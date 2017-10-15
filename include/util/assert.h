@@ -56,7 +56,7 @@ struct Assertion_error: std::logic_error {
 
 #define ASSERT_IMPL_THROW(cond, type) \
     (LIKELY(cond) ? static_cast<void>(0) \
-                  : throw util::Assertion_error(type " `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__));)
+                  : throw util::Assertion_error(type " `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__)))
 
 #define ASSERT_IMPL_TERMINATE(cond, type) (LIKELY(cond) ? static_cast<void>(0) : std::terminate())
 

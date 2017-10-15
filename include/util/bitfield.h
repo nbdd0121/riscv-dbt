@@ -20,8 +20,8 @@ class Bitfield {
 
 public:
     static constexpr int width = 0;
-    static constexpr Type extract(Type) { return 0; }
-    static constexpr Type pack(Type bits, Type) { return bits; }
+    static constexpr Type extract(Type) noexcept { return 0; }
+    static constexpr Type pack(Type bits, Type) noexcept { return bits; }
 };
 
 template<typename Type, int Hi, int Lo, int... Range>
@@ -37,11 +37,11 @@ class Bitfield<Type, Hi, Lo, Range...> {
 public:
     static constexpr int width = Chain::width + (Hi - Lo + 1);
 
-    static constexpr Type extract(Type bits) {
+    static constexpr Type extract(Type bits) noexcept {
         return Chain::extract(bits) | ((bits & mask) >> Lo << Chain::width);
     }
 
-    static constexpr Type pack(Type bits, Type value) {
+    static constexpr Type pack(Type bits, Type value) noexcept {
         return Chain::pack((bits & ~mask) | ((value >> Chain::width << Lo) & mask), value);
     }
 };

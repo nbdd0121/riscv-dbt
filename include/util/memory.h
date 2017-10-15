@@ -42,7 +42,7 @@ struct interpret_as_proxy {
 // common, interpret_as is implemented to maximise standard conformance.
 // The returned proxy should be either immediated casted, or immediately assigned.
 template<typename T>
-internal::interpret_as_proxy<T> interpret_as(void *memory) {
+internal::interpret_as_proxy<T> interpret_as(void *memory) noexcept {
     return {memory};
 }
 
