@@ -12,9 +12,6 @@ namespace util {
 template<typename Type, int... Range>
 class Bitfield {
 
-    // Bitfield should be only operating on unsigned types.
-    static_assert(std::is_unsigned<Type>::value, "Bitfield must be used on unsigned types.");
-
     // This unspecialized class catches the case that sizeof...(Range) is 0 or odd, but odd number does not make sense.
     static_assert(sizeof...(Range) == 0, "Bitfield must have an even number of integer arguments.");
 
@@ -28,20 +25,33 @@ template<typename Type, int Hi, int Lo, int... Range>
 class Bitfield<Type, Hi, Lo, Range...> {
     static_assert(Hi >= Lo, "Hi must be >= Lo.");
 
+    using Effective_type = std::make_unsigned_t<Type>;
+
     // This class will handle only one segment, and then it passes the task to a smaller bitfield.
-    using Chain = Bitfield<Type, Range...>;
+    using Chain = Bitfield<Effective_type, Range...>;
 
     // Mask containing ones on all bits within range [Lo, Hi]
-    static constexpr Type mask = ((static_cast<Type>(1) << (Hi - Lo + 1)) - 1) << Lo;
+    static constexpr Effective_type mask = ((static_cast<Effective_type>(1) << (Hi - Lo + 1)) - 1) << Lo;
 
 public:
     static constexpr int width = Chain::width + (Hi - Lo + 1);
 
     static constexpr Type extract(Type bits) noexcept {
-        return Chain::extract(bits) | ((bits & mask) >> Lo << Chain::width);
+
+        // We have right shifts here, so make sure we are only operating on unsigned values.
+        Effective_type bits_unsigned = bits;
+        Effective_type value = Chain::extract(bits_unsigned) | ((bits_unsigned & mask) >> Lo << Chain::width);
+
+        if constexpr(std::is_signed<Type>::value) {
+            return static_cast<Type>(value) << (sizeof(Type) * 8 - width) >> (sizeof(Type) * 8 - width);
+        } else {
+            return value;
+        }
     }
 
     static constexpr Type pack(Type bits, Type value) noexcept {
+
+        // No need to cast to unsigned here since the righted result is masked.
         return Chain::pack((bits & ~mask) | ((value >> Chain::width << Lo) & mask), value);
     }
 };
