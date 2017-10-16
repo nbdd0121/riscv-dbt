@@ -38,12 +38,16 @@
 // Hint to the compiler that the condition will always be true for optimisation.
 #ifdef _MSC_VER
 #   define ASSUME(cond) __assume(cond)
+#   define UNREACHABLE() ASSUME(0)
 #elif defined(__clang__)
+#   define UNREACHABLE() __builtin_unreachable()
 #   define ASSUME(cond) __builtin_assume(cond)
 #elif defined(__GNUC__)
-#   define ASSUME(cond) ((cond) ? static_cast<void>(0) : __builtin_unreachable())
+#   define UNREACHABLE() __builtin_unreachable()
+#   define ASSUME(cond) ((cond) ? static_cast<void>(0) : UNREACHABLE())
 #else
 #   define ASSUME(cond) static_cast<void>(0)
+#   define UNREACHABLE() ASSUME(0)
 #endif
 
 namespace util {
@@ -77,4 +81,3 @@ struct Assertion_error: std::logic_error {
 #endif
 
 #endif
-
