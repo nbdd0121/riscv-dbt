@@ -8,7 +8,9 @@ namespace util {
 // It a quite common operation to view an integer as bits and extract from or pack fields into the integer. Doing these
 // operation by shift and bit operation each time is tedious, inelegant, and prone to errors. Bitfield class provide a
 // easy way to access them.
+// Arguments are specified in pairs, Hi followed by Lo. If Hi set to -1, then Lo is the number of zeroes to pad.
 // E.g. Bitfield<int, 23, 16, 7, 0> will extract 0x3478 from 0x12345678.
+// E.g. Bitfield<int, 23, 16, -1, 8, 7, 0> will extract 0x340078 from 0x12345678.
 template<typename Type, int... Range>
 class Bitfield {
 
@@ -23,6 +25,7 @@ public:
 
 template<typename Type, int Hi, int Lo, int... Range>
 class Bitfield<Type, Hi, Lo, Range...> {
+    static_assert(Hi >= 0 && Lo >= 0, "Hi and Lo must be non-negative.");
     static_assert(Hi >= Lo, "Hi must be >= Lo.");
 
     using Effective_type = std::make_unsigned_t<Type>;
@@ -54,6 +57,23 @@ public:
         // No need to cast to unsigned here since the righted result is masked.
         return Chain::pack((bits & ~mask) | ((value >> Chain::width << Lo) & mask), value);
     }
+};
+
+// Special case for padding 0s. This essentially only increase width, and otherwise is a no-op.
+template<typename Type, int Lo, int... Range>
+class Bitfield<Type, -1, Lo, Range...> {
+    static_assert(Lo > 0, "Lo must be positive.");
+
+    // Since Bitfield<Signed> will be converted to Bitfield<Unsigned> after first segment, if we see signed, then the
+    // user must be putting padding as the first segment.
+    static_assert(std::is_unsigned<Type>::value, "Padding 0 at the start of a signed integer is meaningless");
+
+    using Chain = Bitfield<Type, Range...>;
+
+public:
+    static constexpr int width = Chain::width + Lo;
+    static constexpr Type extract(Type bits) noexcept { return Chain::extract(bits); }
+    static constexpr Type pack(Type bits, Type value) noexcept { return Chain::pack(bits, value); }
 };
 
 }
