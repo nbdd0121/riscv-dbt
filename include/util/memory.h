@@ -23,7 +23,6 @@ struct interpret_as_proxy {
     // Return value is intentionally set to void to discourage chained assignments.
     void operator =(const T& value) noexcept {
         memcpy(pointer_, &value, sizeof(T));
-        return *this;
     }
 
     void operator =(const interpret_as_proxy&) = delete;
