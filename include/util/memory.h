@@ -45,6 +45,6 @@ internal::interpret_as_proxy<T> interpret_as(void *memory) noexcept {
     return {memory};
 }
 
-}
+} // util
 
 #endif

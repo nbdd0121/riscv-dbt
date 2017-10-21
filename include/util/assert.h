@@ -56,7 +56,7 @@ struct Assertion_error: std::logic_error {
     explicit Assertion_error(const char* message) : std::logic_error(message) {}
 };
 
-}
+} // util
 
 #define ASSERT_IMPL_THROW(cond, type) \
     (LIKELY(cond) ? static_cast<void>(0) \

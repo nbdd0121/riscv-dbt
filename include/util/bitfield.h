@@ -76,6 +76,6 @@ public:
     static constexpr Type pack(Type bits, Type value) noexcept { return Chain::pack(bits, value); }
 };
 
-}
+} // util
 
 #endif
