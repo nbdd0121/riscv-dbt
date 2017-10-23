@@ -4,6 +4,7 @@
 #include <stdexcept>
 
 #include "config.h"
+#include "util/macro.h"
 
 // Available strategies in case of assertion failure:
 // 0. Throw an util::Assertion_error when assertion failed.
@@ -22,9 +23,6 @@
 #ifndef CONTRACT_STRATEGY
 #   define CONTRACT_STRATEGY ASSERT_STRATEGY_THROW
 #endif
-
-#define STRINGIFY_IMPL(x) #x
-#define STRINGIFY(x) STRINGIFY_IMPL(x)
 
 // Hint to the compiler the likely outcome of a condition for optimisation.
 #ifdef __GNUC__
