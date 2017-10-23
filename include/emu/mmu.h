@@ -79,7 +79,7 @@ public:
         }
     }
 
-    void copy_from_host(reg_t address, void* source, size_t size);
+    void copy_from_host(reg_t address, const void* source, size_t size);
     void copy_to_host(reg_t address, void* target, size_t size);
     void zero_memory(reg_t address, size_t size);
 };

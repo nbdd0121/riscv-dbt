@@ -64,8 +64,8 @@ void Mmu::blockify(reg_t address, size_t size, T&& lambda) {
     }
 }
 
-void Mmu::copy_from_host(reg_t address, void* target, size_t size) {
-    std::byte *target_bytes = reinterpret_cast<std::byte*>(target);
+void Mmu::copy_from_host(reg_t address, const void* target, size_t size) {
+    const std::byte *target_bytes = reinterpret_cast<const std::byte*>(target);
     blockify(address, size, [=](reg_t start, size_t limit) {
         std::byte *buffer = translate_page(start &~ page_mask) + (start & page_mask);
         memcpy(buffer, target_bytes + (start - address), limit);
