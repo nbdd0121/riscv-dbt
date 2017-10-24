@@ -77,6 +77,10 @@ enum {
 };
 
 enum {
+    EM_RISCV = 243
+};
+
+enum {
     SHN_UNDEF = 0,
     SHN_LOPROC = 0xFF00,
     SHN_HIPROC = 0xFF1F,
