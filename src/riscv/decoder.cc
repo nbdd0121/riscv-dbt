@@ -501,7 +501,7 @@ Instruction Decoder::decode() const {
                     case 0b000: {
                         if (ret.rd() != 0 || ret.rs1() != 0) goto illegal;
                         reg_t imm = I_imm_field::extract(bits_);
-                        if (imm &~ 0xF) goto illegal;
+                        if (imm &~ 0xFF) goto illegal;
                         ret.opcode(Opcode::fence);
                         ret.imm(imm);
                         return ret;
