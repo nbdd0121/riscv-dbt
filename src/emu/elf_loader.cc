@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cstring>
 #include <stdexcept>
 
 #include "emu/elf64.h"

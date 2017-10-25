@@ -2,6 +2,7 @@
 #include <sys/mman.h>
 
 #include "emu/mmu.h"
+#include "util/memory.h"
 
 namespace emu {
 
@@ -18,13 +19,13 @@ T Mmu::load_memory_misaligned(reg_t address) {
 
         std::byte *next_translated_page = translate_page(page_base + page_size);
         int size_in_page = page_size - page_offset;
-        memcpy(word, translated_page + page_offset, size_in_page);
-        memcpy(word + size_in_page, next_translated_page, sizeof(T) - size_in_page);
+        util::safe_memcpy(word, translated_page + page_offset, size_in_page);
+        util::safe_memcpy(word + size_in_page, next_translated_page, sizeof(T) - size_in_page);
 
         return util::interpret_as<T>(word);
     }
 
-    return util::interpret_as<T>(translated_page + page_offset);
+    return util::safe_read<T>(translated_page + page_offset);
 }
 
 template<typename T>
@@ -41,13 +42,13 @@ void Mmu::store_memory_misaligned(reg_t address, T value) {
 
         std::byte *next_translated_page = translate_page(page_base + page_size);
         int size_in_page = page_size - page_offset;
-        memcpy(translated_page + page_offset, word, size_in_page);
-        memcpy(next_translated_page, word + size_in_page, sizeof(T) - size_in_page);
+        util::safe_memcpy(translated_page + page_offset, word, size_in_page);
+        util::safe_memcpy(next_translated_page, word + size_in_page, sizeof(T) - size_in_page);
         
         return;
     }
 
-    util::interpret_as<T>(translated_page + page_offset) = value;
+    util::safe_write<T>(translated_page + page_offset, value);
 }
 
 template<typename T>
@@ -68,7 +69,7 @@ void Mmu::copy_from_host(reg_t address, const void* target, size_t size) {
     const std::byte *target_bytes = reinterpret_cast<const std::byte*>(target);
     blockify(address, size, [=](reg_t start, size_t limit) {
         std::byte *buffer = translate_page(start &~ page_mask) + (start & page_mask);
-        memcpy(buffer, target_bytes + (start - address), limit);
+        util::safe_memcpy(buffer, target_bytes + (start - address), limit);
     });
 }
 
@@ -76,15 +77,22 @@ void Mmu::copy_to_host(reg_t address, void* target, size_t size) {
     std::byte *target_bytes = reinterpret_cast<std::byte*>(target);
     blockify(address, size, [=](reg_t start, size_t limit) {
         std::byte *buffer = translate_page(start &~ page_mask) + (start & page_mask);
-        memcpy(target_bytes + (start - address), buffer, limit);
+        util::safe_memcpy(target_bytes + (start - address), buffer, limit);
     });
 }
 
 void Mmu::zero_memory(reg_t address, size_t size) {
     blockify(address, size, [=](reg_t start, size_t limit) {
         std::byte *buffer = translate_page(start &~ page_mask) + (start & page_mask);
-        memset(buffer, 0, limit);
+        util::safe_memset(buffer, 0, limit);
     });
+}
+
+Paging_mmu::Paging_mmu() {
+
+    // All valid entries stored in TLB will be page-aligned.
+    // Since the bit pattern of -1 is page-aligned, the TLB is effectively marked as invalid.
+    for (auto& query: cached_query) query = -1;
 }
 
 Paging_mmu::~Paging_mmu() {
@@ -93,6 +101,10 @@ Paging_mmu::~Paging_mmu() {
     for (const auto& mapping: map) {
         munmap(mapping.second, page_size);
     }
+
+    // Map the first page of emulated address space to the first page of virtual address space, so all null reference
+    // can be catched.
+    map[0] = 0;
 }
 
 void Paging_mmu::tlb_fetch(reg_t address) {
@@ -148,6 +160,9 @@ Flat_mmu::Flat_mmu(size_t size): size_(size) {
     if (memory_ == nullptr) {
         throw std::bad_alloc {};
     }
+
+    // Make the first page not accessible so it catches null reference.
+    mprotect(memory_, 4096, PROT_NONE);
 }
 
 Flat_mmu::~Flat_mmu() {

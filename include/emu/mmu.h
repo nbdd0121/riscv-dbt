@@ -9,7 +9,7 @@
 #include "config.h"
 #include "emu/typedef.h"
 #include "util/assert.h"
-#include "util/memory.h"
+#include "util/safe_memory.h"
 
 namespace emu {
 
@@ -39,7 +39,7 @@ public:
         reg_t page_offset = address & page_mask;
         reg_t page_base = address &~ page_mask;
         std::byte *translated_page = translate_page(page_base);
-        return util::interpret_as<T>(translated_page + page_offset);
+        return util::safe_read<T>(translated_page + page_offset);
     }
 
     template<typename T>
@@ -47,7 +47,7 @@ public:
         reg_t page_offset = address & page_mask;
         reg_t page_base = address &~ page_mask;
         std::byte *translated_page = translate_page(page_base);
-        util::interpret_as<T>(translated_page + page_offset) = value;
+        util::safe_write<T>(translated_page + page_offset, value);
     }
 
     // To make the interface obvious and tidy, these functions are defined as templates. However the function lies on a
@@ -92,12 +92,7 @@ public:
     mutable std::byte* cached_result[32];
     std::unordered_map<reg_t, std::byte*> map;
 
-    Paging_mmu() {
-
-        // All valid entries stored in TLB will be page-aligned.
-        // Since the bit pattern of -1 is page-aligned, the TLB is effectively marked as invalid.
-        for (auto& query: cached_query) query = -1;
-    }
+    Paging_mmu();
 
     // Free all the mappings. Placed in mmu.cc since it contains munmap.
     ~Paging_mmu();
