@@ -8,6 +8,7 @@
 #include "riscv/instruction.h"
 
 #include "util/assert.h"
+#include "util/format.h"
 
 using namespace riscv;
 
@@ -203,15 +204,14 @@ const char* Disassembler::opcode_name(Opcode opcode) {
 }
 
 void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) {
-    std::cout << std::setfill(' ') << std::setw(8) << std::hex << pc << ":\t";
-    if (inst.length() == 4) {
-        std::cout << std::setfill('0') << std::setw(8) << bits << "\t";
-    } else {
-        std::cout << std::setfill('0') << std::setw(4) << (bits & 0xFF) << "\t\t";
-    }
-
     Opcode opcode = inst.opcode();
-    std::cout << Disassembler::opcode_name(opcode) << "\t";
+    const char *opcode_name = Disassembler::opcode_name(opcode);
+
+    if (inst.length() == 4) {
+        util::format(std::cout, "{:8x}:\t{:08x}\t{}\t", pc, bits, opcode_name);
+    } else {
+        util::format(std::cout, "{:8x}:\t{:04x}\t\t{}\t", pc, bits & 0xFF, opcode_name);
+    }
 
     // Since most instructions use sign-extension, convert it to signed beforehand.
     sreg_t imm = inst.imm();
@@ -222,7 +222,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
     switch (opcode) {
         case Opcode::lui:
         case Opcode::auipc:
-            std::cout << register_name(rd) << ", 0x" << std::hex << (static_cast<uint32_t>(imm) >> 12);
+            util::format(std::cout, "{}, {:#x}",  register_name(rd), static_cast<uint32_t>(imm) >> 12);
             break;
         case Opcode::jal: {
             reg_t target_pc = pc + imm;
@@ -231,8 +231,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
                 imm = -imm;
                 sign = '-';
             }
-            std::cout << register_name(rd) << ", pc " << sign << " " << std::dec << imm
-                      << " <" << std::hex << target_pc << ">";
+            util::format(std::cout, "{}, pc {} {} <{:x}>",  register_name(rd), sign, imm, target_pc);
             break;
         }
         case Opcode::beq:
@@ -247,8 +246,9 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
                 imm = -imm;
                 sign = '-';
             }
-            std::cout << register_name(rs1) << ", " << register_name(rs2) << ", pc " << sign << " "
-                      << std::dec << imm << " <" << std::hex << target_pc << ">";
+            util::format(
+                std::cout, "{}, {}, pc {} {} <{:x}>",  register_name(rs1), register_name(rs2), sign, imm, target_pc
+            );
             break;
         }
         case Opcode::lb:
@@ -260,7 +260,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::lwu:
         // jalr has same string representation as load instructions.
         case Opcode::jalr:
-            std::cout << register_name(rd) << ", " << std::dec << imm << "(" << register_name(rs1) << ")";
+            util::format(std::cout, "{}, {}({})", register_name(rd), imm, register_name(rs1));
             break;
         // TODO: display the arguments of fence?
         case Opcode::fence:
@@ -272,7 +272,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::sh:
         case Opcode::sw:
         case Opcode::sd:
-            std::cout << register_name(rs2) << ", " << std::dec << imm << "(" << register_name(rs1) << ")";
+            util::format(std::cout, "{}, {}({})", register_name(rs2), imm, register_name(rs1));
             break;
         case Opcode::addi:
         case Opcode::slti:
@@ -289,7 +289,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::slliw:
         case Opcode::srliw:
         case Opcode::sraiw:
-            std::cout << register_name(rd) << ", " << register_name(rs1) << ", " << std::dec << imm;
+            util::format(std::cout, "{}, {}, {}", register_name(rd), register_name(rs1), imm);
             break;
         case Opcode::add:
         case Opcode::sub:
@@ -319,23 +319,25 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::divuw:
         case Opcode::remw:
         case Opcode::remuw:
-            std::cout << register_name(rd) << ", " << register_name(rs1) << ", " << register_name(rs2);
+            util::format(std::cout, "{}, {}, {}", register_name(rd), register_name(rs1), register_name(rs2));
             break;
         // CSR instructions store immediates differently.
         case Opcode::csrrw:
         case Opcode::csrrs:
         case Opcode::csrrc:
-            std::cout << register_name(rd) << ", " << csr_name(static_cast<Csr>(imm)) << ", " << register_name(rs1);
+            util::format(
+                std::cout, "{}, #{}, {}", register_name(rd), csr_name(static_cast<Csr>(imm)), register_name(rs1)
+            );
             break;
         case Opcode::csrrwi:
         case Opcode::csrrsi:
         case Opcode::csrrci:
-            std::cout << register_name(rd) << ", #" << csr_name(static_cast<Csr>(imm)) << ", " << std::dec << rs1;
+            util::format(std::cout, "{}, #{}, {}", register_name(rd), csr_name(static_cast<Csr>(imm)), rs1);
             break;
         // TODO: For atomic instructions we may want to display their aq, rl arguments?
         case Opcode::lr_w:
         case Opcode::lr_d:
-            std::cout << register_name(rd) << ", (" << register_name(rs1) << ")";
+            util::format(std::cout, "{}, ({})", register_name(rd), register_name(rs1));
             break;
         case Opcode::sc_w:
         case Opcode::sc_d:
@@ -357,16 +359,16 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::amominu_d:
         case Opcode::amomaxu_w:
         case Opcode::amomaxu_d:
-            std::cout << register_name(rd) << ", " << register_name(rs2) << ", (" << register_name(rs1) << ")";
+            util::format(std::cout, "{}, {}, ({})", register_name(rd), register_name(rs2), register_name(rs1));
             break;
         // TODO: For floating point arguments we may want to display their r/m arguments?
         case Opcode::flw:
         case Opcode::fld:
-            std::cout << "f" << std::dec << rd << ", " << imm << "(" << register_name(rs1) << ")";
+            util::format(std::cout, "f{}, {}({})", rd, imm, register_name(rs1));
             break;
         case Opcode::fsw:
         case Opcode::fsd:
-            std::cout << "f" << std::dec << rs2 << ", "  << imm << "(" << register_name(rs1) << ")";
+            util::format(std::cout, "f{}, {}({})", rs2, imm, register_name(rs1));
             break;
         case Opcode::fadd_s:
         case Opcode::fsub_s:
@@ -386,13 +388,13 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::fsgnjx_d:
         case Opcode::fmin_d:
         case Opcode::fmax_d:
-            std::cout << "f" << std::dec << rd << ", f" << rs1 << ", f" << rs2;
+            util::format(std::cout, "f{}, f{}, f{}", rd, rs1, rs2);
             break;
         case Opcode::fsqrt_s:
         case Opcode::fsqrt_d:
         case Opcode::fcvt_s_d:
         case Opcode::fcvt_d_s:
-            std::cout << "f" << std::dec << rd << ", f" << rs1;
+            util::format(std::cout, "f{}, f{}", rd, rs1);
             break;
         case Opcode::fcvt_w_s:
         case Opcode::fcvt_wu_s:
@@ -406,7 +408,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::fcvt_lu_d:
         case Opcode::fmv_x_d:
         case Opcode::fclass_d:
-            std::cout << register_name(rd) << ", f" << std::dec << rs1;
+            util::format(std::cout, "{}, f{}", register_name(rd), rs1);
             break;
         case Opcode::fcvt_s_w:
         case Opcode::fcvt_s_wu:
@@ -418,7 +420,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::fcvt_d_l:
         case Opcode::fcvt_d_lu:
         case Opcode::fmv_d_x:
-            std::cout << "f" << std::dec << rd << ", " << register_name(rs1);
+            util::format(std::cout, "f{}, {}", rd, register_name(rs1));
             break;
         case Opcode::feq_s:
         case Opcode::flt_s:
@@ -426,7 +428,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::feq_d:
         case Opcode::flt_d:
         case Opcode::fle_d:
-            std::cout << register_name(rd) << ", f" << std::dec << rs1 << ", f" << rs2;
+            util::format(std::cout, "{}, f{}, f{}", register_name(rd), rs1, rs2);
             break;
         case Opcode::fmadd_s:
         case Opcode::fmsub_s:
@@ -436,7 +438,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::fmsub_d:
         case Opcode::fnmsub_d:
         case Opcode::fnmadd_d:
-            std::cout << "f" << std::dec << rd << ", f" << rs1 << ", f" << rs2 << ", f" << inst.rs3();
+            util::format(std::cout, "f{}, f{}, f{}, f{}", rd, rs1, rs2, inst.rs3());
             break;
 
         case Opcode::illegal:
