@@ -10,6 +10,7 @@ OBJS = \
 	main.o \
 	riscv/decoder.o \
 	riscv/disassembler.o \
+	softfp/float.o \
 	util/format.o \
 	util/safe_memory.o
 
