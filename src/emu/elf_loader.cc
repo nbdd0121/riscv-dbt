@@ -9,12 +9,15 @@
 
 #include "emu/elf64.h"
 #include "emu/mmu.h"
+#include "emu/state.h"
 
 #include "util/scope_exit.h"
 
 namespace emu {
 
-reg_t load_elf(const char *filename, Mmu& mmu) {
+reg_t load_elf(const char *filename, State& state) {
+
+    Mmu& mmu = *state.mmu;
 
     // Open the file first
     int fd = open(filename, O_RDONLY);
@@ -73,6 +76,7 @@ reg_t load_elf(const char *filename, Mmu& mmu) {
         }
     }
 
+    reg_t brk = 0;
     for (int i = 0; i < header->e_phnum; i++) {
         elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
         if (h->p_type == elf::PT_LOAD) {
@@ -86,8 +90,18 @@ reg_t load_elf(const char *filename, Mmu& mmu) {
             mmu.zero_memory(h->p_vaddr + h->p_filesz, h->p_memsz - h->p_filesz);
             // TODO: This should be be mmapped instead of copied
             mmu.copy_from_host(h->p_vaddr, memory + h->p_offset, h->p_filesz);
+
+            reg_t vaddr_end = h->p_vaddr + h->p_memsz;
+
+            // Set brk to the address past the last program segment.
+            if (vaddr_end > brk) {
+                brk = vaddr_end;
+            }
         }
     }
+
+    state.original_brk = brk;
+    state.brk = brk;
 
     return header->e_entry;
 }

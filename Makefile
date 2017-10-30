@@ -7,16 +7,18 @@ CXX_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-pro
 OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
+	emu/syscall.o \
 	main.o \
 	riscv/decoder.o \
 	riscv/disassembler.o \
+	riscv/step.o \
 	softfp/float.o \
 	util/format.o \
 	util/safe_memory.o
 
 default: all
 
-.PHONY: all clean feature-test register unregister
+.PHONY: all clean register unregister
 
 all: codegen
 

@@ -4,12 +4,14 @@
 #include <vector>
 
 #include "emu/mmu.h"
+#include "emu/state.h"
+#include "riscv/context.h"
 #include "riscv/decoder.h"
 #include "riscv/disassembler.h"
 #include "riscv/instruction.h"
 
 namespace emu {
-reg_t load_elf(const char *filename, Mmu& mmu);
+reg_t load_elf(const char *filename, State& mmu);
 }
 
 int main(int argc, const char **argv) {
@@ -42,13 +44,16 @@ int main(int argc, const char **argv) {
     }
     const char *program_name = argv[arg_index];
 
+    emu::State state;
+
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
-    std::unique_ptr<emu::Mmu> mmu;
     if (use_paging) {
-        mmu = std::make_unique<emu::Paging_mmu>();
+        state.mmu = std::make_unique<emu::Paging_mmu>();
     } else {
-        mmu = std::make_unique<emu::Flat_mmu>(0x10000000);
+        state.mmu = std::make_unique<emu::Flat_mmu>(0x10000000);
     }
+
+    emu::Mmu *mmu = state.mmu.get();
 
     // Set sp to be the highest possible address.
     emu::reg_t sp = use_paging ? 0x800000000000 : 0x10000000;
@@ -86,7 +91,7 @@ int main(int argc, const char **argv) {
     sp -= sizeof(emu::reg_t);
     mmu->store_memory<emu::reg_t>(sp, argc - arg_index);
 
-    emu::reg_t pc = load_elf(program_name, *mmu);
+    emu::reg_t pc = load_elf(program_name, state);
     for (int i = 0; i < 100; i++) {
         uint32_t inst_bits = mmu->load_memory<uint32_t>(pc);
         riscv::Decoder decoder { inst_bits };
