@@ -37,7 +37,7 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
         }
 
         // Print out all unprinted normal characters preceeding the brace. Pointers will be updated after formatted print.
-        stream.write(format, pointer - format);
+        if (pointer != format) stream.write(format, pointer - format);
 
         if (*pointer == '{') {
 

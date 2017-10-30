@@ -1,7 +1,7 @@
 #ifndef UTIL_FORMAT_H
 #define UTIL_FORMAT_H
 
-#include <ostream>
+#include <iostream>
 
 namespace util {
 
@@ -41,6 +41,16 @@ template<typename... Args>
 void format(std::ostream& stream, const char *format, const Args&... args) {
     util::internal::Bound_formatter list[] = { args... };
     format_impl(stream, format, list, sizeof...(args));
+}
+
+template<typename... Args>
+void print(const char *format, const Args&... args) {
+    util::format(std::cout, format, args...);
+}
+
+template<typename... Args>
+void log(const char *format, const Args&... args) {
+    util::format(std::clog, format, args...);
 }
 
 }
