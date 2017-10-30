@@ -9,9 +9,14 @@
 #include "riscv/decoder.h"
 #include "riscv/disassembler.h"
 #include "riscv/instruction.h"
+#include "util/format.h"
 
 namespace emu {
 reg_t load_elf(const char *filename, State& mmu);
+}
+
+namespace riscv {
+void step(Context *context, Instruction inst);
 }
 
 int main(int argc, const char **argv) {
@@ -19,6 +24,7 @@ int main(int argc, const char **argv) {
     /* Arguments to be parsed */
     // By default we use flat mmu since it is faster.
     bool use_paging = false;
+    bool strace = false;
 
     // Parsing arguments
     int arg_index;
@@ -32,6 +38,8 @@ int main(int argc, const char **argv) {
 
         if (strcmp(arg, "--paging") == 0) {
             use_paging = true;
+        } else if (strcmp(arg, "--strace") == 0) {
+            strace = true;
         } else {
             std::cerr << "Unknown argument " << arg << ", ignored" << std::endl;
         }
@@ -45,6 +53,8 @@ int main(int argc, const char **argv) {
     const char *program_name = argv[arg_index];
 
     emu::State state;
+    state.strace = strace;
+    state.exit_code = -1;
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
     if (use_paging) {
@@ -91,12 +101,47 @@ int main(int argc, const char **argv) {
     sp -= sizeof(emu::reg_t);
     mmu->store_memory<emu::reg_t>(sp, argc - arg_index);
 
-    emu::reg_t pc = load_elf(program_name, state);
-    for (int i = 0; i < 100; i++) {
-        uint32_t inst_bits = mmu->load_memory<uint32_t>(pc);
-        riscv::Decoder decoder { inst_bits };
-        riscv::Instruction inst = decoder.decode();
-        riscv::Disassembler::print_instruction(pc, inst_bits, inst);
-        pc += inst.length();
+    state.context = std::make_unique<riscv::Context>();
+    riscv::Context *context = state.context.get();
+
+    // Initialize context
+    context->pc = load_elf(program_name, state);
+
+    for (int i = 1; i < 32; i++) {
+        // Reset to some easily debuggable value.
+        context->registers[i] = 0xCCCCCCCCCCCCCCCC;
+        context->fp_registers[i] = 0xFFFFFFFFFFFFFFFF;
     }
+
+    context->mmu = mmu;
+    context->state = &state;
+
+    // x0 must always be 0
+    context->registers[0] = 0;
+    // sp
+    context->registers[2] = sp;
+    context->fcsr = 0;
+    context->instret = 0;
+    context->lr = 0;
+
+    try {
+        while (state.exit_code == -1) {
+            uint32_t inst_bits = mmu->load_memory<uint32_t>(context->pc);
+            riscv::Decoder decoder { inst_bits };
+            riscv::Instruction inst = decoder.decode();
+
+            // Disassembler::print_instruction(context->pc, inst_bits, inst);
+            context->pc += inst.length();
+            riscv::step(context, inst);
+            context->instret++;
+        }
+    } catch (std::exception& ex) {
+        util::print("{}\npc={:x}\n", ex.what(), context->pc);
+        for (int i = 0; i < 32; i++) {
+            util::print("x{} = {:x}\n", i, context->registers[i]);
+        }
+        return 1;
+    }
+
+    return state.exit_code;
 }

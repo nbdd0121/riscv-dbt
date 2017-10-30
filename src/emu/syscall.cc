@@ -279,9 +279,6 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::exit: {
-            // EXIT
-            state->context->pc = 0xFFFFFFF0;
-
             // Record the exit_code so that the emulator can correctly return it.
             state->exit_code = arg0 & 0xFF;
 
