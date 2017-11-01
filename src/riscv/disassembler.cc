@@ -254,9 +254,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
                 imm = -imm;
                 sign = '-';
             }
-            util::format(
-                std::cout, "{}, {}, pc {} {} <{:x}>",  register_name(rs1), register_name(rs2), sign, imm, target_pc
-            );
+            util::log("{}, {}, pc {} {} <{:x}>",  register_name(rs1), register_name(rs2), sign, imm, target_pc);
             break;
         }
         case Opcode::lb:
@@ -333,9 +331,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         case Opcode::csrrw:
         case Opcode::csrrs:
         case Opcode::csrrc:
-            util::format(
-                std::cout, "{}, #{}, {}", register_name(rd), csr_name(static_cast<Csr>(imm)), register_name(rs1)
-            );
+            util::log("{}, #{}, {}", register_name(rd), csr_name(static_cast<Csr>(imm)), register_name(rs1));
             break;
         case Opcode::csrrwi:
         case Opcode::csrrsi:
@@ -453,5 +449,5 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
             break;
     }
 
-    std::cout << std::endl;
+    std::clog << std::endl;
 }
