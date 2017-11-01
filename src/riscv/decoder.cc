@@ -1,16 +1,19 @@
+#include "emu/mmu.h"
+#include "emu/state.h"
 #include "riscv/decoder.h"
+#include "riscv/disassembler.h"
 #include "riscv/opcode.h"
 #include "riscv/instruction.h"
 #include "util/assert.h"
 
 namespace riscv {
 
-Instruction Decoder::decode() const {
+Instruction Decoder::decode(uint32_t bits) {
     Instruction ret;
     Opcode opcode = Opcode::illegal;
 
     // 2-byte compressed instructions
-    if ((bits_ & 0x03) != 0x03) {
+    if ((bits & 0x03) != 0x03) {
 
         // Fields definition
         using C_funct3_field = util::Bitfield<uint32_t, 15, 13>;
@@ -35,15 +38,15 @@ Instruction Decoder::decode() const {
         using Cb_imm_field = util::Bitfield<int64_t, 12, 12, 6, 5, 2, 2, 11, 10, 4, 3, -1, 1>;
         using Cj_imm_field = util::Bitfield<int64_t, 12, 12, 8, 8, 10, 9, 6, 6, 7, 7, 2, 2, 11, 11, 5, 3, -1, 1>;
 
-        int function = C_funct3_field::extract(bits_);
+        int function = C_funct3_field::extract(bits);
 
         ret.length(2);
 
-        switch (bits_ & 0b11) {
+        switch (bits & 0b11) {
             case 0b00: {
                 switch (function) {
                     case 0b000: {
-                        reg_t imm = Ciw_imm_field::extract(bits_);
+                        reg_t imm = Ciw_imm_field::extract(bits);
                         if (imm == 0) {
                             // Illegal instruction. At this point ret is all zero, so return directly.
                             return ret;
@@ -51,7 +54,7 @@ Instruction Decoder::decode() const {
                         // C.ADDI4SPN
                         // translate to addi rd', x2, imm
                         ret.opcode(Opcode::addi);
-                        ret.rd(C_rds_field::extract(bits_) + 8);
+                        ret.rd(C_rds_field::extract(bits) + 8);
                         ret.rs1(2);
                         ret.imm(imm);
                         return ret;
@@ -60,27 +63,27 @@ Instruction Decoder::decode() const {
                         // C.FLD
                         // translate to fld rd', rs1', offset
                         ret.opcode(Opcode::fld);
-                        ret.rd(C_rds_field::extract(bits_) + 8);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.imm(Cl_ld_imm_field::extract(bits_));
+                        ret.rd(C_rds_field::extract(bits) + 8);
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.imm(Cl_ld_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b010: {
                         // C.LW
                         // translate to lw rd', rs1', offset
                         ret.opcode(Opcode::lw);
-                        ret.rd(C_rds_field::extract(bits_) + 8);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.imm(Cl_lw_imm_field::extract(bits_));
+                        ret.rd(C_rds_field::extract(bits) + 8);
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.imm(Cl_lw_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b011: {
                         // C.LD
                         // translate to ld rd', rs1', offset
                         ret.opcode(Opcode::ld);
-                        ret.rd(C_rds_field::extract(bits_) + 8);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.imm(Cl_ld_imm_field::extract(bits_));
+                        ret.rd(C_rds_field::extract(bits) + 8);
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.imm(Cl_ld_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b100:
@@ -90,27 +93,27 @@ Instruction Decoder::decode() const {
                         // C.FSD
                         // translate to fsd rs2', rs1', offset
                         ret.opcode(Opcode::fsd);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.rs2(C_rs2s_field::extract(bits_) + 8);
-                        ret.imm(Cs_sd_imm_field::extract(bits_));
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.rs2(C_rs2s_field::extract(bits) + 8);
+                        ret.imm(Cs_sd_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b110: {
                         // C.SW
                         // translate to sw rs2', rs1', offset
                         ret.opcode(Opcode::sw);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.rs2(C_rs2s_field::extract(bits_) + 8);
-                        ret.imm(Cs_sw_imm_field::extract(bits_));
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.rs2(C_rs2s_field::extract(bits) + 8);
+                        ret.imm(Cs_sw_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b111: {
                         // C.SD
                         // translate to sd rs2', rs1', offset
                         ret.opcode(Opcode::sd);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.rs2(C_rs2s_field::extract(bits_) + 8);
-                        ret.imm(Cs_sd_imm_field::extract(bits_));
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.rs2(C_rs2s_field::extract(bits) + 8);
+                        ret.imm(Cs_sd_imm_field::extract(bits));
                         return ret;
                     }
                     // full case
@@ -124,15 +127,15 @@ Instruction Decoder::decode() const {
                         // r0 = 0 is C.NOP
                         // C.ADDI
                         // translate to addi rd, rd, imm
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         ret.opcode(Opcode::addi);
                         ret.rd(rd);
                         ret.rs1(rd);
-                        ret.imm(Ci_imm_field::extract(bits_));
+                        ret.imm(Ci_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b001: {
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         if (rd == 0) {
                             // Reserved
                             goto illegal_compressed;
@@ -142,7 +145,7 @@ Instruction Decoder::decode() const {
                         ret.opcode(Opcode::addiw);
                         ret.rd(rd);
                         ret.rs1(rd);
-                        ret.imm(Ci_imm_field::extract(bits_));
+                        ret.imm(Ci_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b010: {
@@ -150,15 +153,15 @@ Instruction Decoder::decode() const {
                         // C.LI
                         // translate to addi rd, x0, imm
                         ret.opcode(Opcode::addi);
-                        ret.rd(C_rd_field::extract(bits_));
+                        ret.rd(C_rd_field::extract(bits));
                         ret.rs1(0);
-                        ret.imm(Ci_imm_field::extract(bits_));
+                        ret.imm(Ci_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b011: {
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         if (rd == 2) {
-                            reg_t imm = Ci_addi16sp_imm_field::extract(bits_);
+                            reg_t imm = Ci_addi16sp_imm_field::extract(bits);
                             if (imm == 0) {
                                 // Reserved
                                 goto illegal_compressed;
@@ -176,13 +179,13 @@ Instruction Decoder::decode() const {
                             // translate to lui rd, imm
                             ret.opcode(Opcode::lui);
                             ret.rd(rd);
-                            ret.imm(Ci_imm_field::extract(bits_) << 12);
+                            ret.imm(Ci_imm_field::extract(bits) << 12);
                             return ret;
                         }
                     }
                     case 0b100: {
-                        int rs1 = C_rs1s_field::extract(bits_) + 8;
-                        switch (util::Bitfield<uint32_t, 11, 10>::extract(bits_)) {
+                        int rs1 = C_rs1s_field::extract(bits) + 8;
+                        switch (util::Bitfield<uint32_t, 11, 10>::extract(bits)) {
                             case 0b00: {
                                 // imm = 0 is HINT
                                 // C.SRLI
@@ -190,7 +193,7 @@ Instruction Decoder::decode() const {
                                 ret.opcode(Opcode::srli);
                                 ret.rd(rs1);
                                 ret.rs1(rs1);
-                                ret.imm(Ci_imm_field::extract(bits_) & 63);
+                                ret.imm(Ci_imm_field::extract(bits) & 63);
                                 return ret;
                             }
                             case 0b01: {
@@ -200,7 +203,7 @@ Instruction Decoder::decode() const {
                                 ret.opcode(Opcode::srai);
                                 ret.rs1(rs1);
                                 ret.rd(rs1);
-                                ret.imm(Ci_imm_field::extract(bits_) & 63);
+                                ret.imm(Ci_imm_field::extract(bits) & 63);
                                 return ret;
                             }
                             case 0b10: {
@@ -209,17 +212,17 @@ Instruction Decoder::decode() const {
                                 ret.opcode(Opcode::andi);
                                 ret.rs1(rs1);
                                 ret.rd(rs1);
-                                ret.imm(Ci_imm_field::extract(bits_));
+                                ret.imm(Ci_imm_field::extract(bits));
                                 return ret;
                             }
                             case 0b11: {
-                                if ((bits_ & 0x1000) == 0) {
+                                if ((bits & 0x1000) == 0) {
                                     // C.SUB
                                     // C.XOR
                                     // C.OR
                                     // C.AND
                                     // translates to [OP] rs1', rs1', rs2'
-                                    switch (util::Bitfield<uint32_t, 6, 5>::extract(bits_)) {
+                                    switch (util::Bitfield<uint32_t, 6, 5>::extract(bits)) {
                                         case 0b00: opcode = Opcode::sub; break;
                                         case 0b01: opcode = Opcode::i_xor; break;
                                         case 0b10: opcode = Opcode::i_or; break;
@@ -230,17 +233,17 @@ Instruction Decoder::decode() const {
                                     ret.opcode(opcode);
                                     ret.rd(rs1);
                                     ret.rs1(rs1);
-                                    ret.rs2(C_rs2s_field::extract(bits_) + 8);
+                                    ret.rs2(C_rs2s_field::extract(bits) + 8);
                                     return ret;
                                 } else {
-                                    switch (util::Bitfield<uint32_t, 6, 5>::extract(bits_)) {
+                                    switch (util::Bitfield<uint32_t, 6, 5>::extract(bits)) {
                                         case 0b00: {
                                             // C.SUBW
                                             // translates to subw rs1', rs1', rs2'
                                             ret.opcode(Opcode::subw);
                                             ret.rd(rs1);
                                             ret.rs1(rs1);
-                                            ret.rs2(C_rs2s_field::extract(bits_) + 8);
+                                            ret.rs2(C_rs2s_field::extract(bits) + 8);
                                             return ret;
                                         }
                                         case 0b01: {
@@ -249,7 +252,7 @@ Instruction Decoder::decode() const {
                                             ret.opcode(Opcode::addw);
                                             ret.rd(rs1);
                                             ret.rs1(rs1);
-                                            ret.rs2(C_rs2s_field::extract(bits_) + 8);
+                                            ret.rs2(C_rs2s_field::extract(bits) + 8);
                                             return ret;
                                         }
                                         default:
@@ -267,7 +270,7 @@ Instruction Decoder::decode() const {
                         // translate to jal x0, imm
                         ret.opcode(Opcode::jal);
                         ret.rd(0);
-                        ret.imm(Cj_imm_field::extract(bits_));
+                        ret.imm(Cj_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b110: {
@@ -275,8 +278,8 @@ Instruction Decoder::decode() const {
                         // translate to beq rs1', x0, imm
                         ret.opcode(Opcode::beq);
                         ret.rs2(0);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.imm(Cb_imm_field::extract(bits_));
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.imm(Cb_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b111: {
@@ -284,8 +287,8 @@ Instruction Decoder::decode() const {
                         // translate to bne rs1', x0, imm
                         ret.opcode(Opcode::bne);
                         ret.rs2(0);
-                        ret.rs1(C_rs1s_field::extract(bits_) + 8);
-                        ret.imm(Cb_imm_field::extract(bits_));
+                        ret.rs1(C_rs1s_field::extract(bits) + 8);
+                        ret.imm(Cb_imm_field::extract(bits));
                         return ret;
                     }
                     // full case
@@ -299,25 +302,25 @@ Instruction Decoder::decode() const {
                         // rd = 0 is HINT
                         // C.SLLI
                         // translates to slli rd, rd, imm
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         ret.opcode(Opcode::slli);
                         ret.rd(rd);
                         ret.rs1(rd);
-                        ret.imm(Ci_imm_field::extract(bits_) & 63);
+                        ret.imm(Ci_imm_field::extract(bits) & 63);
                         return ret;
                     }
                     case 0b001: {
                         // C.FLDSP
                         // translate to fld rd, x2, imm
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         ret.opcode(Opcode::fld);
                         ret.rd(rd);
                         ret.rs1(2);
-                        ret.imm(Ci_ldsp_imm_field::extract(bits_));
+                        ret.imm(Ci_ldsp_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b010: {
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         if (rd == 0) {
                             // Reserved
                             goto illegal_compressed;
@@ -327,11 +330,11 @@ Instruction Decoder::decode() const {
                         ret.opcode(Opcode::lw);
                         ret.rd(rd);
                         ret.rs1(2);
-                        ret.imm(Ci_lwsp_imm_field::extract(bits_));
+                        ret.imm(Ci_lwsp_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b011: {
-                        int rd = C_rd_field::extract(bits_);
+                        int rd = C_rd_field::extract(bits);
                         if (rd == 0) {
                             // Reserved
                             goto illegal_compressed;
@@ -341,14 +344,14 @@ Instruction Decoder::decode() const {
                         ret.opcode(Opcode::ld);
                         ret.rd(rd);
                         ret.rs1(2);
-                        ret.imm(Ci_ldsp_imm_field::extract(bits_));
+                        ret.imm(Ci_ldsp_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b100: {
-                        int rs2 = C_rs2_field::extract(bits_);
-                        if ((bits_ & 0x1000) == 0) {
+                        int rs2 = C_rs2_field::extract(bits);
+                        if ((bits & 0x1000) == 0) {
                             if (rs2 == 0) {
-                                int rs1 = C_rs1_field::extract(bits_);
+                                int rs1 = C_rs1_field::extract(bits);
                                 if (rs1 == 0) {
                                     // Reserved
                                     goto illegal_compressed;
@@ -365,13 +368,13 @@ Instruction Decoder::decode() const {
                                 // C.MV
                                 // translate to add rd, x0, rs2
                                 ret.opcode(Opcode::add);
-                                ret.rd(C_rd_field::extract(bits_));
+                                ret.rd(C_rd_field::extract(bits));
                                 ret.rs1(0);
                                 ret.rs2(rs2);
                                 return ret;
                             }
                         } else {
-                            int rs1 = C_rs1_field::extract(bits_);
+                            int rs1 = C_rs1_field::extract(bits);
                             if (rs1 == 0) {
                                 // C.EBREAK
                                 ret.opcode(Opcode::ebreak);
@@ -388,7 +391,7 @@ Instruction Decoder::decode() const {
                                 // rd = 0 is HINT
                                 // C.ADD
                                 // translate to add rd, rd, rs2
-                                int rd = C_rd_field::extract(bits_);
+                                int rd = C_rd_field::extract(bits);
                                 ret.opcode(Opcode::add);
                                 ret.rd(rd);
                                 ret.rs1(rd);
@@ -402,8 +405,8 @@ Instruction Decoder::decode() const {
                         // translate to fsd rs2, x2, imm
                         ret.opcode(Opcode::fsd);
                         ret.rs1(2);
-                        ret.rs2(C_rs2_field::extract(bits_));
-                        ret.imm(Css_sdsp_imm_field::extract(bits_));
+                        ret.rs2(C_rs2_field::extract(bits));
+                        ret.imm(Css_sdsp_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b110: {
@@ -411,8 +414,8 @@ Instruction Decoder::decode() const {
                         // translate to sw rs2, x2, imm
                         ret.opcode(Opcode::sw);
                         ret.rs1(2);
-                        ret.rs2(C_rs2_field::extract(bits_));
-                        ret.imm(Css_swsp_imm_field::extract(bits_));
+                        ret.rs2(C_rs2_field::extract(bits));
+                        ret.imm(Css_swsp_imm_field::extract(bits));
                         return ret;
                     }
                     case 0b111: {
@@ -420,8 +423,8 @@ Instruction Decoder::decode() const {
                         // translate to sd rs2, x2, imm
                         ret.opcode(Opcode::sd);
                         ret.rs1(2);
-                        ret.rs2(C_rs2_field::extract(bits_));
-                        ret.imm(Css_sdsp_imm_field::extract(bits_));
+                        ret.rs2(C_rs2_field::extract(bits));
+                        ret.imm(Css_sdsp_imm_field::extract(bits));
                         return ret;
                     }
                     // full case
@@ -438,7 +441,7 @@ Instruction Decoder::decode() const {
         return ret;
     }
 
-    if ((bits_ & 0x1F) != 0x1F) {
+    if ((bits & 0x1F) != 0x1F) {
 
         // Field definitions
         using Funct7_field = util::Bitfield<uint32_t, 31, 25>;
@@ -455,16 +458,16 @@ Instruction Decoder::decode() const {
         using J_imm_field = util::Bitfield<int64_t, 31, 31, 19, 12, 20, 20, 30, 21, -1, 1>;
 
         // Almost all functions use funct3
-        int function = Funct3_field::extract(bits_);
+        int function = Funct3_field::extract(bits);
 
         // First fill all rd, rs1, rs2 as they are common.
-        ret.rd(Rd_field::extract(bits_));
-        ret.rs1(Rs1_field::extract(bits_));
-        int rs2 = Rs2_field::extract(bits_);
+        ret.rd(Rd_field::extract(bits));
+        ret.rs1(Rs1_field::extract(bits));
+        int rs2 = Rs2_field::extract(bits);
         ret.rs2(rs2);
         ret.length(4);
 
-        switch (bits_ & 0b1111111) {
+        switch (bits & 0b1111111) {
             /* Base Opcode LOAD */
             case 0b0000011: {
                 switch (function) {
@@ -478,7 +481,7 @@ Instruction Decoder::decode() const {
                     goto illegal;
                 }
                 ret.opcode(opcode);
-                ret.imm(I_imm_field::extract(bits_));
+                ret.imm(I_imm_field::extract(bits));
                 return ret;
             }
 
@@ -491,7 +494,7 @@ Instruction Decoder::decode() const {
                     goto illegal;
                 }
                 ret.opcode(opcode);
-                ret.imm(I_imm_field::extract(bits_));
+                ret.imm(I_imm_field::extract(bits));
                 return ret;
             }
 
@@ -500,14 +503,14 @@ Instruction Decoder::decode() const {
                 switch (function) {
                     case 0b000: {
                         if (ret.rd() != 0 || ret.rs1() != 0) goto illegal;
-                        reg_t imm = I_imm_field::extract(bits_);
+                        reg_t imm = I_imm_field::extract(bits);
                         if (imm &~ 0xFF) goto illegal;
                         ret.opcode(Opcode::fence);
                         ret.imm(imm);
                         return ret;
                     }
                     case 0b001: {
-                        if (ret.rd() != 0 || ret.rs1() != 0 || I_imm_field::extract(bits_) != 0) goto illegal;
+                        if (ret.rd() != 0 || ret.rs1() != 0 || I_imm_field::extract(bits) != 0) goto illegal;
                         ret.opcode(Opcode::fence_i);
                         return ret;
                     }
@@ -517,7 +520,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode OP-IMM */
             case 0b0010011: {
-                reg_t imm = I_imm_field::extract(bits_);
+                reg_t imm = I_imm_field::extract(bits);
                 switch (function) {
                     case 0b000: opcode = Opcode::addi; break;
                     case 0b001:
@@ -548,13 +551,13 @@ Instruction Decoder::decode() const {
             /* Base Opcode AUIPC */
             case 0b0010111: {
                 ret.opcode(Opcode::auipc);
-                ret.imm(U_imm_field::extract(bits_));
+                ret.imm(U_imm_field::extract(bits));
                 return ret;
             }
 
             /* Base Opcode OP-IMM-32 */
             case 0b0011011: {
-                reg_t imm = I_imm_field::extract(bits_);
+                reg_t imm = I_imm_field::extract(bits);
                 switch (function) {
                     case 0b000: opcode = Opcode::addiw; break;
                     case 0b001: {
@@ -589,7 +592,7 @@ Instruction Decoder::decode() const {
                     goto illegal;
                 }
                 ret.opcode(opcode);
-                ret.imm(S_imm_field::extract(bits_));
+                ret.imm(S_imm_field::extract(bits));
                 return ret;
             }
 
@@ -602,14 +605,14 @@ Instruction Decoder::decode() const {
                     default: goto illegal;
                 }
                 ret.opcode(opcode);
-                ret.imm(S_imm_field::extract(bits_));
+                ret.imm(S_imm_field::extract(bits));
                 return ret;
             }
 
             /* Base Opcode AMO */
             case 0b0101111: {
                 /* A-Extension */
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 if (function == 0b010) {
                     switch (function7 >> 2) {
                         case 0b00010: if (rs2 != 0) goto illegal; opcode = Opcode::lr_w; break;
@@ -651,7 +654,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode OP */
             case 0b0110011: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
 
                 // M-extension
                 if (function7 == 0b0000001) {
@@ -714,13 +717,13 @@ Instruction Decoder::decode() const {
             /* Base Opcode LUI */
             case 0b0110111: {
                 ret.opcode(Opcode::lui);
-                ret.imm(U_imm_field::extract(bits_));
+                ret.imm(U_imm_field::extract(bits));
                 return ret;
             }
 
             /* Base Opcode OP-32 */
             case 0b0111011: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
 
                 // M-extension
                 if (function7 == 0b0000001) {
@@ -759,7 +762,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode MADD */
             case 0b1000011: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 switch (function7 & 3) {
                     case 0b00: opcode = Opcode::fmadd_s; break;
                     case 0b01: opcode = Opcode::fmadd_d; break;
@@ -773,7 +776,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode MSUB */
             case 0b1000111: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 switch (function7 & 3) {
                     case 0b00: opcode = Opcode::fmsub_s; break;
                     case 0b01: opcode = Opcode::fmsub_d; break;
@@ -787,7 +790,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode NMSUB */
             case 0b1001011: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 switch (function7 & 3) {
                     case 0b00: opcode = Opcode::fnmsub_s; break;
                     case 0b01: opcode = Opcode::fnmsub_d; break;
@@ -801,7 +804,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode NMADD */
             case 0b1001111: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 switch (function7 & 3) {
                     case 0b00: opcode = Opcode::fnmadd_s; break;
                     case 0b01: opcode = Opcode::fnmadd_d; break;
@@ -815,7 +818,7 @@ Instruction Decoder::decode() const {
 
             /* Base Opcode OP-FP */
             case 0b1010011: {
-                int function7 = Funct7_field::extract(bits_);
+                int function7 = Funct7_field::extract(bits);
                 switch (function7) {
                     /* F-extension and D-extension */
                     case 0b0000000: opcode = Opcode::fadd_s; break;
@@ -949,7 +952,7 @@ Instruction Decoder::decode() const {
                     default: goto illegal;
                 }
                 ret.opcode(opcode);
-                ret.imm(B_imm_field::extract(bits_));
+                ret.imm(B_imm_field::extract(bits));
                 return ret;
             }
 
@@ -957,14 +960,14 @@ Instruction Decoder::decode() const {
             case 0b1100111: {
                 if (function != 0b000) goto illegal;
                 ret.opcode(Opcode::jalr);
-                ret.imm(I_imm_field::extract(bits_));
+                ret.imm(I_imm_field::extract(bits));
                 return ret;
             }
 
             /* Base Opcode JAL */
             case 0b1101111: {
                 ret.opcode(Opcode::jal);
-                ret.imm(J_imm_field::extract(bits_));
+                ret.imm(J_imm_field::extract(bits));
                 return ret;
             }
 
@@ -972,11 +975,11 @@ Instruction Decoder::decode() const {
             case 0b1110011: {
                 switch (function) {
                     case 0b000:
-                        if (bits_ == 0x73) {
+                        if (bits == 0x73) {
                             // All other bits cleared
                             ret.opcode(Opcode::ecall);
                             return ret;
-                        } else if (bits_ == 0x100073) {
+                        } else if (bits == 0x100073) {
                             ret.opcode(Opcode::ebreak);
                             return ret;
                         }
@@ -993,7 +996,7 @@ Instruction Decoder::decode() const {
                 // In both I and non-I cases we put immediate in RS1, so we don't have to deal with that specially.
                 // csr fields are similar to I-type but unsigned.
                 ret.opcode(opcode);
-                ret.imm(Csr_field::extract(bits_));
+                ret.imm(Csr_field::extract(bits));
                 return ret;
             }
 
@@ -1008,6 +1011,16 @@ Instruction Decoder::decode() const {
     // Long instructions are not supported yet. For now just treat it as a 2-bit illegal instruction.
     ret.length(2);
     return ret;
+}
+
+Instruction Decoder::decode_instruction() {
+    uint32_t bits = state_->mmu->load_memory<uint32_t>(pc_);
+    Instruction inst = decode(bits);
+    if (state_->disassemble) {
+        Disassembler::print_instruction(pc_, bits, inst);
+    }
+    pc_ += inst.length();
+    return inst;
 }
 
 }

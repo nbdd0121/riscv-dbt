@@ -30,6 +30,9 @@ struct State {
 
     // A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
     bool strace;
+
+    // A flag to determine whether to print instruction out when it is decoded.
+    bool disassemble;
 };
 
 }

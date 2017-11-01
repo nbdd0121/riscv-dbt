@@ -25,6 +25,7 @@ int main(int argc, const char **argv) {
     // By default we use flat mmu since it is faster.
     bool use_paging = false;
     bool strace = false;
+    bool disassemble = false;
 
     // Parsing arguments
     int arg_index;
@@ -40,6 +41,8 @@ int main(int argc, const char **argv) {
             use_paging = true;
         } else if (strcmp(arg, "--strace") == 0) {
             strace = true;
+        } else if (strcmp(arg, "--disassemble") == 0) {
+            disassemble = true;
         } else {
             std::cerr << "Unknown argument " << arg << ", ignored" << std::endl;
         }
@@ -54,6 +57,7 @@ int main(int argc, const char **argv) {
 
     emu::State state;
     state.strace = strace;
+    state.disassemble = disassemble;
     state.exit_code = -1;
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
@@ -124,11 +128,12 @@ int main(int argc, const char **argv) {
     context->instret = 0;
     context->lr = 0;
 
+    riscv::Decoder decoder { &state };
+
     try {
         while (state.exit_code == -1) {
-            uint32_t inst_bits = mmu->load_memory<uint32_t>(context->pc);
-            riscv::Decoder decoder { inst_bits };
-            riscv::Instruction inst = decoder.decode();
+            decoder.pc(context->pc);
+            riscv::Instruction inst = decoder.decode_instruction();
 
             // Disassembler::print_instruction(context->pc, inst_bits, inst);
             context->pc += inst.length();
