@@ -113,7 +113,8 @@ reg_t read_csr(Context *context, int csr) {
         case Csr::fcsr:
             return context->fcsr;
         case Csr::instret:
-            return context->instret;
+            // Assume that instret is incremented already.
+            return context->instret - 1;
         default:
             std::cerr << "READ CSR " << csr << std::endl;
             throw "Illegal CSR";

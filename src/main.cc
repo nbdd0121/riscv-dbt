@@ -5,10 +5,12 @@
 
 #include "emu/mmu.h"
 #include "emu/state.h"
+#include "riscv/basic_block.h"
 #include "riscv/context.h"
 #include "riscv/decoder.h"
 #include "riscv/disassembler.h"
 #include "riscv/instruction.h"
+#include "riscv/opcode.h"
 #include "util/format.h"
 
 namespace emu {
@@ -71,7 +73,7 @@ int main(int argc, const char **argv) {
 
     // Set sp to be the highest possible address.
     emu::reg_t sp = use_paging ? 0x800000000000 : 0x10000000;
-    
+
     // This contains (guest) pointers to all argument strings.
     std::vector<emu::reg_t> arg_pointers(argc - arg_index);
 
@@ -129,16 +131,45 @@ int main(int argc, const char **argv) {
     context->lr = 0;
 
     riscv::Decoder decoder { &state };
+    std::unordered_map<emu::reg_t, riscv::Basic_block> inst_cache;
 
     try {
         while (state.exit_code == -1) {
-            decoder.pc(context->pc);
-            riscv::Instruction inst = decoder.decode_instruction();
+            emu::reg_t pc = context->pc;
+            riscv::Basic_block& basic_block = inst_cache[pc];
 
-            // Disassembler::print_instruction(context->pc, inst_bits, inst);
-            context->pc += inst.length();
-            riscv::step(context, inst);
-            context->instret++;
+            if (basic_block.instructions.size() == 0) {
+                decoder.pc(pc);
+                basic_block = decoder.decode_basic_block();
+
+                // Post-processing by replacing auipc with lui.
+                // This is a little bit trick: we rely on the fact that handling of immediate format is done in the decoder
+                // instead of in the interpreter, so lui is implemented as write_rd(imm)
+                for (auto& inst: basic_block.instructions) {
+                    if (inst.opcode() == riscv::Opcode::auipc) {
+                        inst.opcode(riscv::Opcode::lui);
+                        inst.imm(inst.imm() + pc);
+                    }
+                    pc += inst.length();
+                }
+            }
+
+            size_t block_size = basic_block.instructions.size() - 1;
+
+            for (size_t i = 0; i < block_size; i++) {
+                // Retrieve cached data
+                riscv::Instruction inst = basic_block.instructions[i];
+                riscv::step(context, inst);
+            }
+
+            context->pc = basic_block.end_pc;
+            context->instret += block_size + 1;
+            riscv::Instruction inst = basic_block.instructions[block_size];
+            if (inst.opcode() == riscv::Opcode::fence_i) {
+                inst_cache.clear();
+            } else {
+                riscv::step(context, inst);
+            }
         }
     } catch (std::exception& ex) {
         util::print("{}\npc={:x}\n", ex.what(), context->pc);

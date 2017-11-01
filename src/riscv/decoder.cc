@@ -1,10 +1,56 @@
 #include "emu/mmu.h"
 #include "emu/state.h"
+#include "riscv/basic_block.h"
+#include "riscv/csr.h"
 #include "riscv/decoder.h"
 #include "riscv/disassembler.h"
 #include "riscv/opcode.h"
 #include "riscv/instruction.h"
 #include "util/assert.h"
+#include "util/format.h"
+
+namespace {
+
+// Determine whether an instruction can change control flow (excluding exceptional scenario).
+bool can_change_control_flow(riscv::Instruction inst) {
+    switch (inst.opcode()) {
+        // Branch and jump instructions will definitely disrupt the control flow.
+        case riscv::Opcode::beq:
+        case riscv::Opcode::bne:
+        case riscv::Opcode::blt:
+        case riscv::Opcode::bge:
+        case riscv::Opcode::bltu:
+        case riscv::Opcode::bgeu:
+        case riscv::Opcode::jalr:
+        case riscv::Opcode::jal:
+        // ecall and illegal logically does not interrupt control flow, but as they trigger fault, the control flow
+        // will eventually be redirected to the signal handler.
+        case riscv::Opcode::ebreak:
+        case riscv::Opcode::illegal:
+        // fence.i might cause instruction cache to be invalidated. If the code executing is invalidated, then we need
+        // to stop executing, so it is safer to treat it as special instruction at the moment.
+        case riscv::Opcode::fence_i:
+        // ecall usually does not change control flow, but due to existence of syscall such as exit(), it is safer to
+        // treat it as specially at the moment, and maybe considering optimizing later.
+        case riscv::Opcode::ecall:
+            return true;
+        // A common way of using basic blocks is to `batch' instret and pc increment. So if CSR to be accessed is
+        // instret, consider it as special.
+        case riscv::Opcode::csrrw:
+        case riscv::Opcode::csrrs:
+        case riscv::Opcode::csrrc:
+        case riscv::Opcode::csrrwi:
+        case riscv::Opcode::csrrsi:
+        case riscv::Opcode::csrrci: {
+            riscv::Csr csr = static_cast<riscv::Csr>(inst.imm());
+            return csr == riscv::Csr::instret || csr == riscv::Csr::instreth;
+        }
+        default:
+            return false;
+    }
+}
+
+}
 
 namespace riscv {
 
@@ -1021,6 +1067,30 @@ Instruction Decoder::decode_instruction() {
     }
     pc_ += inst.length();
     return inst;
+}
+
+Basic_block Decoder::decode_basic_block() {
+    Basic_block block;
+
+    if (state_->disassemble) {
+        util::log("Decoding {:x}\n", pc_);
+    }
+
+    block.start_pc = pc_;
+
+    // Scan util a branching instruction is encountered
+    while (true) {
+        Instruction inst = decode_instruction();
+        block.instructions.push_back(inst);
+
+        // TODO: We should also consider breaking when this gets large.
+        if (can_change_control_flow(inst)) {
+            break;
+        }
+    }
+
+    block.end_pc = pc_;
+    return block;
 }
 
 }

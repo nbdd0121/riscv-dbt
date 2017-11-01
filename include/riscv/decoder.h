@@ -12,6 +12,7 @@ class State;
 namespace riscv {
 
 class Instruction;
+struct Basic_block;
 
 class Decoder {
     emu::State *state_;
@@ -28,6 +29,7 @@ public:
     void pc(reg_t pc) { pc_ = pc; }
 
     Instruction decode_instruction();
+    Basic_block decode_basic_block();
 };
 
 } // riscv
