@@ -49,6 +49,11 @@ void print(const char *format, const Args&... args) {
 }
 
 template<typename... Args>
+void error(const char *format, const Args&... args) {
+    util::format(std::cerr, format, args...);
+}
+
+template<typename... Args>
 void log(const char *format, const Args&... args) {
     util::format(std::clog, format, args...);
 }

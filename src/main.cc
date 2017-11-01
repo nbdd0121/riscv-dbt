@@ -21,6 +21,15 @@ namespace riscv {
 void step(Context *context, Instruction inst);
 }
 
+static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
+Options:\n\
+  --paging      Use soft paging MMU instead of a flat MMU. The emulated program\n\
+                will have larger address space in expense of performance.\n\
+  --strace      Log system calls.\n\
+  --disassemble Log decoded instructions.\n\
+  --help        Display this help message.\n\
+";
+
 int main(int argc, const char **argv) {
 
     /* Arguments to be parsed */
@@ -45,14 +54,17 @@ int main(int argc, const char **argv) {
             strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
             disassemble = true;
+        } else if (strcmp(arg, "--help") == 0) {
+            util::error(usage_string, argv[0]);
+            return 0;
         } else {
-            std::cerr << "Unknown argument " << arg << ", ignored" << std::endl;
+            util::error("{}: unrecognized option '{}'\n", argv[0], arg);
         }
     }
 
     // The next argument is the path to the executable.
     if (arg_index == argc) {
-        std::cerr << "Program name unspecified" << std::endl;
+        util::error(usage_string, argv[0]);
         return 1;
     }
     const char *program_name = argv[arg_index];
