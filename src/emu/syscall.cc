@@ -316,6 +316,19 @@ reg_t syscall(
             if (arg0 < state->original_brk) {
                 // Cannot reduce beyond original_brk
             } else {
+                reg_t new_heap_end = std::max(state->heap_start, (arg0 + page_mask) &~ page_mask);
+
+                if (new_heap_end > state->heap_end) {
+
+                    // The heap needs to be expanded
+                    state->mmu->allocate_page(state->heap_end, new_heap_end - state->heap_end);
+                    state->heap_end = new_heap_end;
+
+                } else if (new_heap_end < state->heap_end) {
+
+                    // TODO: Also shrink when brk is reduced.
+                }
+
                 state->brk = arg0;
             }
             reg_t ret = state->brk;

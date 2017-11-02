@@ -86,12 +86,15 @@ reg_t load_elf(const char *filename, State& state) {
                 throw std::runtime_error { "invalid elf file: constraint p_filesz <= p_memsz is not satisified" };
             }
 
+            reg_t vaddr_end = h->p_vaddr + h->p_memsz;
+            reg_t page_start = h->p_vaddr &~ page_mask;
+            reg_t page_end = (vaddr_end + page_mask) &~ page_mask;
+            mmu.allocate_page(page_start, page_end - page_start);
+
             // MMU should have memory zeroes at startup
             mmu.zero_memory(h->p_vaddr + h->p_filesz, h->p_memsz - h->p_filesz);
             // TODO: This should be be mmapped instead of copied
             mmu.copy_from_host(h->p_vaddr, memory + h->p_offset, h->p_filesz);
-
-            reg_t vaddr_end = h->p_vaddr + h->p_memsz;
 
             // Set brk to the address past the last program segment.
             if (vaddr_end > brk) {
@@ -102,6 +105,8 @@ reg_t load_elf(const char *filename, State& state) {
 
     state.original_brk = brk;
     state.brk = brk;
+    state.heap_start = (brk + page_mask) &~ page_mask;
+    state.heap_end = state.heap_start;
 
     return header->e_entry;
 }

@@ -117,14 +117,9 @@ void Paging_mmu::tlb_fetch(reg_t address) {
     // Unlikely event of cache miss. Get the entry in the map.
     const auto& mapping = map.find(address);
 
-    // If the mapping does not exist, it will be a page fault. However since currently we does not handle heap and
-    // stack correctly yet, we will map the page in RW
+    // If the mapping does not exist, it will be a page fault.
     if (UNLIKELY(mapping == map.end())) {
-        // throw std::runtime_error {"Page fault"};
-        allocate_page(address, page_size);
-        cached_query[tag] = address;
-        cached_result[tag] = map.at(address);
-        return;
+        throw std::runtime_error {"Page fault"};
     }
 
     cached_query[tag] = address;
@@ -151,18 +146,14 @@ void Paging_mmu::allocate_page(reg_t address, reg_t size) {
 
 Flat_mmu::Flat_mmu(size_t size): size_(size) {
 
-    // Ideally we want the page to be all PROT_NONE, then allocate when it is needed. Since we cannot handle heap and
-    // stack correctly yet, we make them all RW.
+    // Ideally we want the page to be all PROT_NONE, then allocate when it is needed.
     memory_ = reinterpret_cast<std::byte*>(
-        mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)
+        mmap(NULL, size, PROT_NONE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)
     );
 
     if (memory_ == nullptr) {
         throw std::bad_alloc {};
     }
-
-    // Make the first page not accessible so it catches null reference.
-    mprotect(memory_, 4096, PROT_NONE);
 }
 
 Flat_mmu::~Flat_mmu() {

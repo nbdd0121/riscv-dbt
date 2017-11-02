@@ -24,6 +24,8 @@ struct State {
     // A constraint original_brk <= brk must be satisified.
     reg_t original_brk;
     reg_t brk;
+    reg_t heap_start;
+    reg_t heap_end;
 
     // The exit code of the program. Set when the guest program calls syscall exit.
     int exit_code;

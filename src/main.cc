@@ -85,6 +85,7 @@ int main(int argc, const char **argv) {
 
     // Set sp to be the highest possible address.
     emu::reg_t sp = use_paging ? 0x800000000000 : 0x10000000;
+    mmu->allocate_page(sp - 0x800000, 0x800000);
 
     // This contains (guest) pointers to all argument strings.
     std::vector<emu::reg_t> arg_pointers(argc - arg_index);
