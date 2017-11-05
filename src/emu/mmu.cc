@@ -110,7 +110,7 @@ Paging_mmu::~Paging_mmu() {
 void Paging_mmu::tlb_fetch(reg_t address) {
 
     // The input must be page-aligned.
-    PRECONDITION((address & page_mask) == 0);
+    ASSERT((address & page_mask) == 0);
 
     const ptrdiff_t tag = (address >> log_page_size) & 31;
 
@@ -129,7 +129,7 @@ void Paging_mmu::tlb_fetch(reg_t address) {
 void Paging_mmu::allocate_page(reg_t address, reg_t size) {
 
     // The input must be page-aligned.
-    PRECONDITION((address & page_mask) == 0 && (size & page_mask) == 0);
+    ASSERT((address & page_mask) == 0 && (size & page_mask) == 0);
 
     std::byte *result = reinterpret_cast<std::byte*>(
         mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)
@@ -165,7 +165,7 @@ Flat_mmu::~Flat_mmu() {
 void Flat_mmu::allocate_page(reg_t address, reg_t size) {
 
     // The input must be page-aligned.
-    PRECONDITION((address & page_mask) == 0 && (size & page_mask) == 0);
+    ASSERT((address & page_mask) == 0 && (size & page_mask) == 0);
 
     if (address >= size_) {
         throw std::bad_alloc {};

@@ -19,11 +19,6 @@
 #   define ASSERT_STRATEGY ASSERT_STRATEGY_THROW
 #endif
 
-// Default strategy for contract violation is throw.
-#ifndef CONTRACT_STRATEGY
-#   define CONTRACT_STRATEGY ASSERT_STRATEGY_THROW
-#endif
-
 // Hint to the compiler the likely outcome of a condition for optimisation.
 #ifdef __GNUC__
 #   define LIKELY(cond) __builtin_expect(!!(cond), 1)
@@ -56,26 +51,14 @@ struct Assertion_error: std::logic_error {
 
 } // util
 
-#define ASSERT_IMPL_THROW(cond, type) \
-    (LIKELY(cond) ? static_cast<void>(0) \
-                  : throw util::Assertion_error(type " `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__)))
-
-#define ASSERT_IMPL_TERMINATE(cond, type) (LIKELY(cond) ? static_cast<void>(0) : std::terminate())
-
 #if ASSERT_STRATEGY == ASSERT_STRATEGY_THROW
-#   define ASSERT(cond) ASSERT_IMPL_THROW(cond, "assertion")
+#   define ASSERT(cond) \
+    (LIKELY(cond) ? static_cast<void>(0) \
+                  : throw util::Assertion_error("assertion `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__)))
 #elif ASSERT_STRATEGY == ASSERT_STRATEGY_TERMINATE
-#   define ASSERT(cond) ASSERT_IMPL_TERMINATE(cond, "assertion")
+#   define ASSERT(cond) (LIKELY(cond) ? static_cast<void>(0) : std::terminate())
 #else
 #   define ASSERT(cond) ASSUME(cond)
-#endif
-
-#if CONTRACT_STRATEGY == ASSERT_STRATEGY_THROW
-#   define PRECONDITION(cond) ASSERT_IMPL_THROW(cond, "precondition")
-#elif CONTRACT_STRATEGY == ASSERT_STRATEGY_TERMINATE
-#   define PRECONDITION(cond) ASSERT_IMPL_TERMINATE(cond, "precondition")
-#else
-#   define PRECONDITION(cond) ASSUME(cond)
 #endif
 
 #endif

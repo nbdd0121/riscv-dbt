@@ -74,7 +74,7 @@ public:
     void rm(int rm) noexcept { immediate_ = Rm_field::pack(immediate_, rm); }
 
     void length(int len) {
-        PRECONDITION(len == 2 || len == 4);
+        ASSERT(len == 2 || len == 4);
         rs2_ = Length_field::pack(rs2_, len == 4);
     }
 

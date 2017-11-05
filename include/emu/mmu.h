@@ -106,7 +106,7 @@ public:
     virtual std::byte* translate_page(reg_t address) override {
 
         // The input must be page-aligned.
-        PRECONDITION((address & page_mask) == 0);
+        ASSERT((address & page_mask) == 0);
 
         const ptrdiff_t tag = (address >> log_page_size) & 31;
 
@@ -141,7 +141,7 @@ public:
     virtual std::byte* translate_page(reg_t address) override {
 
         // The input must be page-aligned.
-        PRECONDITION((address & page_mask) == 0);
+        ASSERT((address & page_mask) == 0);
 
         if (UNLIKELY(address >= size_)) {
             throw std::runtime_error {"Page fault"};
