@@ -219,7 +219,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
         util::log("{:04x}    ", bits & 0xFF);
     }
 
-    util::log("         {:-8}", opcode_name);
+    util::log("        {:-8}", opcode_name);
 
     // Since most instructions use sign-extension, convert it to signed beforehand.
     sreg_t imm = inst.imm();
