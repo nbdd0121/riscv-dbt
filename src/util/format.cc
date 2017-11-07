@@ -59,8 +59,10 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
             // If the next character is colon, then set stream states accordingly. The format string mimicks the design
             // of printf.
             bool state_changed = false;
+            char format_type = '\0';
             if (*pointer == ':') {
                 pointer++;
+
                 state_changed = true;
 
                 // Parse flags
@@ -81,11 +83,18 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
                             stream.fill(' ');
                             stream.setf(std::ios::left, std::ios::adjustfield);
                             continue;
-                        // TODO: Space and + ignored for now as they need additional work.
+                        // TODO: Space is ignored for now as they need additional work.
+                        case '+':
+                            stream.setf(std::ios::showpos);
+                            continue;
                         default:
                             break;
                     }
                     break;
+                }
+
+                if (stream.fill() == '0' && (stream.flags() & std::ios::showpos)) {
+                    throw std::logic_error {"combination of showpos and zero pad not supported"};
                 }
 
                 // Parse width
@@ -100,7 +109,8 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
 
                 // Note that we don't need to specifiy length modifier since this is type safe.
                 // Parse the base field. Move pointer in advance, and if move it back in case it is not recognized.
-                switch(*pointer++) {
+                format_type = *pointer++;
+                switch(format_type) {
                     case 'u': case 'd': case 'i':
                         stream.setf(std::ios::dec, std::ios::basefield);
                         break;
@@ -115,6 +125,7 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
                         break;
                     default:
                         pointer--;
+                        format_type = '\0';
                         break;
                 }
             }
@@ -124,7 +135,7 @@ void format_impl(std::ostream& stream, const char *format, util::internal::Bound
             pointer++;
             format = pointer;
 
-            view[arg_index].format(stream);
+            view[arg_index].format(stream, format_type);
 
             // Revert stream states to default if we touched it.
             if (state_changed) {

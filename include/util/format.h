@@ -5,31 +5,45 @@
 
 namespace util {
 
-template<typename T>
+template<typename T, typename = void>
 struct Formatter {
-    static void format(std::ostream& stream, const T& value) {
+    static void format(std::ostream& stream, const T& value, [[maybe_unused]] char format) {
         stream << value;
+    }
+};
+
+template<typename T>
+struct Formatter<T, std::enable_if_t<std::is_integral_v<T> && sizeof(T) == 1>> {
+    static void format(std::ostream& stream, const unsigned char& value, [[maybe_unused]] char format) {
+        switch (format) {
+            case 'u': case 'd': case 'i': case 'o': case 'X': case 'x':
+                stream << static_cast<int>(value);
+                break;
+            default:
+                stream << value;
+                break;
+        }
     }
 };
 
 namespace internal {
 
 struct Bound_formatter {
-    using Format_function = void (*)(std::ostream& stream, const void *value);
+    using Format_function = void (*)(std::ostream& stream, const void *value, char format);
 
     Format_function formatter;
     const void *value;
 
     template<typename T>
     Bound_formatter(const T& reference) {
-        formatter = [](std::ostream& stream, const void *value) {
-            Formatter<T>::format(stream, *reinterpret_cast<const T*>(value));
+        formatter = [](std::ostream& stream, const void *value, char format) {
+            Formatter<T>::format(stream, *reinterpret_cast<const T*>(value), format);
         };
         value = reinterpret_cast<const void*>(&reference);
     }
     
-    void format(std::ostream& stream) {
-        formatter(stream, value);
+    void format(std::ostream& stream, char format) {
+        formatter(stream, value, format);
     }
 };
 
