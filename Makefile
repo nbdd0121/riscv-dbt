@@ -17,7 +17,9 @@ OBJS = \
 	util/assert.o \
 	util/code_buffer.o \
 	util/format.o \
-	util/safe_memory.o
+	util/safe_memory.o \
+	x86/disassembler.o \
+	x86/encoder.o
 
 default: all
 
