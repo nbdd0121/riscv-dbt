@@ -8,6 +8,7 @@ OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
 	emu/syscall.o \
+	main/dbt.o \
 	main/interpreter.o \
 	main/main.o \
 	riscv/decoder.o \

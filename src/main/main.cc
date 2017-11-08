@@ -5,6 +5,7 @@
 
 #include "emu/mmu.h"
 #include "emu/state.h"
+#include "main/dbt.h"
 #include "main/interpreter.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
@@ -20,6 +21,7 @@ Options:\n\
                 will have larger address space in expense of performance.\n\
   --strace      Log system calls.\n\
   --disassemble Log decoded instructions.\n\
+  --disable-dbt Disable dynamic binary translation and use interpretation instead.\n\
   --help        Display this help message.\n\
 ";
 
@@ -30,6 +32,7 @@ int main(int argc, const char **argv) {
     bool use_paging = false;
     bool strace = false;
     bool disassemble = false;
+    bool use_dbt = true;
 
     // Parsing arguments
     int arg_index;
@@ -47,6 +50,8 @@ int main(int argc, const char **argv) {
             strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
             disassemble = true;
+        } else if (strcmp(arg, "--disable-dbt") == 0) {
+            use_dbt = false;
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;
@@ -136,11 +141,17 @@ int main(int argc, const char **argv) {
     context->instret = 0;
     context->lr = 0;
 
-    Interpreter executor { state };
-
     try {
-        while (state.exit_code == -1) {
-            executor.step(*context);
+        if (use_dbt) {
+            Dbt_runtime executor { state };
+            while (state.exit_code == -1) {
+                executor.step(*context);
+            }
+        } else {
+            Interpreter executor { state };
+            while (state.exit_code == -1) {
+                executor.step(*context);
+            }
         }
     } catch (std::exception& ex) {
         util::print("{}\npc={:x}\n", ex.what(), context->pc);

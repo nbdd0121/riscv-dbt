@@ -3,6 +3,7 @@
 #include "riscv/decoder.h"
 #include "riscv/instruction.h"
 #include "riscv/opcode.h"
+#include "util/assert.h"
 
 Interpreter::Interpreter(emu::State& state) noexcept: state_{state} {
 
@@ -13,7 +14,7 @@ void Interpreter::step(riscv::Context& context) {
     riscv::Basic_block& basic_block = inst_cache_[pc];
     riscv::Decoder decoder {&state_, pc};
 
-    if (basic_block.instructions.size() == 0) {
+    if (UNLIKELY(basic_block.instructions.size() == 0)) {
         basic_block = decoder.decode_basic_block();
 
         // Post-processing by replacing auipc with lui.
