@@ -13,6 +13,8 @@ OBJS = \
 	riscv/disassembler.o \
 	riscv/step.o \
 	softfp/float.o \
+	util/assert.o \
+	util/code_buffer.o \
 	util/format.o \
 	util/safe_memory.o
 
