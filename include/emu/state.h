@@ -37,6 +37,8 @@ struct State {
     bool disassemble;
 };
 
+reg_t load_elf(const char *filename, State& mmu);
+
 }
 
 #endif

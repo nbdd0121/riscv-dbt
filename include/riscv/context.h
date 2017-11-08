@@ -29,6 +29,9 @@ struct Context {
     emu::State *state;
 };
 
+class Instruction;
+void step(Context *context, Instruction inst);
+
 } // riscv
 
 #endif
