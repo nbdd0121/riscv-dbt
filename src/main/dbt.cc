@@ -136,6 +136,19 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
     *this << add(qword(memory_of(pc)), pc_diff + inst.length());
     *this << add(qword(memory_of(instret)), instret_diff + 1);
+
+    if (inst.opcode() == riscv::Opcode::fence_i) {
+        void (*callback)(Dbt_runtime&) = [](Dbt_runtime& runtime) {
+            for (int i = 0; i < 4096; i++)
+                runtime.icache_tag_[i] = 0;
+            runtime.inst_cache_.clear();
+        };
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(&runtime_));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(callback));
+        *this << pop(x86::Register::rbp);
+        *this << jmp(x86::Register::rax);
+    }
+
     *this << mov(x86::Register::rsi, util::read_as<uint64_t>(&inst));
     *this << lea(x86::Register::rdi, qword(x86::Register::rbp - 0x80));
     *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(riscv::step));
