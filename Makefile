@@ -4,6 +4,9 @@ CXX = g++-7
 LD_FLAGS = -g
 CXX_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
 
+LD_RELEASE_FLAGS = -g -flto
+CXX_RELEASE_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DASSERT_STRATEGY=ASSERT_STRATEGY_ASSUME -flto -fno-stack-protector
+
 OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
@@ -34,7 +37,11 @@ clean:
 codegen: $(patsubst %,bin/%,$(OBJS)) $(LIBS)
 	$(LD) $(LD_FLAGS) $^ -o $@
 
+release: $(patsubst %,bin/release/%,$(OBJS)) $(LIBS)
+	$(LD) $(LD_RELEASE_FLAGS) $^ -o $@
+
 -include $(patsubst %,bin/%,$(OBJS:.o=.d))
+-include $(patsubst %,bin/release/%,$(OBJS:.o=.d))
 
 # Special rule for feature testing
 bin/feature.o: src/feature.cc
@@ -49,6 +56,10 @@ bin/util/safe_memory.o: src/util/safe_memory.cc
 bin/%.o: src/%.cc bin/feature.o
 	@mkdir -p $(dir $@)
 	$(CXX) -c -MMD -MP $(CXX_FLAGS) $< -o $@
+
+bin/release/%.o: src/%.cc bin/feature.o
+	@mkdir -p $(dir $@)
+	$(CXX) -c -MMD -MP $(CXX_RELEASE_FLAGS) $< -o $@
 
 register: codegen
 	sudo bash -c "echo ':riscv:M::\x7fELF\x02\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\xf3\x00:\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff:$(shell realpath codegen):' > /proc/sys/fs/binfmt_misc/register"
