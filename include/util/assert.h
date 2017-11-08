@@ -46,15 +46,22 @@
 namespace util {
 
 struct Assertion_error: std::logic_error {
-    explicit Assertion_error(const char* message) : std::logic_error(message) {}
+    explicit Assertion_error(const char *message) : std::logic_error(message) {}
 };
+
+namespace internal {
+
+// Put this into a function so GCC will not warn about throw in noexcept.
+[[noreturn]] void assertion_fail(const char *message);
+
+}
 
 } // util
 
 #if ASSERT_STRATEGY == ASSERT_STRATEGY_THROW
 #   define ASSERT(cond) \
     (LIKELY(cond) ? static_cast<void>(0) \
-                  : throw util::Assertion_error("assertion `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__)))
+                  : util::internal::assertion_fail("assertion `" #cond "` failed at " __FILE__ ":" STRINGIFY(__LINE__)))
 #elif ASSERT_STRATEGY == ASSERT_STRATEGY_TERMINATE
 #   define ASSERT(cond) (LIKELY(cond) ? static_cast<void>(0) : std::terminate())
 #else
