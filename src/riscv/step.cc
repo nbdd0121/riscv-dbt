@@ -47,19 +47,19 @@ static inline uint64_t zero_ext(uint32_t value) {
 static_assert(sizeof(freg_t) == 8);
 
 static inline void write_double(freg_t& target, softfp::Double value) {
-    target = util::interpret_as<uint64_t>(&value);
+    target = util::read_as<uint64_t>(&value);
 }
 
 static inline void write_single(freg_t& target, softfp::Single value) {
-    target = util::interpret_as<uint32_t>(&value) | 0xFFFFFFFF00000000;
+    target = util::read_as<uint32_t>(&value) | 0xFFFFFFFF00000000;
 }
 
 static inline softfp::Double read_double(freg_t& target) {
-    return util::interpret_as<softfp::Double>(&target);
+    return util::read_as<softfp::Double>(&target);
 }
 
 static inline softfp::Single read_single(freg_t& target) {
-    return util::interpret_as<softfp::Single>(&target);
+    return util::read_as<softfp::Single>(&target);
 }
 
 static inline void set_rm_real(int rm) {
@@ -696,12 +696,12 @@ void step(Context *context, Instruction inst) {
         /* F-extension */
         case Opcode::flw: {
             uint32_t value = context->mmu->load_memory<uint32_t>(read_rs1() + inst.imm());
-            write_frd_s(util::interpret_as<softfp::Single>(&value));
+            write_frd_s(util::read_as<softfp::Single>(&value));
             break;
         }
         case Opcode::fsw: {
             softfp::Single value = read_frs2_s();
-            context->mmu->store_memory<uint32_t>(read_rs1() + inst.imm(), util::interpret_as<uint32_t>(&value));
+            context->mmu->store_memory<uint32_t>(read_rs1() + inst.imm(), util::read_as<uint32_t>(&value));
             break;
         }
         case Opcode::fadd_s:
@@ -779,7 +779,7 @@ void step(Context *context, Instruction inst) {
             break;
         case Opcode::fmv_x_w: {
             softfp::Single value = read_frs1_s();
-            write_rd(sign_ext(util::interpret_as<uint32_t>(&value)));
+            write_rd(sign_ext(util::read_as<uint32_t>(&value)));
             break;
         }
         case Opcode::fcvt_s_w:
@@ -828,7 +828,7 @@ void step(Context *context, Instruction inst) {
         }
         case Opcode::fmv_w_x: {
             reg_t value = read_rs1();
-            write_frd_s(util::interpret_as<softfp::Single>(&value));
+            write_frd_s(util::read_as<softfp::Single>(&value));
             break;
         }
         case Opcode::fmadd_s:
@@ -859,12 +859,12 @@ void step(Context *context, Instruction inst) {
         /* D-extension */
         case Opcode::fld: {
             uint64_t value = context->mmu->load_memory<uint64_t>(read_rs1() + inst.imm());
-            write_frd_d(util::interpret_as<softfp::Double>(&value));
+            write_frd_d(util::read_as<softfp::Double>(&value));
             break;
         }
         case Opcode::fsd: {
             softfp::Double value = read_frs2_d();
-            context->mmu->store_memory<uint64_t>(read_rs1() + inst.imm(), util::interpret_as<uint64_t>(&value));
+            context->mmu->store_memory<uint64_t>(read_rs1() + inst.imm(), util::read_as<uint64_t>(&value));
             break;
         }
         case Opcode::fadd_d:
@@ -953,7 +953,7 @@ void step(Context *context, Instruction inst) {
             break;
         case Opcode::fmv_x_d: {
             softfp::Double value = read_frs1_d();
-            write_rd(util::interpret_as<uint64_t>(&value));
+            write_rd(util::read_as<uint64_t>(&value));
             break;
         }
         case Opcode::fcvt_d_w:
@@ -1002,7 +1002,7 @@ void step(Context *context, Instruction inst) {
         }
         case Opcode::fmv_d_x: {
             reg_t value = read_rs1();
-            write_frd_d(util::interpret_as<softfp::Double>(&value));
+            write_frd_d(util::read_as<softfp::Double>(&value));
             break;
         }
         case Opcode::fmadd_d:

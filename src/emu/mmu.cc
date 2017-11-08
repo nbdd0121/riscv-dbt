@@ -22,7 +22,7 @@ T Mmu::load_memory_misaligned(reg_t address) {
         util::safe_memcpy(word, translated_page + page_offset, size_in_page);
         util::safe_memcpy(word + size_in_page, next_translated_page, sizeof(T) - size_in_page);
 
-        return util::interpret_as<T>(word);
+        return util::read_as<T>(word);
     }
 
     return util::safe_read<T>(translated_page + page_offset);
@@ -38,7 +38,7 @@ void Mmu::store_memory_misaligned(reg_t address, T value) {
 
         // Unaligned, cross-page access. Slow path
         std::byte word[sizeof(T)];
-        util::interpret_as<T>(word) = value;
+        util::write_as<T>(word, value);
 
         std::byte *next_translated_page = translate_page(page_base + page_size);
         int size_in_page = page_size - page_offset;
