@@ -43,6 +43,11 @@ private:
     void emit_lh(riscv::Instruction inst, bool u);
     void emit_lw(riscv::Instruction inst, bool u);
     void emit_ld(riscv::Instruction inst);
+    void emit_sb(riscv::Instruction inst);
+    void emit_sh(riscv::Instruction inst);
+    void emit_sw(riscv::Instruction inst);
+    void emit_sd(riscv::Instruction inst);
+
     void emit_addi(riscv::Instruction inst);
     void emit_slti(riscv::Instruction inst);
     void emit_andi(riscv::Instruction inst);
@@ -145,6 +150,11 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::lbu: emit_lb(inst, true); break;
             case riscv::Opcode::lhu: emit_lh(inst, true); break;
             case riscv::Opcode::lwu: emit_lw(inst, true); break;
+            case riscv::Opcode::sb: emit_sb(inst); break;
+            case riscv::Opcode::sh: emit_sh(inst); break;
+            case riscv::Opcode::sw: emit_sw(inst); break;
+            case riscv::Opcode::sd: emit_sd(inst); break;
+
             case riscv::Opcode::addi: emit_addi(inst); break;
             case riscv::Opcode::slti: emit_slti(inst); break;
             case riscv::Opcode::andi: emit_andi(inst); break;
@@ -521,6 +531,166 @@ void Dbt_compiler::emit_ld(riscv::Instruction inst) {
 
     if (rd != 0) {
         *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_sb(riscv::Instruction inst) {
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (rs2 == 0) {
+            *this << mov(byte(x86::Register::rax + 0), 0);
+        } else {
+            *this << mov(x86::Register::dl, byte(memory_of_register(rs2)));
+            *this << mov(byte(x86::Register::rax + 0), x86::Register::dl);
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        if (rs2 == 0) {
+            *this << mov(x86::Register::rdx, 0);
+        } else {
+            *this << mov(x86::Register::dl, byte(memory_of_register(rs2)));
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint8_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_sh(riscv::Instruction inst) {
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (rs2 == 0) {
+            *this << mov(word(x86::Register::rax + 0), 0);
+        } else {
+            *this << mov(x86::Register::dx, word(memory_of_register(rs2)));
+            *this << mov(word(x86::Register::rax + 0), x86::Register::dx);
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        if (rs2 == 0) {
+            *this << mov(x86::Register::rdx, 0);
+        } else {
+            *this << mov(x86::Register::dx, word(memory_of_register(rs2)));
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint16_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_sw(riscv::Instruction inst) {
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (rs2 == 0) {
+            *this << mov(dword(x86::Register::rax + 0), 0);
+        } else {
+            *this << mov(x86::Register::edx, dword(memory_of_register(rs2)));
+            *this << mov(dword(x86::Register::rax + 0), x86::Register::edx);
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        if (rs2 == 0) {
+            *this << mov(x86::Register::rdx, 0);
+        } else {
+            *this << mov(x86::Register::edx, dword(memory_of_register(rs2)));
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint32_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_sd(riscv::Instruction inst) {
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (rs2 == 0) {
+            *this << mov(qword(x86::Register::rax + 0), 0);
+        } else {
+            *this << mov(x86::Register::rdx, qword(memory_of_register(rs2)));
+            *this << mov(qword(x86::Register::rax + 0), x86::Register::rdx);
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        if (rs2 == 0) {
+            *this << mov(x86::Register::rdx, 0);
+        } else {
+            *this << mov(x86::Register::rdx, qword(memory_of_register(rs2)));
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint64_t>)
+        ));
+
+        *this << call(x86::Register::rax);
     }
 }
 
