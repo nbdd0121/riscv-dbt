@@ -291,12 +291,12 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
     }
 }
 
-// Generic helper function emitting all instructions that operate on rm, supporting 8, 16, 32 and 64-bit.
+// Generic helper function emitting all instructions that operate on r/rm, supporting 8, 16, 32 and 64-bit.
 // Argument mem does not have to be a memory operand.
 // Encoding of opcode: highest byte is reserved for potential mandatory prefix, and lower 3 bytes, if non-zero,
 // will be emitted. The last byte will be emitted even if it's zero. Note that this works since 00 will not appear
 // as an escape code.
-void Encoder::emit_rm(int op_size, const Operand& mem, Register reg, uint64_t opcode) {
+void Encoder::emit_r_rm(int op_size, const Operand& mem, Register reg, uint64_t opcode) {
     // Operand size override prefix.
     if (op_size == 2) emit_byte(0x66);
 
@@ -341,12 +341,12 @@ void Encoder::emit_plusr(int op_size, Register reg, uint64_t opcode) {
 
 // Generate code for instructions with only RM encoding.
 // It makes sure that reg is indeed register, and operand size match.
-void Encoder::emit_rm(const Operand& mem, const Operand& reg, uint64_t opcode) {
+void Encoder::emit_r_rm(const Operand& mem, const Operand& reg, uint64_t opcode) {
     int op_size = get_size(mem);
     ASSERT(op_size != 1);
     ASSERT(reg.is_register());
     ASSERT(get_size(reg) == op_size);
-    emit_rm(op_size, mem, reg.as_register(), opcode);
+    emit_r_rm(op_size, mem, reg.as_register(), opcode);
 }
 
 // Generate code for ALU instructions.
@@ -367,7 +367,7 @@ void Encoder::emit_alu(const Instruction& inst, int id) {
 
         // Short encoding available for 8-bit immediate.
         if (op_size != 1 && is_int8(imm)) {
-            emit_rm(op_size, dst, static_cast<Register>(id), 0x83);
+            emit_r_rm(op_size, dst, static_cast<Register>(id), 0x83);
             emit_byte(imm);
             return;
         }
@@ -386,7 +386,7 @@ void Encoder::emit_alu(const Instruction& inst, int id) {
             return;
         }
 
-        emit_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0x80 : 0x81);
+        emit_r_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0x80 : 0x81);
         emit_immediate(op_size == 8 ? 4 : op_size, imm);
         return;
     }
@@ -396,13 +396,13 @@ void Encoder::emit_alu(const Instruction& inst, int id) {
 
     // Prefer INST r/m, r to INST r, r/m in case of INST r, r
     if (src.is_register()) {
-        emit_rm(op_size, dst, src.as_register(), (id << 3) | (op_size == 1 ? 0x00 : 0x01));
+        emit_r_rm(op_size, dst, src.as_register(), (id << 3) | (op_size == 1 ? 0x00 : 0x01));
         return;
     }
 
     // Operands cannot both be memory.
     ASSERT(dst.is_register());
-    emit_rm(op_size, src, dst.as_register(), (id << 3) | (op_size == 1 ? 0x02 : 0x03));
+    emit_r_rm(op_size, src, dst.as_register(), (id << 3) | (op_size == 1 ? 0x02 : 0x03));
 }
 
 // Generate code for shift instructions.
@@ -416,7 +416,7 @@ void Encoder::emit_shift(const Instruction& inst, int id) {
 
     // Shift by CL
     if (src.is_register() && src.as_register() == x86::Register::cl) {
-        emit_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xD2 : 0xD3);
+        emit_r_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xD2 : 0xD3);
         return;
     }
 
@@ -426,9 +426,9 @@ void Encoder::emit_shift(const Instruction& inst, int id) {
     ASSERT(is_uint8(imm));
 
     if (imm == 1) {
-        emit_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xD0 : 0xD1);
+        emit_r_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xD0 : 0xD1);
     } else {
-        emit_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xC0 : 0xC1);
+        emit_r_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xC0 : 0xC1);
         emit_byte(imm);
     }
 }
@@ -486,7 +486,7 @@ void Encoder::emit_lea(const Instruction& inst) {
     ASSERT(inst.operands[0].is_register() && inst.operands[1].is_memory());
     int op_size = get_size(inst.operands[0]);
     ASSERT(op_size != 1);
-    emit_rm(op_size, inst.operands[1], inst.operands[0].as_register(), 0x8D);
+    emit_r_rm(op_size, inst.operands[1], inst.operands[0].as_register(), 0x8D);
 }
 
 // Emit code for mov.
@@ -514,7 +514,7 @@ void Encoder::emit_mov(const Instruction& inst) {
         }
 
         check_immediate_size(op_size, imm);
-        emit_rm(op_size, dst, static_cast<Register>(0), op_size == 1 ? 0xC6 : 0xC7);
+        emit_r_rm(op_size, dst, static_cast<Register>(0), op_size == 1 ? 0xC6 : 0xC7);
         emit_immediate(op_size == 8 ? 4 : op_size, imm);
         return;
     }
@@ -524,13 +524,13 @@ void Encoder::emit_mov(const Instruction& inst) {
 
     // Prefer INST r/m, r to INST r, r/m in case of INST r, r
     if (src.is_register()) {
-        emit_rm(op_size, dst, src.as_register(), op_size == 1 ? 0x88 : 0x89);
+        emit_r_rm(op_size, dst, src.as_register(), op_size == 1 ? 0x88 : 0x89);
         return;
     }
 
     // Operands cannot both be memory.
     ASSERT(dst.is_register());
-    emit_rm(op_size, src, dst.as_register(), op_size == 1 ? 0x8A : 0x8B);
+    emit_r_rm(op_size, src, dst.as_register(), op_size == 1 ? 0x8A : 0x8B);
 }
 
 // Emit code for movsx.
@@ -543,7 +543,7 @@ void Encoder::emit_movsx(const Instruction& inst) {
     int dst_size = get_size(dst);
     int src_size = get_size(src);
     ASSERT(dst_size > src_size);
-    emit_rm(dst_size, src, dst.as_register(), src_size == 1 ? 0x0FBE : (src_size == 2 ? 0x0FBF : 0x63));
+    emit_r_rm(dst_size, src, dst.as_register(), src_size == 1 ? 0x0FBE : (src_size == 2 ? 0x0FBF : 0x63));
 }
 
 // Emit code for pop.
@@ -560,7 +560,7 @@ void Encoder::emit_pop(const Instruction& inst) {
         return;
     }
 
-    emit_rm(op_size, dst, static_cast<Register>(0), 0x8F);
+    emit_r_rm(op_size, dst, static_cast<Register>(0), 0x8F);
 }
 
 // Emit code for push. Largely identical to pop but also supports push immediate.
@@ -592,7 +592,7 @@ void Encoder::emit_push(const Instruction& inst) {
         return;
     }
 
-    emit_rm(op_size, dst, static_cast<Register>(0), 0xFF);
+    emit_r_rm(op_size, dst, static_cast<Register>(0), 0xFF);
 }
 
 // Emit code for ret.
@@ -633,7 +633,7 @@ void Encoder::encode(const Instruction& inst) {
 
         case Opcode::call: emit_call(inst); break;
         case Opcode::cdqe: emit_byte(0x48); emit_byte(0x98); break;
-        case Opcode::cmovcc: emit_rm(inst.operands[1], inst.operands[0], 0x0F40 + static_cast<uint8_t>(inst.cond)); break;
+        case Opcode::cmovcc: emit_r_rm(inst.operands[1], inst.operands[0], 0x0F40 + static_cast<uint8_t>(inst.cond)); break;
         case Opcode::jmp: emit_jmp(inst); break;
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;

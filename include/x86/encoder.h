@@ -22,10 +22,10 @@ private:
     void emit_rex(const Operand& operand, Register reg, uint8_t rex);
     void emit_modrm(const Operand& operand, Register reg);
 
-    void emit_rm(int op_size, const Operand& mem, Register reg, uint64_t opcode);
+    void emit_r_rm(int op_size, const Operand& mem, Register reg, uint64_t opcode);
     void emit_plusr(int op_size, Register reg, uint64_t opcode);
 
-    void emit_rm(const Operand& mem, const Operand& reg, uint64_t opcode);
+    void emit_r_rm(const Operand& mem, const Operand& reg, uint64_t opcode);
     void emit_alu(const Instruction& inst, int id);
     void emit_shift(const Instruction& inst, int id);
 
