@@ -30,6 +30,7 @@ private:
     /* Helper functions */
     void emit_move(int rd, int rs);
     void emit_move32(int rd, int rs);
+    void emit_load_immediate(int rd, riscv::reg_t imm);
     void emit_branch(riscv::Instruction inst, riscv::reg_t pc_diff, x86::Condition_code cc);
 
     /* Translated instructions */
@@ -37,6 +38,7 @@ private:
     void emit_jal(riscv::Instruction inst, riscv::reg_t pc_diff);
 
     void emit_add(riscv::Instruction inst);
+    void emit_sub(riscv::Instruction inst);
     void emit_addi(riscv::Instruction inst);
     void emit_addiw(riscv::Instruction inst);
     void emit_addw(riscv::Instruction inst);
@@ -127,6 +129,7 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
         switch (opcode) {
             case riscv::Opcode::add: emit_add(inst); break;
+            case riscv::Opcode::sub: emit_sub(inst); break;
             case riscv::Opcode::addi: emit_addi(inst); break;
             case riscv::Opcode::addiw: emit_addiw(inst); break;
             case riscv::Opcode::addw: emit_addw(inst); break;
@@ -200,7 +203,7 @@ void Dbt_compiler::emit_move(int rd, int rs) {
     }
 
     if (rs == 0) {
-        *this << mov(qword(memory_of_register(rd)), 0);
+        emit_load_immediate(rd, 0);
         return;
     }
 
@@ -215,12 +218,21 @@ void Dbt_compiler::emit_move32(int rd, int rs) {
     }
 
     if (rs == 0) {
-        *this << mov(qword(memory_of_register(rd)), 0);
+        emit_load_immediate(rd, 0);
         return;
     }
 
     *this << movsx(x86::Register::rax, dword(memory_of_register(rs)));
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_load_immediate(int rd, riscv::reg_t imm) {
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    *this << mov(qword(memory_of_register(rd)), imm);
 }
 
 void Dbt_compiler::emit_branch(riscv::Instruction inst, riscv::reg_t pc_diff, x86::Condition_code cc) {
@@ -371,6 +383,54 @@ void Dbt_compiler::emit_add(riscv::Instruction inst) {
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
 }
 
+void Dbt_compiler::emit_sub(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    // rd = rs1 - 0
+    if (rs2 == 0) {
+        emit_move(rd, rs1);
+        return;
+    }
+
+    // rd = rs1 - rs1 = 0
+    if (rs1 == rs2) {
+        emit_load_immediate(rd, 0);
+        return;
+    }
+
+    // rd -= rs2
+    if (rd == rs1) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs2)));
+        *this << sub(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    // rd = -rd
+    if (rd == rs2 && rs1 == 0) {
+        *this << neg(qword(memory_of_register(rd)));
+        return;
+    }
+
+    // rd = -rs2
+    if (rs1 == 0) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs2)));
+        *this << neg(x86::Register::rax);
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+    *this << sub(x86::Register::rax, qword(memory_of_register(rs2)));
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
 void Dbt_compiler::emit_addi(riscv::Instruction inst) {
     int rd = inst.rd();
     int rs1 = inst.rs1();
@@ -382,7 +442,7 @@ void Dbt_compiler::emit_addi(riscv::Instruction inst) {
     }
 
     if (rs1 == 0) {
-        *this << mov(qword(memory_of_register(rd)), imm);
+        emit_load_immediate(rd, imm);
         return;
     }
 
@@ -412,7 +472,7 @@ void Dbt_compiler::emit_addiw(riscv::Instruction inst) {
     }
 
     if (rs1 == 0) {
-        *this << mov(qword(memory_of_register(rd)), imm);
+        emit_load_immediate(rd, imm);
         return;
     }
 
@@ -460,13 +520,5 @@ void Dbt_compiler::emit_addw(riscv::Instruction inst) {
 }
 
 void Dbt_compiler::emit_lui(riscv::Instruction inst) {
-    int rd = inst.rd();
-    riscv::reg_t imm = inst.imm();
-
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
-
-    *this << mov(qword(memory_of_register(rd)), imm);
+    emit_load_immediate(inst.rd(), inst.imm());
 }
