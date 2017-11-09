@@ -70,6 +70,7 @@ const char *opcode_name(Opcode opcode) {
         CASE(mov)
         case Opcode::movabs: return "mov";
         CASE(movsx)
+        CASE(neg)
         CASE(nop)
         CASE(push)
         CASE(pop)

@@ -339,7 +339,7 @@ void Encoder::emit_plusr(int op_size, Register reg, uint64_t opcode) {
     emit_byte(opcode | (reg_num & 7));
 }
 
-// Generate code for instructions with only RM encoding.
+// Generate code for instructions with only R/RM encoding.
 // It makes sure that reg is indeed register, and operand size match.
 void Encoder::emit_r_rm(const Operand& mem, const Operand& reg, uint64_t opcode) {
     int op_size = get_size(mem);
@@ -347,6 +347,17 @@ void Encoder::emit_r_rm(const Operand& mem, const Operand& reg, uint64_t opcode)
     ASSERT(reg.is_register());
     ASSERT(get_size(reg) == op_size);
     emit_r_rm(op_size, mem, reg.as_register(), opcode);
+}
+
+// Generate code for instructions with only RM encoding.
+// It assumes the default opcode is for byte sized operands, and other sizes have opcode + 1.
+void Encoder::emit_rm(const Instruction& inst, uint64_t opcode, int id) {
+    ASSERT(inst.operands[1].is_empty());
+    int op_size = get_size(inst.operands[0]);
+    if (op_size != 1) {
+        opcode += 1;
+    }
+    emit_r_rm(op_size, inst.operands[0], static_cast<Register>(id), opcode);
 }
 
 // Generate code for ALU instructions.
@@ -638,6 +649,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;
         case Opcode::movsx: emit_movsx(inst); break;
+        case Opcode::neg: emit_rm(inst, 0xF6, 3); break;
         case Opcode::nop: emit_byte(0x90); break;
         case Opcode::pop: emit_pop(inst); break;
         case Opcode::push: emit_push(inst); break;

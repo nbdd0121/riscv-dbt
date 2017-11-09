@@ -36,6 +36,7 @@ enum class Opcode: uint16_t {
     mov,
     movabs,
     movsx,
+    neg,
     nop,
     push,
     pop,

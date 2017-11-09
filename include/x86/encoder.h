@@ -26,6 +26,7 @@ private:
     void emit_plusr(int op_size, Register reg, uint64_t opcode);
 
     void emit_r_rm(const Operand& mem, const Operand& reg, uint64_t opcode);
+    void emit_rm(const Instruction& inst, uint64_t opcode, int id);
     void emit_alu(const Instruction& inst, int id);
     void emit_shift(const Instruction& inst, int id);
 
