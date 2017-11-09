@@ -1,4 +1,5 @@
 #include "emu/state.h"
+#include "emu/mmu.h"
 #include "main/dbt.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
@@ -8,6 +9,7 @@
 #include "util/assert.h"
 #include "util/code_buffer.h"
 #include "util/format.h"
+#include "util/functional.h"
 #include "util/memory.h"
 #include "x86/builder.h"
 #include "x86/disassembler.h"
@@ -37,6 +39,10 @@ private:
     void emit_jalr(riscv::Instruction inst, riscv::reg_t pc_diff);
     void emit_jal(riscv::Instruction inst, riscv::reg_t pc_diff);
 
+    void emit_lb(riscv::Instruction inst, bool u);
+    void emit_lh(riscv::Instruction inst, bool u);
+    void emit_lw(riscv::Instruction inst, bool u);
+    void emit_ld(riscv::Instruction inst);
     void emit_addi(riscv::Instruction inst);
     void emit_slti(riscv::Instruction inst);
     void emit_andi(riscv::Instruction inst);
@@ -132,6 +138,13 @@ void Dbt_compiler::compile(emu::reg_t pc) {
         riscv::Opcode opcode = inst.opcode();
 
         switch (opcode) {
+            case riscv::Opcode::lb: emit_lb(inst, false); break;
+            case riscv::Opcode::lh: emit_lh(inst, false); break;
+            case riscv::Opcode::lw: emit_lw(inst, false); break;
+            case riscv::Opcode::ld: emit_ld(inst); break;
+            case riscv::Opcode::lbu: emit_lb(inst, true); break;
+            case riscv::Opcode::lhu: emit_lh(inst, true); break;
+            case riscv::Opcode::lwu: emit_lw(inst, true); break;
             case riscv::Opcode::addi: emit_addi(inst); break;
             case riscv::Opcode::slti: emit_slti(inst); break;
             case riscv::Opcode::andi: emit_andi(inst); break;
@@ -339,6 +352,176 @@ void Dbt_compiler::emit_jal(riscv::Instruction inst, riscv::reg_t pc_diff) {
 
     *this << pop(x86::Register::rbp);
     *this << ret();
+}
+
+void Dbt_compiler::emit_lb(riscv::Instruction inst, bool u) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+
+        // For all load and save instructions we ignore the case where rs1 = 0, as this should never happen. Even if it
+        // ever happens, loading from memory still yield correct result.
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << movzx(x86::Register::eax, byte(x86::Register::rax + 0));
+        } else {
+            *this << movsx(x86::Register::rax, byte(x86::Register::rax + 0));
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint8_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+        if (rd != 0) {
+            if (u) {
+                // High 32 bits in rax may contain garbage, so do a mov to zero higher bits.
+                *this << movzx(x86::Register::eax, x86::Register::al);
+            } else {
+                *this << movsx(x86::Register::rax, x86::Register::al);
+            }
+        }
+    }
+
+    if (rd != 0) {
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_lh(riscv::Instruction inst, bool u) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << movzx(x86::Register::eax, word(x86::Register::rax + 0));
+        } else {
+            *this << movsx(x86::Register::rax, word(x86::Register::rax + 0));
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint16_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+        if (rd != 0) {
+            if (u) {
+                // High 32 bits in rax may contain garbage, so do a mov to zero higher bits.
+                *this << movzx(x86::Register::eax, x86::Register::ax);
+            } else {
+                *this << movsx(x86::Register::rax, x86::Register::ax);
+            }
+        }
+    }
+
+    if (rd != 0) {
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_lw(riscv::Instruction inst, bool u) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << mov(x86::Register::eax, dword(x86::Register::rax + 0));
+        } else {
+            *this << movsx(x86::Register::rax, dword(x86::Register::rax + 0));
+        }
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint32_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+        if (rd != 0) {
+            if (u) {
+                // High 32 bits in rax may contain garbage, so do a mov to zero higher bits.
+                *this << mov(x86::Register::eax, x86::Register::eax);
+            } else {
+                *this << cdqe();
+            }
+        }
+    }
+
+    if (rd != 0) {
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    }
+}
+
+void Dbt_compiler::emit_ld(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::reg_t imm = inst.imm();
+
+    emu::Mmu* mmu = runtime_.state_.mmu.get();
+
+    // We can generate better code if the MMU is flat.
+    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
+        *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
+        *this << mov(x86::Register::rax, qword(x86::Register::rax + 0));
+        // TODO: Add bounds checking
+    } else {
+        *this << mov(x86::Register::rsi, qword(memory_of_register(rs1)));
+        if (imm != 0) {
+            *this << add(x86::Register::rsi, imm);
+        }
+
+        *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
+        *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
+            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint64_t>)
+        ));
+
+        *this << call(x86::Register::rax);
+    }
+
+    if (rd != 0) {
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    }
 }
 
 void Dbt_compiler::emit_addi(riscv::Instruction inst) {

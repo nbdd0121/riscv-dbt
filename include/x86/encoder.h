@@ -35,6 +35,7 @@ private:
     void emit_lea(const Instruction& inst);
     void emit_mov(const Instruction& inst);
     void emit_movsx(const Instruction& inst);
+    void emit_movzx(const Instruction& inst);
     void emit_pop(const Instruction& inst);
     void emit_push(const Instruction& inst);
     void emit_ret(const Instruction& inst);

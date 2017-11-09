@@ -86,6 +86,18 @@ static Memory&& dword(internal::Memory_operand_builder&& operand) {
     return std::move(operand.value);
 }
 
+[[maybe_unused]]
+static Memory&& word(internal::Memory_operand_builder&& operand) {
+    operand.value.size = 2;
+    return std::move(operand.value);
+}
+
+[[maybe_unused]]
+static Memory&& byte(internal::Memory_operand_builder&& operand) {
+    operand.value.size = 1;
+    return std::move(operand.value);
+}
+
 /* Instruction builders */
 
 static Instruction nullary(Opcode opcode) {
@@ -141,6 +153,7 @@ UNARY(jmp)
 BINARY(lea)
 BINARY(mov)
 BINARY(movsx)
+BINARY(movzx)
 UNARY(neg)
 NULLARY(nop)
 BINARY(i_or)

@@ -557,6 +557,19 @@ void Encoder::emit_movsx(const Instruction& inst) {
     emit_r_rm(dst_size, src, dst.as_register(), src_size == 1 ? 0x0FBE : (src_size == 2 ? 0x0FBF : 0x63));
 }
 
+// Emit code for movzx.
+void Encoder::emit_movzx(const Instruction& inst) {
+    const Operand& dst = inst.operands[0];
+    const Operand& src = inst.operands[1];
+
+    // Must be movzx r, r/m
+    ASSERT(dst.is_register());
+    int dst_size = get_size(dst);
+    int src_size = get_size(src);
+    ASSERT(dst_size > src_size && src_size != 4);
+    emit_r_rm(dst_size, src, dst.as_register(), src_size == 1 ? 0x0FB6 : 0x0FB7);
+}
+
 // Emit code for pop.
 void Encoder::emit_pop(const Instruction& inst) {
     const Operand& dst = inst.operands[0];
@@ -657,6 +670,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;
         case Opcode::movsx: emit_movsx(inst); break;
+        case Opcode::movzx: emit_movzx(inst); break;
         case Opcode::neg: emit_rm(inst, 0xF6, 3); break;
         case Opcode::nop: emit_byte(0x90); break;
         case Opcode::pop: emit_pop(inst); break;
