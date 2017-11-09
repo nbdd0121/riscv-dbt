@@ -38,13 +38,16 @@ enum class Opcode: uint16_t {
     movsx,
     neg,
     nop,
+    i_or,
     push,
     pop,
     ret,
     sar,
+    setcc,
     shl,
     shr,
     sub,
+    i_xor,
 
     // aliases
     movsxd = movsx,

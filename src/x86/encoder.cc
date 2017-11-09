@@ -625,6 +625,12 @@ void Encoder::emit_ret(const Instruction& inst) {
     }
 }
 
+void Encoder::emit_setcc(const Instruction& inst) {
+    ASSERT(inst.operands[1].is_empty());
+    ASSERT(get_size(inst.operands[0]) == 1);
+    emit_r_rm(1, inst.operands[0], static_cast<Register>(0), 0x0F90 + static_cast<uint8_t>(inst.cond));
+}
+
 void Encoder::encode(const Instruction& inst) {
 
     // If operand0 is monostate, then operand1 must also be.
@@ -633,8 +639,10 @@ void Encoder::encode(const Instruction& inst) {
     switch (inst.opcode) {
         /* ALU instructions */
         case Opcode::add: emit_alu(inst, 0); break;
+        case Opcode::i_or: emit_alu(inst, 1); break;
         case Opcode::i_and: emit_alu(inst, 4); break;
         case Opcode::sub: emit_alu(inst, 5); break;
+        case Opcode::i_xor: emit_alu(inst, 6); break;
         case Opcode::cmp: emit_alu(inst, 7); break;
 
         /* Shift instructions */
@@ -654,6 +662,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::pop: emit_pop(inst); break;
         case Opcode::push: emit_push(inst); break;
         case Opcode::ret: emit_ret(inst); break;
+        case Opcode::setcc: emit_setcc(inst); break;
         default: ASSERT(0);
     }
 }

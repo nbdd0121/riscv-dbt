@@ -38,6 +38,7 @@ private:
     void emit_pop(const Instruction& inst);
     void emit_push(const Instruction& inst);
     void emit_ret(const Instruction& inst);
+    void emit_setcc(const Instruction& inst);
 
 public:
     Encoder(util::Code_buffer& buffer): buffer_ {buffer} {};

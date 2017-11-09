@@ -38,9 +38,11 @@ private:
     void emit_jal(riscv::Instruction inst, riscv::reg_t pc_diff);
 
     void emit_addi(riscv::Instruction inst);
+    void emit_slti(riscv::Instruction inst);
     void emit_andi(riscv::Instruction inst);
     void emit_add(riscv::Instruction inst);
     void emit_sub(riscv::Instruction inst);
+    void emit_or(riscv::Instruction inst);
     void emit_and(riscv::Instruction inst);
     void emit_addiw(riscv::Instruction inst);
     void emit_addw(riscv::Instruction inst);
@@ -131,9 +133,11 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
         switch (opcode) {
             case riscv::Opcode::addi: emit_addi(inst); break;
+            case riscv::Opcode::slti: emit_slti(inst); break;
             case riscv::Opcode::andi: emit_andi(inst); break;
             case riscv::Opcode::add: emit_add(inst); break;
             case riscv::Opcode::sub: emit_sub(inst); break;
+            case riscv::Opcode::i_or: emit_or(inst); break;
             case riscv::Opcode::i_and: emit_and(inst); break;
             case riscv::Opcode::addiw: emit_addiw(inst); break;
             case riscv::Opcode::addw: emit_addw(inst); break;
@@ -367,6 +371,49 @@ void Dbt_compiler::emit_addi(riscv::Instruction inst) {
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
 }
 
+void Dbt_compiler::emit_slti(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::sreg_t imm = inst.imm();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0) {
+        emit_load_immediate(rd, imm > 0);
+        return;
+    }
+
+    // When immediate is zero, this instruction basically determines the sign of the value in rs1. We can logical right
+    // shift the value by 63 bits to achieve the same result.
+    if (imm == 0) {
+        if (rd == rs1) {
+            *this << shr(qword(memory_of_register(rd)), 63);
+            return;
+        }
+
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+        *this << shr(x86::Register::rax, 63);
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    // For positive numbers we decrease the value by one and the compare less equal. This can allow 1 more possible
+    // immediate value to use shorter encoding.
+    x86::Condition_code cc = x86::Condition_code::less;
+    if (imm > 0) {
+        imm--;
+        cc = x86::Condition_code::less_equal;
+    }
+
+    *this << i_xor(x86::Register::eax, x86::Register::eax);
+    *this << cmp(qword(memory_of_register(rs1)), imm);
+    *this << setcc(cc, x86::Register::al);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
 void Dbt_compiler::emit_andi(riscv::Instruction inst) {
     int rd = inst.rd();
     int rs1 = inst.rs1();
@@ -534,6 +581,43 @@ void Dbt_compiler::emit_and(riscv::Instruction inst) {
 
     *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
     *this << i_and(x86::Register::rax, qword(memory_of_register(rs2)));
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_or(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0 || rs1 == rs2) {
+        emit_move(rd, rs2);
+        return;
+    }
+
+    if (rs2 == 0) {
+        emit_move(rd, rs1);
+        return;
+    }
+
+    if (rd == rs1) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs2)));
+        *this << i_or(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    if (rd == rs2) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+        *this << i_or(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+    *this << i_or(x86::Register::rax, qword(memory_of_register(rs2)));
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
 }
 

@@ -72,13 +72,16 @@ const char *opcode_name(Opcode opcode) {
         CASE(movsx)
         CASE(neg)
         CASE(nop)
+        case Opcode::i_or: return "or";
         CASE(push)
         CASE(pop)
         CASE(ret)
         CASE(sar)
+        CASE(setcc)
         CASE(shl)
         CASE(shr)
         CASE(sub)
+        case Opcode::i_xor: return "xor";
 #undef CASE
         default: return "(unknown)";
     }
@@ -170,6 +173,8 @@ void print_instruction(uint64_t pc, const char *code, size_t length, const Instr
 
     if (inst.opcode == Opcode::cmovcc) {
         util::log("        cmov{:-4}", condition_code_name(inst.cond));
+    } else if (inst.opcode == Opcode::setcc) {
+        util::log("        set{:-5}", condition_code_name(inst.cond));
     } else {
         util::log("        {:-8}", opcode_name(inst.opcode));
     }

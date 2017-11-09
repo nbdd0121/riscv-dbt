@@ -88,15 +88,6 @@ static Memory&& dword(internal::Memory_operand_builder&& operand) {
 
 /* Instruction builders */
 
-static Instruction binary_cc(Opcode opcode, Condition_code cc, const Operand& op1, const Operand& op2) {
-    Instruction ret;
-    ret.opcode = opcode;
-    ret.cond = cc;
-    ret.operands[0] = op1;
-    ret.operands[1] = op2;
-    return ret;
-}
-
 static Instruction nullary(Opcode opcode) {
     Instruction ret;
     ret.opcode = opcode;
@@ -135,7 +126,12 @@ BINARY(i_and)
 
 [[maybe_unused]]
 static Instruction cmovcc(Condition_code cc, const Operand& op1, const Operand& op2) {
-    return binary_cc(Opcode::cmovcc, cc, op1, op2);
+    Instruction ret;
+    ret.opcode = Opcode::cmovcc;
+    ret.cond = cc;
+    ret.operands[0] = op1;
+    ret.operands[1] = op2;
+    return ret;
 }
 
 UNARY(call)
@@ -147,13 +143,25 @@ BINARY(mov)
 BINARY(movsx)
 UNARY(neg)
 NULLARY(nop)
+BINARY(i_or)
 UNARY(pop)
 UNARY(push)
 NULLARY(ret) UNARY(ret)
 BINARY(sar)
+
+[[maybe_unused]]
+static Instruction setcc(Condition_code cc, const Operand& op) {
+    Instruction ret;
+    ret.opcode = Opcode::setcc;
+    ret.cond = cc;
+    ret.operands[0] = op;
+    return ret;
+}
+
 BINARY(shl)
 BINARY(shr)
 BINARY(sub)
+BINARY(i_xor)
 
 #undef BINARY
 #undef UNARY
