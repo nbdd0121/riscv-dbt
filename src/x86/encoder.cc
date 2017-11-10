@@ -673,6 +673,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::movzx: emit_movzx(inst); break;
         case Opcode::neg: emit_rm(inst, 0xF6, 3); break;
         case Opcode::nop: emit_byte(0x90); break;
+        case Opcode::i_not: emit_rm(inst, 0xF6, 2); break;
         case Opcode::pop: emit_pop(inst); break;
         case Opcode::push: emit_push(inst); break;
         case Opcode::ret: emit_ret(inst); break;

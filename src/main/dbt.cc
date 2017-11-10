@@ -49,7 +49,11 @@ private:
     void emit_sd(riscv::Instruction inst);
 
     void emit_addi(riscv::Instruction inst);
+    void emit_shifti(riscv::Instruction inst, x86::Opcode opcode);
     void emit_slti(riscv::Instruction inst);
+    void emit_sltiu(riscv::Instruction inst);
+    void emit_xori(riscv::Instruction inst);
+    void emit_ori(riscv::Instruction inst);
     void emit_andi(riscv::Instruction inst);
     void emit_add(riscv::Instruction inst);
     void emit_sub(riscv::Instruction inst);
@@ -57,7 +61,6 @@ private:
     void emit_and(riscv::Instruction inst);
     void emit_addiw(riscv::Instruction inst);
     void emit_addw(riscv::Instruction inst);
-    void emit_lui(riscv::Instruction inst);
 
 public:
     Dbt_compiler(Dbt_runtime& runtime, util::Code_buffer& buffer): runtime_{runtime}, encoder_{buffer} {}
@@ -154,9 +157,16 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::sh: emit_sh(inst); break;
             case riscv::Opcode::sw: emit_sw(inst); break;
             case riscv::Opcode::sd: emit_sd(inst); break;
+            case riscv::Opcode::fence: *this << nop(); break;
 
             case riscv::Opcode::addi: emit_addi(inst); break;
+            case riscv::Opcode::slli: emit_shifti(inst, x86::Opcode::shl); break;
             case riscv::Opcode::slti: emit_slti(inst); break;
+            case riscv::Opcode::sltiu: emit_sltiu(inst); break;
+            case riscv::Opcode::xori: emit_xori(inst); break;
+            case riscv::Opcode::srli: emit_shifti(inst, x86::Opcode::shr); break;
+            case riscv::Opcode::srai: emit_shifti(inst, x86::Opcode::sar); break;
+            case riscv::Opcode::ori: emit_ori(inst); break;
             case riscv::Opcode::andi: emit_andi(inst); break;
             case riscv::Opcode::add: emit_add(inst); break;
             case riscv::Opcode::sub: emit_sub(inst); break;
@@ -164,7 +174,9 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::i_and: emit_and(inst); break;
             case riscv::Opcode::addiw: emit_addiw(inst); break;
             case riscv::Opcode::addw: emit_addw(inst); break;
-            case riscv::Opcode::lui: emit_lui(inst); break;
+            case riscv::Opcode::lui:
+                emit_load_immediate(inst.rd(), inst.imm());
+                break;
             case riscv::Opcode::auipc: {
                 // AUIPC is special: it needs pc_diff, so do not move it to a separate function.
                 const int rd = inst.rd();
@@ -724,6 +736,36 @@ void Dbt_compiler::emit_addi(riscv::Instruction inst) {
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
 }
 
+void Dbt_compiler::emit_shifti(riscv::Instruction inst, x86::Opcode opcode) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::reg_t imm = inst.imm();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0) {
+        emit_load_immediate(rd, 0);
+        return;
+    }
+
+    if (imm == 0) {
+        emit_move(rd, rs1);
+        return;
+    }
+
+    if (rd == rs1) {
+        *this << binary(opcode, qword(memory_of_register(rd)), imm);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+    *this << binary(opcode, x86::Register::rax, imm);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
 void Dbt_compiler::emit_slti(riscv::Instruction inst) {
     int rd = inst.rd();
     int rs1 = inst.rs1();
@@ -764,6 +806,118 @@ void Dbt_compiler::emit_slti(riscv::Instruction inst) {
     *this << i_xor(x86::Register::eax, x86::Register::eax);
     *this << cmp(qword(memory_of_register(rs1)), imm);
     *this << setcc(cc, x86::Register::al);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_sltiu(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    // Even though the instruction is sltiu, we still convert it to signed integer to ease code generation.
+    riscv::sreg_t imm = inst.imm();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0) {
+        emit_load_immediate(rd, imm != 0);
+        return;
+    }
+
+    if (imm == 0) {
+        emit_load_immediate(rd, 0);
+        return;
+    }
+
+    x86::Condition_code cc;
+    if (imm > 0) {
+        imm--;
+        cc = imm == 0 ? x86::Condition_code::equal : x86::Condition_code::below_equal;
+    } else {
+        cc = imm == -1 ? x86::Condition_code::not_equal : x86::Condition_code::below;
+    }
+
+    *this << i_xor(x86::Register::eax, x86::Register::eax);
+    *this << cmp(qword(memory_of_register(rs1)), imm);
+    *this << setcc(cc, x86::Register::al);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_xori(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::sreg_t imm = inst.imm();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0) {
+        emit_load_immediate(rd, imm);
+        return;
+    }
+
+    if (imm == 0) {
+        emit_move(rd, rs1);
+        return;
+    }
+
+    if (rd == rs1) {
+        if (imm == -1) {
+            *this << i_not(qword(memory_of_register(rd)));
+            return;
+        }
+
+        *this << i_xor(qword(memory_of_register(rd)), imm);
+        return;
+    }
+
+    if (imm == -1) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+        *this << i_not(x86::Register::rax);
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+    *this << i_xor(x86::Register::rax, imm);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_ori(riscv::Instruction inst) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    riscv::sreg_t imm = inst.imm();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    if (rs1 == 0) {
+        emit_load_immediate(rd, imm);
+        return;
+    }
+
+    if (imm == 0) {
+        emit_move(rd, rs1);
+        return;
+    }
+
+    if (imm == -1) {
+        emit_load_immediate(rd, -1);
+        return;
+    }
+
+    if (rd == rs1) {
+        *this << i_or(qword(memory_of_register(rd)), imm);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+    *this << i_or(x86::Register::rax, imm);
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
 }
 
@@ -1030,8 +1184,4 @@ void Dbt_compiler::emit_addw(riscv::Instruction inst) {
 
     *this << cdqe();
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
-}
-
-void Dbt_compiler::emit_lui(riscv::Instruction inst) {
-    emit_load_immediate(inst.rd(), inst.imm());
 }

@@ -73,6 +73,7 @@ const char *opcode_name(Opcode opcode) {
         CASE(movzx)
         CASE(neg)
         CASE(nop)
+        case Opcode::i_not: return "not";
         case Opcode::i_or: return "or";
         CASE(push)
         CASE(pop)
