@@ -464,6 +464,22 @@ void Encoder::emit_call(const Instruction& inst) {
     emit_dword(imm);
 }
 
+// Emit code for imul. 3-operand form is not yet supported.
+void Encoder::emit_imul(const Instruction& inst) {
+
+    int op_size = get_size(inst.operands[0]);
+
+    // d:a = a * r/m
+    if (inst.operands[1].is_empty()) {
+        emit_r_rm(op_size, inst.operands[0], static_cast<Register>(5), op_size == 1 ? 0xF6 : 0xF7);
+        return;
+    }
+
+    ASSERT(op_size != 1 && get_size(inst.operands[1]) == op_size);
+    ASSERT(inst.operands[0].is_register());
+    emit_r_rm(op_size, inst.operands[1], inst.operands[0].as_register(), 0x0FAF);
+}
+
 // Emit code for jmp
 void Encoder::emit_jmp(const Instruction& inst) {
     const Operand& dst = inst.operands[0];
@@ -644,6 +660,39 @@ void Encoder::emit_setcc(const Instruction& inst) {
     emit_r_rm(1, inst.operands[0], static_cast<Register>(0), 0x0F90 + static_cast<uint8_t>(inst.cond));
 }
 
+void Encoder::emit_test(const Instruction& inst) {
+    const Operand& dst = inst.operands[0];
+    const Operand& src = inst.operands[1];
+
+    int op_size = get_size(dst);
+
+    if (src.is_immediate()) {
+        uint64_t imm = src.as_immediate();
+        check_immediate_size(op_size, imm);
+
+        // Short encoding is available for RAX
+        if (dst.is_register() && (static_cast<uint8_t>(dst.as_register()) & 0xF) == 0) {
+
+            if (op_size == 2) {
+                emit_byte(0x66);
+            } else if (op_size == 8) {
+                emit_byte(0x48);
+            }
+
+            emit_byte(op_size == 1 ? 0xA8 : 0xA9);
+            emit_immediate(op_size == 8 ? 4 : op_size, imm);
+            return;
+        }
+
+        emit_r_rm(op_size, dst, static_cast<Register>(0), op_size == 1 ? 0xF6 : 0xF7);
+        emit_immediate(op_size == 8 ? 4 : op_size, imm);
+        return;
+    }
+
+    ASSERT(src.is_register() && get_size(src) == op_size);
+    emit_r_rm(op_size, dst, src.as_register(), op_size == 1 ? 0x84 : 0x85);
+}
+
 void Encoder::encode(const Instruction& inst) {
 
     // If operand0 is monostate, then operand1 must also be.
@@ -666,11 +715,13 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::call: emit_call(inst); break;
         case Opcode::cdqe: emit_byte(0x48); emit_byte(0x98); break;
         case Opcode::cmovcc: emit_r_rm(inst.operands[1], inst.operands[0], 0x0F40 + static_cast<uint8_t>(inst.cond)); break;
+        case Opcode::imul: emit_imul(inst); break;
         case Opcode::jmp: emit_jmp(inst); break;
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;
         case Opcode::movsx: emit_movsx(inst); break;
         case Opcode::movzx: emit_movzx(inst); break;
+        case Opcode::mul: emit_rm(inst, 0xF6, 4); break;
         case Opcode::neg: emit_rm(inst, 0xF6, 3); break;
         case Opcode::nop: emit_byte(0x90); break;
         case Opcode::i_not: emit_rm(inst, 0xF6, 2); break;
@@ -678,6 +729,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::push: emit_push(inst); break;
         case Opcode::ret: emit_ret(inst); break;
         case Opcode::setcc: emit_setcc(inst); break;
+        case Opcode::test: emit_test(inst); break;
         default: ASSERT(0);
     }
 }

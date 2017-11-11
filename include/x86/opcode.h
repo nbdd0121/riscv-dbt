@@ -31,12 +31,14 @@ enum class Opcode: uint16_t {
     call,
     cmovcc,
     cmp,
+    imul,
     jmp,
     lea,
     mov,
     movabs,
     movsx,
     movzx,
+    mul,
     neg,
     nop,
     i_not,
@@ -49,6 +51,7 @@ enum class Opcode: uint16_t {
     shl,
     shr,
     sub,
+    test,
     i_xor,
 
     // aliases

@@ -31,6 +31,7 @@ private:
     void emit_shift(const Instruction& inst, int id);
 
     void emit_call(const Instruction& inst);
+    void emit_imul(const Instruction& inst);
     void emit_jmp(const Instruction& inst);
     void emit_lea(const Instruction& inst);
     void emit_mov(const Instruction& inst);
@@ -40,6 +41,7 @@ private:
     void emit_push(const Instruction& inst);
     void emit_ret(const Instruction& inst);
     void emit_setcc(const Instruction& inst);
+    void emit_test(const Instruction& inst);
 
 public:
     Encoder(util::Code_buffer& buffer): buffer_ {buffer} {};

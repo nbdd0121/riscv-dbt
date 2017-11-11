@@ -65,12 +65,14 @@ const char *opcode_name(Opcode opcode) {
         CASE(call)
         CASE(cmovcc)
         CASE(cmp)
+        CASE(imul)
         CASE(jmp)
         CASE(lea)
         CASE(mov)
         case Opcode::movabs: return "mov";
         CASE(movsx)
         CASE(movzx)
+        CASE(mul)
         CASE(neg)
         CASE(nop)
         case Opcode::i_not: return "not";
@@ -83,6 +85,7 @@ const char *opcode_name(Opcode opcode) {
         CASE(shl)
         CASE(shr)
         CASE(sub)
+        CASE(test)
         case Opcode::i_xor: return "xor";
 #undef CASE
         default: return "(unknown)";

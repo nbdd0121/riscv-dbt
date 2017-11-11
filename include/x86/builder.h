@@ -149,11 +149,13 @@ static Instruction cmovcc(Condition_code cc, const Operand& op1, const Operand& 
 UNARY(call)
 NULLARY(cdqe)
 BINARY(cmp)
+UNARY(imul) BINARY(imul)
 UNARY(jmp)
 BINARY(lea)
 BINARY(mov)
 BINARY(movsx)
 BINARY(movzx)
+UNARY(mul)
 UNARY(neg)
 NULLARY(nop)
 UNARY(i_not)
@@ -175,6 +177,7 @@ static Instruction setcc(Condition_code cc, const Operand& op) {
 BINARY(shl)
 BINARY(shr)
 BINARY(sub)
+BINARY(test)
 BINARY(i_xor)
 
 #undef BINARY
