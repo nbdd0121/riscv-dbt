@@ -76,6 +76,8 @@ private:
     void emit_mulh(riscv::Instruction inst, bool u);
     void emit_mulhsu(riscv::Instruction inst);
     void emit_mulw(riscv::Instruction inst);
+    void emit_div(riscv::Instruction inst, bool u, bool rem);
+    void emit_divw(riscv::Instruction inst, bool u, bool rem);
 
 public:
     Dbt_compiler(Dbt_runtime& runtime, util::Code_buffer& buffer): runtime_{runtime}, encoder_{buffer} {}
@@ -211,6 +213,16 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::mulhsu: emit_mulhsu(inst); break;
             case riscv::Opcode::mulhu: emit_mulh(inst, true); break;
             case riscv::Opcode::mulw: emit_mulw(inst); break;
+            /* DIV is partially implemented. Divide by zero might be triggered at the moment.
+            case riscv::Opcode::div: emit_div(inst, false, false); break;
+            case riscv::Opcode::divu: emit_div(inst, true, false); break;
+            case riscv::Opcode::rem: emit_div(inst, false, true); break;
+            case riscv::Opcode::remu: emit_div(inst, true, true); break;
+            case riscv::Opcode::divw: emit_divw(inst, false, false); break;
+            case riscv::Opcode::divuw: emit_divw(inst, true, false); break;
+            case riscv::Opcode::remw: emit_divw(inst, false, true); break;
+            case riscv::Opcode::remuw: emit_divw(inst, true, true); break;
+            */
 
             case riscv::Opcode::lui:
                 emit_load_immediate(inst.rd(), inst.imm());
@@ -1581,4 +1593,103 @@ void Dbt_compiler::emit_mulw(riscv::Instruction inst) {
 
     *this << cdqe();
     *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+}
+
+void Dbt_compiler::emit_div(riscv::Instruction inst, bool u, bool rem) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    // x / 0 = -1, x % 0 = x
+    if (rs2 == 0) {
+        if (rem) {
+            emit_move(rd, rs1);
+        } else {
+            emit_load_immediate(rd, -1);
+        }
+        return;
+    }
+
+    if (rs1 == 0) {
+        // 0 % x = 0, and 0 % 0 = 0.
+        if (rem) {
+            emit_load_immediate(rd, 0);
+            return;
+        }
+
+        // 0 / x = 0, but 0 / 0 = -1.
+        *this << cmp(qword(memory_of_register(rs2)), 1);
+        *this << sbb(x86::Register::rax, x86::Register::rax);
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+
+    if (u) {
+        *this << i_xor(x86::Register::edx, x86::Register::edx);
+    } else {
+        *this << cqo();
+    }
+
+    *this << unary(u ? x86::Opcode::div : x86::Opcode::idiv, qword(memory_of_register(rs2)));
+    *this << mov(qword(memory_of_register(rd)), rem ? x86::Register::rdx : x86::Register::rax);
+}
+
+void Dbt_compiler::emit_divw(riscv::Instruction inst, bool u, bool rem) {
+    int rd = inst.rd();
+    int rs1 = inst.rs1();
+    int rs2 = inst.rs2();
+
+    if (rd == 0) {
+        *this << nop();
+        return;
+    }
+
+    // x / 0 = -1, x % 0 = x
+    if (rs2 == 0) {
+        if (rem) {
+            emit_move32(rd, rs1);
+        } else {
+            emit_load_immediate(rd, -1);
+        }
+        return;
+    }
+
+    if (rs1 == 0) {
+        // 0 % x = 0, and 0 % 0 = 0.
+        if (rem) {
+            emit_load_immediate(rd, 0);
+            return;
+        }
+
+        // 0 / x = 0, but 0 / 0 = -1.
+        *this << cmp(dword(memory_of_register(rs2)), 1);
+        *this << sbb(x86::Register::rax, x86::Register::rax);
+        *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+        return;
+    }
+
+    *this << mov(x86::Register::eax, dword(memory_of_register(rs1)));
+
+    if (u) {
+        *this << i_xor(x86::Register::edx, x86::Register::edx);
+    } else {
+        *this << cdq();
+    }
+
+    *this << unary(u ? x86::Opcode::div : x86::Opcode::idiv, dword(memory_of_register(rs2)));
+
+    if (rem) {
+        *this << movsx(x86::Register::rdx, x86::Register::edx);
+    } else {
+        *this << cdqe();
+    }
+
+    *this << mov(qword(memory_of_register(rd)), rem ? x86::Register::rdx : x86::Register::rax);
 }

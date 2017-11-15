@@ -702,6 +702,7 @@ void Encoder::encode(const Instruction& inst) {
         /* ALU instructions */
         case Opcode::add: emit_alu(inst, 0); break;
         case Opcode::i_or: emit_alu(inst, 1); break;
+        case Opcode::sbb: emit_alu(inst, 3); break;
         case Opcode::i_and: emit_alu(inst, 4); break;
         case Opcode::sub: emit_alu(inst, 5); break;
         case Opcode::i_xor: emit_alu(inst, 6); break;
@@ -715,6 +716,10 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::call: emit_call(inst); break;
         case Opcode::cdqe: emit_byte(0x48); emit_byte(0x98); break;
         case Opcode::cmovcc: emit_r_rm(inst.operands[1], inst.operands[0], 0x0F40 + static_cast<uint8_t>(inst.cond)); break;
+        case Opcode::cdq: emit_byte(0x99); break;
+        case Opcode::cqo: emit_byte(0x48); emit_byte(0x99); break;
+        case Opcode::div: emit_rm(inst, 0xF6, 6); break;
+        case Opcode::idiv: emit_rm(inst, 0xF6, 7); break;
         case Opcode::imul: emit_imul(inst); break;
         case Opcode::jmp: emit_jmp(inst); break;
         case Opcode::lea: emit_lea(inst); break;

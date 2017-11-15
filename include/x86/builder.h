@@ -149,6 +149,9 @@ static Instruction cmovcc(Condition_code cc, const Operand& op1, const Operand& 
 UNARY(call)
 NULLARY(cdqe)
 BINARY(cmp)
+NULLARY(cdq) NULLARY(cqo)
+UNARY(div)
+UNARY(idiv)
 UNARY(imul) BINARY(imul)
 UNARY(jmp)
 BINARY(lea)
@@ -164,6 +167,7 @@ UNARY(pop)
 UNARY(push)
 NULLARY(ret) UNARY(ret)
 BINARY(sar)
+BINARY(sbb)
 
 [[maybe_unused]]
 static Instruction setcc(Condition_code cc, const Operand& op) {
