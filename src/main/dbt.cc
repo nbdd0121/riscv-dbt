@@ -20,11 +20,25 @@
 // Shorthand for instruction coding.
 using namespace x86::builder;
 
+// Denotes a translated block.
+struct Dbt_block {
+
+    // Translated code.
+    util::Code_buffer code;
+
+    // Decoded instructions.
+    riscv::Basic_block block;
+
+    // Specify the mapping between RISC-V instruction and x86 instruction.
+    std::vector<uint8_t> pc_map;
+};
+
 // A separate class is used instead of generating code directly in Dbt_runtime, so it is easier to define and use
 // helper functions that are shared by many instructions.
 class Dbt_compiler {
 private:
     Dbt_runtime& runtime_;
+    Dbt_block& block_;
     x86::Encoder encoder_;
 
     Dbt_compiler& operator <<(const x86::Instruction& inst);
@@ -80,7 +94,7 @@ private:
     void emit_divw(riscv::Instruction inst, bool u, bool rem);
 
 public:
-    Dbt_compiler(Dbt_runtime& runtime, util::Code_buffer& buffer): runtime_{runtime}, encoder_{buffer} {}
+    Dbt_compiler(Dbt_runtime& runtime, Dbt_block& block): runtime_{runtime}, block_{block}, encoder_{block.code} {}
     void compile(emu::reg_t pc);
 };
 
@@ -89,6 +103,8 @@ Dbt_runtime::Dbt_runtime(emu::State& state): state_ {state} {
     icache_ = std::unique_ptr<std::byte*[]> { new std::byte*[4096] };
 }
 
+// Necessary as Dbt_block is incomplete in header.
+Dbt_runtime::~Dbt_runtime() {}
 void Dbt_runtime::step(riscv::Context& context) {
     const emu::reg_t pc = context.pc;
     const ptrdiff_t tag = (pc >> 1) & 4095;
@@ -106,19 +122,20 @@ void Dbt_runtime::step(riscv::Context& context) {
 
 void Dbt_runtime::compile(emu::reg_t pc) {
     const ptrdiff_t tag = (pc >> 1) & 4095;
-    util::Code_buffer& buffer = inst_cache_[pc];
+    auto& block_ptr = inst_cache_[pc];
 
     // Reserve a page in case that the buffer is empty, it saves the code buffer from reallocating (which is expensive
     // as code buffer is backed up by mmap and munmap at the moment.
     // If buffer.size() is not zero, it means that we have compiled the code previously but it is not in the hot cache.
-    if (buffer.size() == 0) {
-        buffer.reserve(4096);
-        Dbt_compiler compiler { *this, buffer };
+    if (!block_ptr) {
+        block_ptr = std::make_unique<Dbt_block>();
+        block_ptr->code.reserve(4096);
+        Dbt_compiler compiler { *this, *block_ptr };
         compiler.compile(pc);
     }
 
     // Update tag to reflect newly compiled code.
-    icache_[tag] = buffer.data();
+    icache_[tag] = block_ptr->code.data();
     icache_tag_[tag] = pc;
 }
 
@@ -142,7 +159,8 @@ Dbt_compiler& Dbt_compiler::operator <<(const x86::Instruction& inst) {
 
 void Dbt_compiler::compile(emu::reg_t pc) {
     riscv::Decoder decoder { &runtime_.state_, pc };
-    riscv::Basic_block block = decoder.decode_basic_block();
+    block_.block = decoder.decode_basic_block();
+    riscv::Basic_block& block = block_.block;
 
     if (runtime_.state_.disassemble) {
         util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(encoder_.buffer().data()));
@@ -161,6 +179,7 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
         riscv::Instruction inst = block.instructions[i];
         riscv::Opcode opcode = inst.opcode();
+        size_t host_pc_start = block_.code.size();
 
         switch (opcode) {
             case riscv::Opcode::lb: emit_lb(inst, false); break;
@@ -246,6 +265,10 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
         pc_diff += inst.length();
         instret_diff++;
+
+        // Keep track of the translation relationship.
+        size_t host_pc_end = block_.code.size();
+        block_.pc_map.push_back(host_pc_end - host_pc_start);
     }
 
     riscv::Instruction inst = block.instructions.back();

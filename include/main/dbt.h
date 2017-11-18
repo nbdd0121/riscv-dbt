@@ -21,6 +21,8 @@ namespace util {
 class Code_buffer;
 };
 
+struct Dbt_block;
+
 class Dbt_runtime {
 private:
     emu::State& state_;
@@ -30,12 +32,14 @@ private:
     std::unique_ptr<std::byte*[]> icache_;
 
     // The "slow" instruction cache that contains all code that are compiled previously.
-    std::unordered_map<emu::reg_t, util::Code_buffer> inst_cache_;
+    std::unordered_map<emu::reg_t, std::unique_ptr<Dbt_block>> inst_cache_;
 
     void compile(emu::reg_t);
 
 public:
     Dbt_runtime(emu::State& state);
+    ~Dbt_runtime();
+
     void step(riscv::Context& context);
 
     friend class Dbt_compiler;
