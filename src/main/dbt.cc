@@ -284,7 +284,7 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::sh: emit_sh(inst); break;
             case riscv::Opcode::sw: emit_sw(inst); break;
             case riscv::Opcode::sd: emit_sd(inst); break;
-            case riscv::Opcode::fence: *this << nop(); break;
+            case riscv::Opcode::fence: break;
 
             case riscv::Opcode::addi: emit_addi(inst); break;
             case riscv::Opcode::slli: emit_shifti(inst, x86::Opcode::shl); break;
@@ -459,12 +459,7 @@ void Dbt_compiler::generate_eh_frame() {
 }
 
 void Dbt_compiler::emit_move(int rd, int rs) {
-    if (rd == 0 || rd == rs) {
-        // We would like at least one x86 instruction to be generated for an instruction. Therefore if the instruction
-        // turns out to be no-op, we also generate a no-op.
-        *this << nop();
-        return;
-    }
+    if (rd == 0 || rd == rs) return;
 
     if (rs == 0) {
         emit_load_immediate(rd, 0);
@@ -476,10 +471,7 @@ void Dbt_compiler::emit_move(int rd, int rs) {
 }
 
 void Dbt_compiler::emit_move32(int rd, int rs) {
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs == 0) {
         emit_load_immediate(rd, 0);
@@ -491,10 +483,7 @@ void Dbt_compiler::emit_move32(int rd, int rs) {
 }
 
 void Dbt_compiler::emit_load_immediate(int rd, riscv::reg_t imm) {
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     *this << mov(qword(memory_of_register(rd)), imm);
 }
@@ -932,10 +921,7 @@ void Dbt_compiler::emit_addi(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::reg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm);
@@ -962,10 +948,7 @@ void Dbt_compiler::emit_shifti(riscv::Instruction inst, x86::Opcode opcode) {
     int rs1 = inst.rs1();
     riscv::reg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, 0);
@@ -999,10 +982,7 @@ void Dbt_compiler::emit_slti(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::sreg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm > 0);
@@ -1043,10 +1023,7 @@ void Dbt_compiler::emit_sltiu(riscv::Instruction inst) {
     // Even though the instruction is sltiu, we still convert it to signed integer to ease code generation.
     riscv::sreg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm != 0);
@@ -1077,10 +1054,7 @@ void Dbt_compiler::emit_xori(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::sreg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm);
@@ -1119,10 +1093,7 @@ void Dbt_compiler::emit_ori(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::sreg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm);
@@ -1154,10 +1125,7 @@ void Dbt_compiler::emit_andi(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::reg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, 0);
@@ -1189,10 +1157,7 @@ void Dbt_compiler::emit_addiw(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     riscv::reg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, imm);
@@ -1215,10 +1180,7 @@ void Dbt_compiler::emit_shiftiw(riscv::Instruction inst, x86::Opcode opcode) {
     int rs1 = inst.rs1();
     riscv::reg_t imm = inst.imm();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, 0);
@@ -1247,10 +1209,7 @@ void Dbt_compiler::emit_add(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_move(rd, rs2);
@@ -1297,10 +1256,7 @@ void Dbt_compiler::emit_sub(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     // rd = rs1 - 0
     if (rs2 == 0) {
@@ -1345,10 +1301,7 @@ void Dbt_compiler::emit_shift(riscv::Instruction inst, x86::Opcode opcode) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, 0);
@@ -1377,10 +1330,7 @@ void Dbt_compiler::emit_slt(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == rs2) {
         emit_load_immediate(rd, 0);
@@ -1420,10 +1370,7 @@ void Dbt_compiler::emit_sltu(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs2 == 0 || rs1 == rs2) {
         emit_load_immediate(rd, 0);
@@ -1451,10 +1398,7 @@ void Dbt_compiler::emit_and(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs2 == 0) {
         emit_load_immediate(rd, 0);
@@ -1488,10 +1432,7 @@ void Dbt_compiler::emit_xor(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_move(rd, rs2);
@@ -1530,10 +1471,7 @@ void Dbt_compiler::emit_or(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs1 == rs2) {
         emit_move(rd, rs2);
@@ -1567,10 +1505,7 @@ void Dbt_compiler::emit_addw(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_move32(rd, rs2);
@@ -1600,10 +1535,7 @@ void Dbt_compiler::emit_subw(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs2 == 0) {
         emit_move32(rd, rs1);
@@ -1634,10 +1566,7 @@ void Dbt_compiler::emit_shiftw(riscv::Instruction inst, x86::Opcode opcode) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0) {
         emit_load_immediate(rd, 0);
@@ -1661,10 +1590,7 @@ void Dbt_compiler::emit_mul(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs2 == 0) {
         emit_load_immediate(rd, 0);
@@ -1687,10 +1613,7 @@ void Dbt_compiler::emit_mulh(riscv::Instruction inst, bool u) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs2 == 0) {
         emit_load_immediate(rd, 0);
@@ -1713,10 +1636,7 @@ void Dbt_compiler::emit_mulhsu(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs2 == 0) {
         emit_load_immediate(rd, 0);
@@ -1744,10 +1664,7 @@ void Dbt_compiler::emit_mulw(riscv::Instruction inst) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     if (rs1 == 0 || rs2 == 0) {
         emit_load_immediate(rd, 0);
@@ -1771,10 +1688,7 @@ void Dbt_compiler::emit_div(riscv::Instruction inst, bool u, bool rem) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     // x / 0 = -1, x % 0 = x
     if (rs2 == 0) {
@@ -1817,10 +1731,7 @@ void Dbt_compiler::emit_divw(riscv::Instruction inst, bool u, bool rem) {
     int rs1 = inst.rs1();
     int rs2 = inst.rs2();
 
-    if (rd == 0) {
-        *this << nop();
-        return;
-    }
+    if (rd == 0) return;
 
     // x / 0 = -1, x % 0 = x
     if (rs2 == 0) {
