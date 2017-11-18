@@ -595,6 +595,9 @@ void Encoder::emit_pop(const Instruction& inst) {
     // Only 16 and 64 bit pop are encodable.
     ASSERT(op_size == 2 || op_size == 8);
 
+    // REX.W not needed
+    if (op_size == 8) op_size = 4;
+
     if (dst.is_register()) {
         emit_plusr(op_size, dst.as_register(), 0x58);
         return;
@@ -626,6 +629,9 @@ void Encoder::emit_push(const Instruction& inst) {
 
     // Only 16 and 64 bit pop are encodable.
     ASSERT(op_size == 2 || op_size == 8);
+
+    // REX.W not needed
+    if (op_size == 8) op_size = 4;
 
     if (dst.is_register()) {
         emit_plusr(op_size, dst.as_register(), 0x50);
