@@ -34,7 +34,16 @@ void Interpreter::step(riscv::Context& context) {
     for (size_t i = 0; i < block_size; i++) {
         // Retrieve cached data
         riscv::Instruction inst = basic_block.instructions[i];
-        riscv::step(&context, inst);
+        try {
+            riscv::step(&context, inst);
+        } catch(...) {
+            // In case an exception happens, we need to move the pc before the instruction.
+            for (size_t j = 0; j < i; j++) {
+                context.pc += basic_block.instructions[j].length();
+            }
+            context.instret += i;
+            throw;
+        }
     }
 
     context.pc = basic_block.end_pc;
@@ -43,6 +52,12 @@ void Interpreter::step(riscv::Context& context) {
     if (inst.opcode() == riscv::Opcode::fence_i) {
         inst_cache_.clear();
     } else {
-        riscv::step(&context, inst);
+        try {
+            riscv::step(&context, inst);
+        } catch(...) {
+            context.pc -= inst.length();
+            context.instret--;
+            throw;
+        }
     }
 }
