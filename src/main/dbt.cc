@@ -416,14 +416,21 @@ void Dbt_compiler::generate_eh_frame() {
         0x01,
         // Augmentation string
         'z', 'P', 'L', 0,
-        // Factors & Ret reg
-        0x01, 0x78, 0x10,
+        // Instruction alignment factor = 1
+        0x01,
+        // Data alignment factor = -8
+        0x78,
+        // Return register number
+        0x10,
         // Augmentation data
         0x0A, // Data for z
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // abs format, personality routine
         0x00, // abs format for LSDA
         // Instructions
-        0x0c, 0x07, 0x08, 0x90, 0x01,
+        // def_cfa(rsp, 8)
+        0x0c, 0x07, 0x08,
+        // offset(rsp, cfa-8)
+        0x90, 0x01,
         // Padding
 
         // FDE
@@ -441,8 +448,8 @@ void Dbt_compiler::generate_eh_frame() {
         0x41,
         // def_cfa_offset(16)
         0x0E, 0x10,
-        // offset(rbx, cfa-16)
-        0x83, 0x02,
+        // offset(rbp, cfa-16)
+        0x86, 0x02,
         // Padding
         0x00, 0x00,
 
