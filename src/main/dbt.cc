@@ -189,6 +189,9 @@ _Unwind_Reason_Code dbt_personality(
 Dbt_runtime::Dbt_runtime(emu::State& state): state_ {state} {
     icache_tag_ = std::unique_ptr<emu::reg_t[]> { new emu::reg_t[4096] };
     icache_ = std::unique_ptr<std::byte*[]> { new std::byte*[4096] };
+    for (size_t i = 0; i < 4096; i++) {
+        icache_tag_[i] = 0;
+    }
 }
 
 // Necessary as Dbt_block is incomplete in header.
