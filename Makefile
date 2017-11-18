@@ -14,6 +14,7 @@ OBJS = \
 	main/dbt.o \
 	main/interpreter.o \
 	main/main.o \
+	main/signal.o \
 	riscv/decoder.o \
 	riscv/disassembler.o \
 	riscv/step.o \

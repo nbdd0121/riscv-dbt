@@ -7,6 +7,7 @@
 #include "emu/state.h"
 #include "main/dbt.h"
 #include "main/interpreter.h"
+#include "main/signal.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
 #include "riscv/decoder.h"
@@ -26,6 +27,8 @@ Options:\n\
 ";
 
 int main(int argc, const char **argv) {
+
+    setup_fault_handler();
 
     /* Arguments to be parsed */
     // By default we use flat mmu since it is faster.
