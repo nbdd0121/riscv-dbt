@@ -1,6 +1,8 @@
 #include "emu/state.h"
 #include "emu/mmu.h"
+#include "emu/unwind.h"
 #include "main/dbt.h"
+#include "main/signal.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
 #include "riscv/decoder.h"
@@ -20,6 +22,10 @@
 // Shorthand for instruction coding.
 using namespace x86::builder;
 
+// Declare the exception handling registration functions.
+extern "C" void __register_frame(void*);
+extern "C" void __deregister_frame(void*);
+
 // Denotes a translated block.
 struct Dbt_block {
 
@@ -31,6 +37,15 @@ struct Dbt_block {
 
     // Specify the mapping between RISC-V instruction and x86 instruction.
     std::vector<uint8_t> pc_map;
+
+    // Exception handling frame
+    std::unique_ptr<uint8_t[]> cie;
+
+    ~Dbt_block() {
+        if (cie) {
+            __deregister_frame(cie.get());
+        }
+    }
 };
 
 // A separate class is used instead of generating code directly in Dbt_runtime, so it is easier to define and use
@@ -96,7 +111,80 @@ private:
 public:
     Dbt_compiler(Dbt_runtime& runtime, Dbt_block& block): runtime_{runtime}, block_{block}, encoder_{block.code} {}
     void compile(emu::reg_t pc);
+    void generate_eh_frame();
 };
+
+_Unwind_Reason_Code dbt_personality(
+    [[maybe_unused]] int version,
+    _Unwind_Action actions,
+    [[maybe_unused]] uint64_t exception_class,
+    [[maybe_unused]] struct _Unwind_Exception *exception_object,
+    [[maybe_unused]] struct _Unwind_Context *context
+) {
+    if (actions & _UA_SEARCH_PHASE) {
+
+        // We will need to catch FPE exception. So check if the exception_class is a C++ exception.
+        // 432B2B00 is ASCII of 'C++\0'.
+        if ((exception_class & 0xFFFFFFFF) == 0x432B2B00) {
+
+            // Get the C++ exception object from the generic exception object.
+            __cxa_exception *ex = reinterpret_cast<__cxa_exception*>(
+                reinterpret_cast<uintptr_t>(exception_object) - offsetof(__cxa_exception, unwindHeader)
+            );
+
+            // Check if the exception in process is a FPE exception.
+            if (*ex->exceptionType == typeid(Fpe_exception)) {
+                return _URC_HANDLER_FOUND;
+            }
+        }
+
+        // Otherwise we do not catch it, and we proceed to unwind.
+        return _URC_CONTINUE_UNWIND;
+    } else {
+
+        // Cleanup phase.
+
+        // First retrieve the associated Dbt_block by reading from LSDA.
+        Dbt_block& block = *reinterpret_cast<Dbt_block*>(_Unwind_GetLanguageSpecificData(context));
+
+        // Retrive the runtime context by reading register RBP, which has id 5.
+        riscv::Context* ctx = reinterpret_cast<riscv::Context*>(_Unwind_GetGR(context, 5));
+
+        // Calculate the index and offset of the trapping instruction.
+        uint64_t current_ip = _Unwind_GetIP(context);
+        uint64_t host_offset = current_ip - reinterpret_cast<uint64_t>(block.code.data());
+        size_t guest_offset = 0, i;
+        for (i = 0; i < block.pc_map.size(); i++) {
+            if (host_offset < block.pc_map[i]) {
+                break;
+            }
+            host_offset -= block.pc_map[i];
+            guest_offset += block.block.instructions[i].length();
+        }
+        ASSERT(i < block.pc_map.size());
+
+        if (actions & _UA_HANDLER_FRAME) {
+
+            // Emulate the trapping division instruction using step function.
+            riscv::step(ctx, block.block.instructions[i]);
+
+            // Advance the IP past the generated sequence for the trapping guest instruction.
+            _Unwind_SetIP(context, current_ip - host_offset + block.pc_map[i]);
+
+            // Cleanup the exception object.
+            _Unwind_DeleteException(exception_object);
+
+            return _URC_INSTALL_CONTEXT;
+
+        } else {
+
+            // Make sure emulated CPU state is consistency.
+            ctx->instret += i;
+            ctx->pc += guest_offset;
+            return _URC_CONTINUE_UNWIND;
+        }
+    }
+}
 
 Dbt_runtime::Dbt_runtime(emu::State& state): state_ {state} {
     icache_tag_ = std::unique_ptr<emu::reg_t[]> { new emu::reg_t[4096] };
@@ -105,6 +193,7 @@ Dbt_runtime::Dbt_runtime(emu::State& state): state_ {state} {
 
 // Necessary as Dbt_block is incomplete in header.
 Dbt_runtime::~Dbt_runtime() {}
+
 void Dbt_runtime::step(riscv::Context& context) {
     const emu::reg_t pc = context.pc;
     const ptrdiff_t tag = (pc >> 1) & 4095;
@@ -179,7 +268,9 @@ void Dbt_compiler::compile(emu::reg_t pc) {
 
         riscv::Instruction inst = block.instructions[i];
         riscv::Opcode opcode = inst.opcode();
-        size_t host_pc_start = block_.code.size();
+
+        // We treat the prologue as part of the first instruction.
+        size_t host_pc_start = i == 0 ? 0 : block_.code.size();
 
         switch (opcode) {
             case riscv::Opcode::lb: emit_lb(inst, false); break;
@@ -232,7 +323,6 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::mulhsu: emit_mulhsu(inst); break;
             case riscv::Opcode::mulhu: emit_mulh(inst, true); break;
             case riscv::Opcode::mulw: emit_mulw(inst); break;
-            /* DIV is partially implemented. Divide by zero might be triggered at the moment.
             case riscv::Opcode::div: emit_div(inst, false, false); break;
             case riscv::Opcode::divu: emit_div(inst, true, false); break;
             case riscv::Opcode::rem: emit_div(inst, false, true); break;
@@ -241,7 +331,6 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             case riscv::Opcode::divuw: emit_divw(inst, true, false); break;
             case riscv::Opcode::remw: emit_divw(inst, false, true); break;
             case riscv::Opcode::remuw: emit_divw(inst, true, true); break;
-            */
 
             case riscv::Opcode::lui:
                 emit_load_immediate(inst.rd(), inst.imm());
@@ -308,6 +397,65 @@ void Dbt_compiler::compile(emu::reg_t pc) {
             *this << jmp(x86::Register::rax);
             break;
     }
+
+    generate_eh_frame();
+}
+
+void Dbt_compiler::generate_eh_frame() {
+    // TODO: Create an dwarf generation to replace this hard-coded template.
+    static const unsigned char cie_template[] = {
+        // CIE
+        // Length
+        0x1C, 0x00, 0x00, 0x00,
+        // CIE
+        0x00, 0x00, 0x00, 0x00,
+        // Version
+        0x01,
+        // Augmentation string
+        'z', 'P', 'L', 0,
+        // Factors & Ret reg
+        0x01, 0x78, 0x10,
+        // Augmentation data
+        0x0A, // Data for z
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // abs format, personality routine
+        0x00, // abs format for LSDA
+        // Instructions
+        0x0c, 0x07, 0x08, 0x90, 0x01,
+        // Padding
+
+        // FDE
+        // Length
+        0x24, 0x00, 0x00, 0x00,
+        // CIE Pointer
+        0x24, 0x00, 0x00, 0x00,
+        // Initial location
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        // Augumentation data
+        0x8,
+        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // LSDA
+        // advance_loc(1)
+        0x41,
+        // def_cfa_offset(16)
+        0x0E, 0x10,
+        // offset(rbx, cfa-16)
+        0x83, 0x02,
+        // Padding
+        0x00, 0x00,
+
+        0x00, 0x00, 0x00, 0x00
+    };
+
+    block_.cie = std::make_unique<uint8_t[]>(sizeof(cie_template));
+    uint8_t *cie = block_.cie.get();
+
+    memcpy(cie, cie_template, sizeof(cie_template));
+    util::write_as<uint64_t>(cie + 0x12, reinterpret_cast<uint64_t>(dbt_personality));
+    util::write_as<uint64_t>(cie + 0x28, reinterpret_cast<uint64_t>(block_.code.data()));
+    util::write_as<uint64_t>(cie + 0x30, block_.code.size());
+    util::write_as<uint64_t>(cie + 0x39, reinterpret_cast<uint64_t>(&block_));
+
+    __register_frame(cie);
 }
 
 void Dbt_compiler::emit_move(int rd, int rs) {
