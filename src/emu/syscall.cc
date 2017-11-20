@@ -279,14 +279,12 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::exit: {
-            // Record the exit_code so that the emulator can correctly return it.
-            state->exit_code = arg0 & 0xFF;
-
             if (strace) {
                 util::log("exit({}) = ?\n", arg0);
             }
 
-            return 0;
+            // Record the exit_code so that the emulator can correctly return it.
+            throw emu::Exit_control { static_cast<uint8_t>(arg0) };
         }
         case riscv::abi::Syscall_number::gettimeofday: {
             struct timeval host_tv;

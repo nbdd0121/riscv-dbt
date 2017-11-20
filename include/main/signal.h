@@ -3,13 +3,11 @@
 
 #include <stdexcept>
 
-class Segv_exception: public std::runtime_error {
-public:
+struct Segv_exception: std::runtime_error {
     Segv_exception(): std::runtime_error {"segmentation fault"} {}
 };
 
-class Fpe_exception: public std::runtime_error {
-public:
+struct Fpe_exception: std::runtime_error {
     Fpe_exception(): std::runtime_error {"floating point exception"} {}
 };
 

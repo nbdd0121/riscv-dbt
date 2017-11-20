@@ -2,6 +2,7 @@
 #define EMU_STATE_H
 
 #include <memory>
+#include <stdexcept>
 
 #include "emu/typedef.h"
 
@@ -27,14 +28,18 @@ struct State {
     reg_t heap_start;
     reg_t heap_end;
 
-    // The exit code of the program. Set when the guest program calls syscall exit.
-    int exit_code;
-
     // A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
     bool strace;
 
     // A flag to determine whether to print instruction out when it is decoded.
     bool disassemble;
+};
+
+// This is not really an error. However it shares some properties with an exception, as it needs to break out from
+// any nested controls and stop executing guest code.
+struct Exit_control: std::runtime_error {
+    uint8_t exit_code;
+    Exit_control(uint8_t exit_code): std::runtime_error { "exit" }, exit_code {exit_code} {}
 };
 
 reg_t load_elf(const char *filename, State& mmu);

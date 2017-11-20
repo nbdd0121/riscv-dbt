@@ -73,7 +73,6 @@ int main(int argc, const char **argv) {
     emu::State state;
     state.strace = strace;
     state.disassemble = disassemble;
-    state.exit_code = -1;
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
     if (use_paging) {
@@ -147,15 +146,17 @@ int main(int argc, const char **argv) {
     try {
         if (use_dbt) {
             Dbt_runtime executor { state };
-            while (state.exit_code == -1) {
+            while (true) {
                 executor.step(*context);
             }
         } else {
             Interpreter executor { state };
-            while (state.exit_code == -1) {
+            while (true) {
                 executor.step(*context);
             }
         }
+    } catch (emu::Exit_control& ex) {
+        return ex.exit_code;
     } catch (std::exception& ex) {
         util::print("{}\npc={:x}\n", ex.what(), context->pc);
         for (int i = 0; i < 32; i++) {
@@ -163,6 +164,4 @@ int main(int argc, const char **argv) {
         }
         return 1;
     }
-
-    return state.exit_code;
 }
