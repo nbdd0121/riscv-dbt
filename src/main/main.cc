@@ -158,9 +158,13 @@ int main(int argc, const char **argv) {
     } catch (emu::Exit_control& ex) {
         return ex.exit_code;
     } catch (std::exception& ex) {
-        util::print("{}\npc={:x}\n", ex.what(), context->pc);
-        for (int i = 0; i < 32; i++) {
-            util::print("x{} = {:x}\n", i, context->registers[i]);
+        util::print("{}\npc  = {:16x}  ra  = {:16x}\n", ex.what(), context->pc, context->registers[1]);
+        for (int i = 2; i < 32; i += 2) {
+            util::print(
+                "{:-3} = {:16x}  {:-3} = {:16x}\n",
+                riscv::Disassembler::register_name(i), context->registers[i],
+                riscv::Disassembler::register_name(i + 1), context->registers[i + 1]
+            );
         }
         return 1;
     }
