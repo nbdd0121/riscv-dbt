@@ -23,6 +23,7 @@ Options:\n\
   --strace      Log system calls.\n\
   --disassemble Log decoded instructions.\n\
   --disable-dbt Disable dynamic binary translation and use interpretation instead.\n\
+  --no-instret  Disable precise instret updating in binary translated code.\n\
   --help        Display this help message.\n\
 ";
 
@@ -36,6 +37,7 @@ int main(int argc, const char **argv) {
     bool strace = false;
     bool disassemble = false;
     bool use_dbt = true;
+    bool no_instret = false;
 
     // Parsing arguments
     int arg_index;
@@ -55,6 +57,8 @@ int main(int argc, const char **argv) {
             disassemble = true;
         } else if (strcmp(arg, "--disable-dbt") == 0) {
             use_dbt = false;
+        } else if (strcmp(arg, "--no-instret") == 0) {
+            no_instret = true;
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;
@@ -73,6 +77,7 @@ int main(int argc, const char **argv) {
     emu::State state;
     state.strace = strace;
     state.disassemble = disassemble;
+    state.no_instret = no_instret;
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
     if (use_paging) {

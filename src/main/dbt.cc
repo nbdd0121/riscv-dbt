@@ -367,7 +367,9 @@ void Dbt_compiler::compile(emu::reg_t pc) {
     pc_diff += inst.length();
     instret_diff += 1;
 
-    *this << add(qword(memory_of(instret)), instret_diff);
+    if (!runtime_.state_.no_instret) {
+        *this << add(qword(memory_of(instret)), instret_diff);
+    }
 
     switch (inst.opcode()) {
         case riscv::Opcode::jalr: emit_jalr(inst, pc_diff); break;

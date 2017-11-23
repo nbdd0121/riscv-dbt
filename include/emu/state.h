@@ -33,6 +33,9 @@ struct State {
 
     // A flag to determine whether to print instruction out when it is decoded.
     bool disassemble;
+
+    // A flag to determine whether instret should be updated precisely in binary translated code.
+    bool no_instret;
 };
 
 // This is not really an error. However it shares some properties with an exception, as it needs to break out from
