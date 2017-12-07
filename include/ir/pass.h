@@ -19,6 +19,17 @@ public:
     void run(Graph& buffer);
 };
 
+class Printer: public Pass {
+public:
+    static const char* opcode_name(Opcode opcode);
+    static const char* type_name(Type type);
+
+protected:
+    // Used for numbering the output of instructions.
+    uint64_t index = 0;
+    virtual void after(Instruction* inst) override;
+};
+
 }
 
 #endif
