@@ -158,21 +158,27 @@ public:
     void reference_remove(Instruction* inst);
     void reference_update(Instruction* oldinst, Instruction* newinst);
     
-    friend class Instruction_heap;
+    friend class Graph;
     friend pass::Pass;
 };
 
-class Instruction_heap {
-public:
+class Graph {
+private:
     std::vector<Instruction*> _heap;
+    Instruction* _root = nullptr;
 
 public:
-    ~Instruction_heap();
+    ~Graph();
 
     Instruction* manage(Instruction* inst) {
         _heap.push_back(inst);
         return inst;
     }
+
+    Instruction* root() const { return _root; }
+    void root(Instruction* root) { _root = root; }
+
+    friend pass::Pass;
 };
 
 } // ir

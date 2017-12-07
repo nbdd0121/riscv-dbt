@@ -111,7 +111,7 @@ void Instruction::reference_update(Instruction* oldinst, Instruction* newinst) {
     *ptr = newinst;
 }
 
-Instruction_heap::~Instruction_heap() {
+Graph::~Graph() {
     for (auto inst: _heap) {
         inst->_operands.clear();
         inst->_references.clear();

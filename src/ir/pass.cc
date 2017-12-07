@@ -18,11 +18,11 @@ void Pass::run_recurse(Instruction* inst) {
     inst->_visited = 1;
 }
 
-void Pass::run(std::vector<ir::Instruction*>& buffer) {
-    for (auto inst: buffer) {
+void Pass::run(Graph& graph) {
+    for (auto inst: graph._heap) {
         inst->_visited = false;
     }
-    run_recurse(buffer.back());
+    run_recurse(graph.root());
 }
 
 }

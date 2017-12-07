@@ -16,7 +16,7 @@ protected:
     virtual void after(Instruction*) {}
 
 public:
-    void run(std::vector<ir::Instruction*>& buffer);
+    void run(Graph& buffer);
 };
 
 }
