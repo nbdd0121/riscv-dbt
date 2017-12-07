@@ -11,6 +11,7 @@ OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
 	emu/syscall.o \
+	ir/dot_printer.o \
 	ir/instruction.o \
 	ir/pass.o \
 	ir/printer.o \

@@ -56,7 +56,7 @@ void Printer::after(Instruction* inst) {
 
     // Display the type and number of the instruction. If the instruction does not return value
     if (inst->type() != Type::none) {
-        inst->scratchpad(index++);
+        inst->scratchpad(_index++);
         util::log("{} %{} = ", type_name(inst->type()), inst->scratchpad());
     } else {
         // In debugging mode, set the index of an instruction returning none to -1 to ease debugging.

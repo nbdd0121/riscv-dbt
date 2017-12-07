@@ -22,7 +22,9 @@ void Pass::run(Graph& graph) {
     for (auto inst: graph._heap) {
         inst->_visited = false;
     }
+    start();
     run_recurse(graph.root());
+    finish();
 }
 
 }
