@@ -21,6 +21,7 @@ OBJS = \
 	main/signal.o \
 	riscv/decoder.o \
 	riscv/disassembler.o \
+	riscv/frontend.o \
 	riscv/step.o \
 	softfp/float.o \
 	util/assert.o \

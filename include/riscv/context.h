@@ -16,9 +16,9 @@ struct Context {
     reg_t registers[32];
     freg_t fp_registers[32];
     reg_t pc;
+    reg_t instret;
 
     reg_t fcsr;
-    reg_t instret;
 
     // For load-reserved
     reg_t lr;
