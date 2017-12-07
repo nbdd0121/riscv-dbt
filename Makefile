@@ -11,6 +11,7 @@ OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
 	emu/syscall.o \
+	ir/instruction.o \
 	main/dbt.o \
 	main/interpreter.o \
 	main/main.o \
