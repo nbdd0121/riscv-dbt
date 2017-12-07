@@ -97,7 +97,8 @@ private:
     Opcode _opcode;
 
     // Whether the instruction is visited. For graph walking only.
-    bool _visited;
+    // 0 - not visited, 1 - visited, 2 - visiting.
+    uint8_t _visited;
 
 public:
     Instruction(Type type, Opcode opcode, std::vector<Instruction*>&& operands);

@@ -12,6 +12,7 @@ OBJS = \
 	emu/mmu.o \
 	emu/syscall.o \
 	ir/instruction.o \
+	ir/pass.o \
 	main/dbt.o \
 	main/interpreter.o \
 	main/main.o \
