@@ -4,8 +4,6 @@
 #include "util/assert.h"
 #include "util/format.h"
 
-using namespace ir;
-
 namespace ir::pass {
 
 void Dot_printer::start() {

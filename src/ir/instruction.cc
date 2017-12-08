@@ -79,8 +79,8 @@ void Instruction::relink(Instruction* inst) {
 void Instruction::operand_set(size_t index, Instruction* inst) {
     ASSERT(index < _operands.size());
     auto& ptr = _operands[index];
-    if (inst) inst->reference_add(inst);
-    if (ptr) ptr->reference_remove(inst);
+    if (inst) inst->reference_add(this);
+    if (ptr) ptr->reference_remove(this);
     ptr = inst;
 }
 
