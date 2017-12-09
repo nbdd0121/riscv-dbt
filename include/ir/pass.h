@@ -6,10 +6,17 @@
 namespace ir::pass {
 
 class Pass {
+public:
+    static void replace(Instruction* oldnode, Instruction* newnode);
+
+protected:
+    Graph* _graph;
+
 private:
     void run_recurse(Instruction* inst);
 
 protected:
+
     // Before visiting the tree.
     virtual void start() {}
     // After visiting the tree.
@@ -20,7 +27,7 @@ protected:
     virtual void after(Instruction*) {}
 
 public:
-    void run(Graph& buffer);
+    void run(Graph& graph);
 };
 
 class Printer: public Pass {

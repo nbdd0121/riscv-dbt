@@ -3,6 +3,12 @@
 
 namespace ir::pass {
 
+void Pass::replace(Instruction* oldnode, Instruction* newnode) {
+    while (oldnode->reference_count()) {
+        oldnode->references().back()->operand_update(oldnode, newnode);
+    }
+}
+
 void Pass::run_recurse(Instruction* inst) {
     if (inst->_visited) return;
     if (before(inst)) {
@@ -19,6 +25,7 @@ void Pass::run_recurse(Instruction* inst) {
 }
 
 void Pass::run(Graph& graph) {
+    _graph = &graph;
     for (auto inst: graph._heap) {
         inst->_visited = false;
     }
