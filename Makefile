@@ -15,6 +15,7 @@ OBJS = \
 	ir/instruction.o \
 	ir/pass.o \
 	ir/printer.o \
+	ir/register_access_elimination.o \
 	main/dbt.o \
 	main/interpreter.o \
 	main/main.o \

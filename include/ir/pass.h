@@ -49,6 +49,25 @@ protected:
     virtual void after(Instruction* inst) override;
 };
 
+class Register_access_elimination: public Printer {
+private:
+    std::vector<Instruction*> last_load;
+    std::vector<Instruction*> last_store;
+    // Do not use std::vector<bool> as we don't need its space optimization.
+    std::vector<char> has_store_after_exception;
+
+    Instruction* last_exception = nullptr;
+    Instruction* last_effect = nullptr;
+public:
+    Register_access_elimination(int regcount):
+        last_load(regcount), last_store(regcount), has_store_after_exception(regcount) {}
+private:
+    Instruction* dependency(std::vector<Instruction*>&& dep);
+
+protected:
+    virtual void after(Instruction* inst) override;
+};
+
 }
 
 #endif
