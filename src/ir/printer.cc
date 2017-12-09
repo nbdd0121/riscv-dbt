@@ -12,6 +12,7 @@ const char* Printer::opcode_name(Opcode opcode) {
         CASE(constant)
         CASE(cast)
         case Opcode::i_return: return "return";
+        CASE(fence)
         CASE(load_register)
         CASE(store_register)
         CASE(load_memory)
@@ -62,6 +63,9 @@ void Printer::after(Instruction* inst) {
             inst->scratchpad(-1);
         }
     }
+
+    // As we does not output side-effect dependency, fence is omitted.
+    if (inst->opcode() == Opcode::fence) return;
 
     std::clog << opcode_name(inst->opcode());
 

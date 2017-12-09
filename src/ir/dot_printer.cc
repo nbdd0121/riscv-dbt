@@ -48,6 +48,9 @@ void Dot_printer::after(Instruction* inst) {
         case Opcode::i_return:
             dependency_count = 1;
             break;
+        case Opcode::fence:
+            dependency_count = inst->operand_count();
+            break;
         default: break;
     }
     std::clog << "\"];\n";

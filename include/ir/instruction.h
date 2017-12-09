@@ -28,6 +28,7 @@ enum class Opcode: uint8_t {
     cast,
     i_return,
     emulate,
+    fence,
 
     /* Machine register load/store */
     load_register,
