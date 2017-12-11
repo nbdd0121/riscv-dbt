@@ -4,6 +4,7 @@
 #include "riscv/frontend.h"
 #include "riscv/instruction.h"
 #include "riscv/opcode.h"
+#include "util/memory.h"
 
 namespace riscv {
 
@@ -187,7 +188,8 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::srlw: emit_shift(inst, ir::Opcode::shr, true); break;
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
             default: {
-                last_side_effect = builder.emulate(last_side_effect, const_cast<Instruction*>(&inst));
+                last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {last_side_effect}));
+                last_side_effect->attribute(util::read_as<uint64_t>(&inst));
                 break;
             }
         }

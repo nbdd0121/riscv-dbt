@@ -47,12 +47,6 @@ public:
         return _graph.manage(new Instruction(Type::none, Opcode::store_memory, {dep, address, value}));
     }
 
-    Instruction* emulate(Instruction* dep, void* ptr) {
-        auto inst = new Instruction(Type::none, Opcode::emulate, {dep});
-        inst->attribute_pointer(ptr);
-        return _graph.manage(inst);
-    }
-
     Instruction* arithmetic(Opcode opcode, Instruction* left, Instruction* right) {
         ASSERT(left->type() == right->type());
         return _graph.manage(new Instruction(left->type(), opcode, {left, right}));
