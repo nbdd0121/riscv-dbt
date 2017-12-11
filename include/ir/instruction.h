@@ -22,6 +22,11 @@ enum class Type: uint8_t {
     i64 = 64,
 };
 
+[[maybe_unused]]
+static size_t get_type_size(Type type) {
+    return static_cast<uint8_t>(type);
+}
+
 enum class Opcode: uint8_t {
     /* Special instruction */
     constant,

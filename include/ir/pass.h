@@ -3,6 +3,10 @@
 
 #include "ir/instruction.h"
 
+namespace riscv {
+    struct Context;
+};
+
 namespace ir::pass {
 
 class Pass {
@@ -65,6 +69,23 @@ private:
     Instruction* dependency(std::vector<Instruction*>&& dep);
 
 protected:
+    virtual void after(Instruction* inst) override;
+};
+
+class Evaluator: public Pass {
+public:
+    static uint64_t sign_extend(Type type, uint64_t value);
+    static uint64_t zero_extend(Type type, uint64_t value);
+    static uint64_t cast(Type type, Type oldtype, bool sext, uint64_t value);
+    static uint64_t binary(Type type, Opcode opcode, uint64_t l, uint64_t r);
+
+private:
+    // TODO: Make the evaluator more generic.
+    riscv::Context* _ctx;
+
+public:
+    Evaluator(riscv::Context* ctx): _ctx {ctx} {};
+
     virtual void after(Instruction* inst) override;
 };
 
