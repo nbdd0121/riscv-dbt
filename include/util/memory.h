@@ -9,7 +9,7 @@ namespace util {
 // common, read_as and write_as are implemented to maximise standard conformance.
 
 template<typename T>
-T read_as(void *pointer) {
+T read_as(const void *pointer) {
     T ret;
     memcpy(&ret, pointer, sizeof(T));
     return ret;
