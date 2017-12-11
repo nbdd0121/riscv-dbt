@@ -32,6 +32,8 @@ const char* Printer::opcode_name(Opcode opcode) {
         CASE(ge)
         CASE(ltu)
         CASE(geu)
+        CASE(neg)
+        case Opcode::i_not: return "not";
 #undef CASE
         default: return "(unknown)";
     }

@@ -12,9 +12,9 @@ Interpreter::Interpreter(emu::State& state) noexcept: state_{state} {
 void Interpreter::step(riscv::Context& context) {
     emu::reg_t pc = context.pc;
     riscv::Basic_block& basic_block = inst_cache_[pc];
-    riscv::Decoder decoder {&state_, pc};
 
     if (UNLIKELY(basic_block.instructions.size() == 0)) {
+        riscv::Decoder decoder {&state_, pc};
         basic_block = decoder.decode_basic_block();
 
         // Post-processing by replacing auipc with lui.
