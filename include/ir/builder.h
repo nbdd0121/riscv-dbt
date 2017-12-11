@@ -34,7 +34,7 @@ public:
     }
 
     Instruction* store_register(Instruction* dep, int regnum, Instruction* operand) {
-        auto inst = new Instruction(Type::i64, Opcode::store_register, {dep, operand});
+        auto inst = new Instruction(Type::none, Opcode::store_register, {dep, operand});
         inst->attribute(regnum);
         return _graph.manage(inst);
     }
