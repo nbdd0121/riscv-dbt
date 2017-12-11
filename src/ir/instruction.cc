@@ -1,6 +1,7 @@
 #include <algorithm>
 
 #include "ir/instruction.h"
+#include "ir/pass.h"
 
 namespace ir {
 
@@ -117,6 +118,18 @@ Graph::~Graph() {
         inst->_references.clear();
         delete inst;
     }
+}
+
+void Graph::garbage_collect() {
+    pass::Pass{}.run(*this);
+    size_t size = _heap.size();
+    for (size_t i = 0; i < size; i++) {
+        if (!_heap[i]->_visited) {
+            // Move last element to current.
+            _heap[i--] = _heap[--size];
+        }
+    }
+    _heap.resize(size);
 }
 
 }

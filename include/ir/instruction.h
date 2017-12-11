@@ -187,6 +187,10 @@ public:
         return inst;
     }
 
+    // Free up dead instructions. Not necessary during compilation, but useful for reducing footprint when graph needs
+    // to be cached.
+    void garbage_collect();
+
     Instruction* root() const { return _root; }
     void root(Instruction* root) { _root = root; }
 
