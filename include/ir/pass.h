@@ -1,6 +1,8 @@
 #ifndef IR_PASS_H
 #define IR_PASS_H
 
+#include <unordered_set>
+
 #include "ir/instruction.h"
 
 namespace riscv {
@@ -86,6 +88,24 @@ private:
 public:
     Evaluator(riscv::Context* ctx): _ctx {ctx} {};
 
+    virtual void after(Instruction* inst) override;
+};
+
+class Local_value_numbering: public Pass {
+private:
+    struct Hash {
+        size_t operator ()(Instruction* inst) const noexcept;
+    };
+    struct Equal_to {
+        bool operator ()(Instruction* a, Instruction* b) const noexcept;
+    };
+public:
+    static void replace_with_constant(Instruction* inst, uint64_t value);
+
+private:
+    std::unordered_set<Instruction*, Hash, Equal_to> _set;
+
+protected:
     virtual void after(Instruction* inst) override;
 };
 

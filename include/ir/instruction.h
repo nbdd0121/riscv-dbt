@@ -28,10 +28,10 @@ static size_t get_type_size(Type type) {
 }
 
 enum class Opcode: uint8_t {
-    /* Special instruction */
-    constant,
-    cast,
+    /** Control flow opcodes **/
     i_return,
+
+    /** Opcodes with side-effects **/
     emulate,
     fence,
 
@@ -42,6 +42,14 @@ enum class Opcode: uint8_t {
     /* Memory load/store */
     load_memory,
     store_memory,
+
+    /** Pure opcodes **/
+    constant,
+    cast,
+
+    /* Unary ops */
+    neg,
+    i_not,
 
     /* Binary ops */
     /* Arithmetic operations */
@@ -63,16 +71,32 @@ enum class Opcode: uint8_t {
     ge,
     ltu,
     geu,
-
-    /* Unary ops */
-    neg,
-    i_not,
 };
+
+[[maybe_unused]]
+static bool is_pure_opcode(Opcode opcode) {
+    return static_cast<uint8_t>(opcode) >= static_cast<uint8_t>(Opcode::constant);
+}
 
 [[maybe_unused]]
 static bool is_binary_opcode(Opcode opcode) {
     uint8_t value = static_cast<uint8_t>(opcode);
     return value >= static_cast<uint8_t>(Opcode::add) && value <= static_cast<uint8_t>(Opcode::geu);
+}
+
+[[maybe_unused]]
+static bool is_commutative_opcode(Opcode opcode) {
+    switch(opcode) {
+        case Opcode::add:
+        case Opcode::i_xor:
+        case Opcode::i_or:
+        case Opcode::i_and:
+        case Opcode::eq:
+        case Opcode::ne:
+            return true;
+        default:
+            return false;
+    }
 }
 
 class Instruction {
