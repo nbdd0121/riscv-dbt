@@ -7,6 +7,7 @@
 #include "emu/state.h"
 #include "main/dbt.h"
 #include "main/interpreter.h"
+#include "main/ir_evaluator.h"
 #include "main/signal.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
@@ -23,6 +24,7 @@ Options:\n\
   --strace      Log system calls.\n\
   --disassemble Log decoded instructions.\n\
   --disable-dbt Disable dynamic binary translation and use interpretation instead.\n\
+  --disable-ir  Disable IR-based optimising binary translator.\n\
   --no-instret  Disable precise instret updating in binary translated code.\n\
   --help        Display this help message.\n\
 ";
@@ -37,6 +39,7 @@ int main(int argc, const char **argv) {
     bool strace = false;
     bool disassemble = false;
     bool use_dbt = true;
+    bool use_ir = true;
     bool no_instret = false;
 
     // Parsing arguments
@@ -57,6 +60,8 @@ int main(int argc, const char **argv) {
             disassemble = true;
         } else if (strcmp(arg, "--disable-dbt") == 0) {
             use_dbt = false;
+        } else if (strcmp(arg, "--disable-ir") == 0) {
+            use_ir = false;
         } else if (strcmp(arg, "--no-instret") == 0) {
             no_instret = true;
         } else if (strcmp(arg, "--help") == 0) {
@@ -149,7 +154,12 @@ int main(int argc, const char **argv) {
     context->lr = 0;
 
     try {
-        if (use_dbt) {
+        if (use_ir) {
+            Ir_evaluator executor { state };
+            while (true) {
+                executor.step(*context);
+            }
+        } else if (use_dbt) {
             Dbt_runtime executor { state };
             while (true) {
                 executor.step(*context);

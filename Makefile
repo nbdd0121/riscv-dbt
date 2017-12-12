@@ -20,6 +20,7 @@ OBJS = \
 	ir/register_access_elimination.o \
 	main/dbt.o \
 	main/interpreter.o \
+	main/ir_evaluator.o \
 	main/main.o \
 	main/signal.o \
 	riscv/decoder.o \
