@@ -11,6 +11,10 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
+    Instruction* start() {
+        return _graph.manage(new Instruction(Type::none, Opcode::start, {}));
+    }
+
     Instruction* constant(Type type, uint64_t value) {
         auto inst = new Instruction(type, Opcode::constant, {});
         inst->attribute(value);

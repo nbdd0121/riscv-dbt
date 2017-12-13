@@ -73,13 +73,14 @@ void Evaluator::after(Instruction* inst) {
     uint64_t result = 0;
     auto opcode = inst->opcode();
     switch (opcode) {
+        case Opcode::start:
+        case Opcode::i_return:
+            break;
         case Opcode::constant:
             result = inst->attribute();
             break;
         case Opcode::cast:
             result = cast(inst->type(), inst->operand(0)->type(), inst->attribute(), inst->operand(0)->scratchpad());
-            break;
-        case Opcode::i_return:
             break;
         case Opcode::load_register:
             // Need to use util::read_as to be standard-compliant (otherwise we may access array out of bound).

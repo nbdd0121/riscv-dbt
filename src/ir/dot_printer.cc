@@ -58,13 +58,11 @@ void Dot_printer::after(Instruction* inst) {
     // Draw operand dependencies as edges. For side-effect dependencies, we additionally color it blue.
     for (size_t i = 0; i < inst->operand_count(); i++) {
         auto operand = inst->operand(i);
-        if (operand) {
-            util::log(
-                "\t{} -> {} [label={}{}];\n",
-                inst->scratchpad(), operand->scratchpad(),
-                i, i < dependency_count ? ",color=blue" : ""
-            );
-        }
+        util::log(
+            "\t{} -> {} [label={}{}];\n",
+            inst->scratchpad(), operand->scratchpad(),
+            i, i < dependency_count ? ",color=blue" : ""
+        );
     }
 }
 

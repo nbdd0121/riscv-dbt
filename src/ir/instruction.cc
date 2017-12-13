@@ -60,32 +60,35 @@ void Instruction::operator =(Instruction&& inst) {
 
 void Instruction::link() {
     for (auto operand: _operands) {
-        if (operand) operand->reference_add(this);
+        operand->reference_add(this);
     }
 }
 
 void Instruction::unlink() {
     for (auto operand: _operands) {
-        if (operand) operand->reference_remove(this);
+        operand->reference_remove(this);
     }
 }
 
 void Instruction::relink(Instruction* inst) {
     for (auto operand: _operands) {
-        if (operand) operand->reference_update(inst, this);
+        operand->reference_update(inst, this);
     }
-    
 }
 
 void Instruction::operand_set(size_t index, Instruction* inst) {
     ASSERT(index < _operands.size());
+    ASSERT(inst);
+
     auto& ptr = _operands[index];
-    if (inst) inst->reference_add(this);
-    if (ptr) ptr->reference_remove(this);
+    inst->reference_add(this);
+    ptr->reference_remove(this);
     ptr = inst;
 }
 
 void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
+    ASSERT(oldinst && newinst);
+
     auto ptr = std::find(_operands.begin(), _operands.end(), oldinst);
     ASSERT(ptr != _operands.end());
     *ptr = newinst;
@@ -94,6 +97,8 @@ void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
 }
 
 void Instruction::reference_remove(Instruction* inst) {
+    ASSERT(inst);
+
     auto ptr = std::find(_references.begin(), _references.end(), inst);
     ASSERT(ptr != _references.end());
 
@@ -107,6 +112,8 @@ void Instruction::reference_remove(Instruction* inst) {
 }
 
 void Instruction::reference_update(Instruction* oldinst, Instruction* newinst) {
+    ASSERT(oldinst && newinst);
+
     auto ptr = std::find(_references.begin(), _references.end(), oldinst);
     ASSERT(ptr != _references.end());
     *ptr = newinst;

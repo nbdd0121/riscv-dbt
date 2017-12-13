@@ -19,7 +19,7 @@ void Pass::run_recurse(Instruction* inst) {
     inst->_visited = 2;
 
     // Visit all dependencies
-    for (auto operand: inst->operands()) if (operand) run_recurse(operand);
+    for (auto operand: inst->operands()) run_recurse(operand);
     after(inst);
     inst->_visited = 1;
 }
