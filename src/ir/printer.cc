@@ -10,6 +10,10 @@ const char* Printer::opcode_name(Opcode opcode) {
     switch (opcode) {
 #define CASE(name) case Opcode::name: return #name;
         CASE(start)
+        case Opcode::i_if: return "if";
+        CASE(if_true)
+        CASE(if_false)
+        CASE(jmp)
         case Opcode::i_return: return "return";
         CASE(constant)
         CASE(cast)

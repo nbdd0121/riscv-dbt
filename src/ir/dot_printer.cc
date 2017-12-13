@@ -18,7 +18,7 @@ void Dot_printer::finish() {
 void Dot_printer::after(Instruction* inst) {
 
     // Allocate and assign index to the node. In contrast to Printer, we have to assign those returning none as well
-    // here, as we are also displaying side-effect dependencies in the graph.
+    // here, as we are also displaying control and side-effect dependencies in the graph.
     inst->scratchpad(_index++);
 
     // Draw the node with type, opcode
@@ -28,9 +28,30 @@ void Dot_printer::after(Instruction* inst) {
     }
     std::clog << opcode_name(inst->opcode());
 
-    // Also append attributes to node label, and decide number of side-effect dependencies operands.
+    // Also append attributes to node label, and decide number of control or side-effect dependencies operands.
+    bool control_dependency = false;
     size_t dependency_count = 0;
     switch (inst->opcode()) {
+        case Opcode::start:
+            control_dependency = true;
+            dependency_count = inst->operand_count();
+            break;
+        case Opcode::if_true:
+        case Opcode::if_false:
+            control_dependency = true;
+            dependency_count = 1;
+            break;
+        case Opcode::i_if:
+        case Opcode::jmp:
+        case Opcode::i_return:
+        case Opcode::emulate:
+        case Opcode::load_memory:
+        case Opcode::store_memory:
+            dependency_count = 1;
+            break;
+        case Opcode::fence:
+            dependency_count = inst->operand_count();
+            break;
         case Opcode::constant:
             std::clog << ' ' << static_cast<int64_t>(inst->attribute());
             break;
@@ -42,15 +63,6 @@ void Dot_printer::after(Instruction* inst) {
             dependency_count = 1;
             std::clog << " r" << inst->attribute();
             break;
-        case Opcode::load_memory:
-        case Opcode::store_memory:
-        case Opcode::emulate:
-        case Opcode::i_return:
-            dependency_count = 1;
-            break;
-        case Opcode::fence:
-            dependency_count = inst->operand_count();
-            break;
         default: break;
     }
     std::clog << "\"];\n";
@@ -61,7 +73,7 @@ void Dot_printer::after(Instruction* inst) {
         util::log(
             "\t{} -> {} [label={}{}];\n",
             inst->scratchpad(), operand->scratchpad(),
-            i, i < dependency_count ? ",color=blue" : ""
+            i, i < dependency_count ? (control_dependency ? ",color=red" : ",color=blue") : ""
         );
     }
 }

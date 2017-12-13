@@ -29,30 +29,62 @@ static size_t get_type_size(Type type) {
 
 enum class Opcode: uint8_t {
     /** Control flow opcodes **/
+    // Input: Control[]. Output: Memory.
     start,
+
+    // Input: Memory, Value. Output: (Control, Control).
+    i_if,
+
+    // Input: (Control, Control). Output: Control.
+    if_true,
+    if_false,
+
+    // Input: Memory. Output: Control.
+    jmp,
+
+    // Input: Memory. Output: None.
     i_return,
 
     /** Opcodes with side-effects **/
+    // Input: Memory. Output: Memory.
     emulate,
+
+    // Input: Memory[]. Output: Memory.
     fence,
 
     /* Machine register load/store */
+    // Input: Memory. Output: Memory, Value.
     load_register,
+
+    // Input: Memory, Value. Output: Memory.
     store_register,
 
     /* Memory load/store */
+    // Input: Memory, Value. Output: Memory, Value.
     load_memory,
+
+    // Input: Memory, Value, Value. Output: Memory.
     store_memory,
 
     /** Pure opcodes **/
+
+    // Input: None. Output: Value.
     constant,
+
+    // Input: Value. Output: Value.
     cast,
 
-    /* Unary ops */
+    /*
+     * Unary ops
+     * Input: Value. Output: Value.
+     */
     neg,
     i_not,
 
-    /* Binary ops */
+    /*
+     * Binary ops
+     * Input: Value, Value. Output: Value.
+     */
     /* Arithmetic operations */
     add,
     sub,
