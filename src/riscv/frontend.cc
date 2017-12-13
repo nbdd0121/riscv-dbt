@@ -189,6 +189,33 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::sllw: emit_shift(inst, ir::Opcode::shl, true); break;
             case Opcode::srlw: emit_shift(inst, ir::Opcode::shr, true); break;
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
+            case Opcode::jal: {
+                auto pc_node = builder.load_register(last_side_effect, 64);
+                last_side_effect = pc_node;
+                if (inst.rd()) {
+                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), pc_node);
+                }
+                ASSERT(pc_offset + inst.length() == 0);
+                auto pc_offset_node = builder.constant(ir::Type::i64, -inst.length() + inst.imm());
+                auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
+                last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
+                break;
+            }
+            case Opcode::jalr: {
+                auto rs_node = emit_load_register(ir::Type::i64, inst.rs1());
+                auto imm_node = builder.constant(ir::Type::i64, inst.imm());
+                auto new_pc_node = builder.arithmetic(
+                    ir::Opcode::i_and,
+                    builder.arithmetic(ir::Opcode::add, rs_node, imm_node),
+                    builder.constant(ir::Type::i64, ~1)
+                );
+                if (inst.rd()) {
+                    auto pc_node = builder.load_register(last_side_effect, 64);
+                    last_side_effect = builder.store_register(pc_node, inst.rd(), pc_node);
+                }
+                last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
+                break;
+            }
             default: {
                 last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {last_side_effect}));
                 last_side_effect->attribute(util::read_as<uint64_t>(&inst));
