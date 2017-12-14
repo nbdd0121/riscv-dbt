@@ -73,9 +73,7 @@ void Evaluator::after(Instruction* inst) {
     uint64_t result = 0;
     auto opcode = inst->opcode();
     switch (opcode) {
-        case Opcode::start:
-        case Opcode::end:
-        case Opcode::block:
+        case Opcode::i_if:
         case Opcode::jmp:
             break;
         case Opcode::constant:
@@ -140,6 +138,45 @@ void Evaluator::after(Instruction* inst) {
         }
     }
     inst->scratchpad(result);
+}
+
+void Evaluator::run(Graph& graph) {
+    auto start = graph.start();
+    ASSERT(start->reference_count() == 1);
+    auto block = start->reference(0);
+
+    // While the control does not reach the end node.
+    while (block != graph.root()) {
+        ASSERT(block->opcode() == ir::Opcode::block);
+
+        // Use attribute.pointer to find the last node of the block.
+        auto end = static_cast<ir::Instruction*>(block->attribute_pointer());
+
+        // Evaluate the block.
+        run_on(graph, end);
+
+        if (end->opcode() == ir::Opcode::i_if) {
+
+            // Get the result of comparision.
+            bool result = end->operand(1)->scratchpad();
+
+            for (auto ref: end->references()) {
+                bool expected;
+                if (ref->opcode() == ir::Opcode::if_true) expected = true;
+                else if (ref->opcode() == ir::Opcode::if_false) expected = false;
+                else ASSERT(0);
+
+                if (result == expected) {
+                    end = ref;
+                    break;
+                }
+            }
+        } else {
+            ASSERT(end->opcode() == ir::Opcode::jmp);
+        }
+
+        block = end->reference(0);
+    }
 }
 
 }

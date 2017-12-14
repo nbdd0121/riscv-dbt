@@ -36,6 +36,7 @@ enum class Opcode: uint8_t {
     end,
 
     // Input: Control[]. Output: Memory.
+    // attribute.pointer is used to reference the last instruction in the block, i.e. jmp/if.
     block,
 
     // Input: Memory, Value. Output: (Control, Control).

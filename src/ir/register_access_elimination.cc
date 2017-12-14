@@ -111,6 +111,7 @@ void Register_access_elimination::after(Instruction* inst) {
             break;
         }
         case Opcode::emulate:
+        case Opcode::i_if:
         case Opcode::jmp: {
             std::vector<Instruction*> dependencies;
 
@@ -135,7 +136,13 @@ void Register_access_elimination::after(Instruction* inst) {
             inst->operand_set(0, dep);
 
             last_exception = nullptr;
-            last_effect = inst;
+
+            if (inst->opcode() == Opcode::emulate) {
+                last_effect = inst;
+            } else {
+                // if and jmp node will turn memory dependency into control, so last_effect needs to be cleared.
+                last_effect = nullptr;
+            }
             break;
         }
         default: break;

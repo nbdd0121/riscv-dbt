@@ -76,7 +76,16 @@ protected:
     virtual void after(Instruction* inst) override;
 };
 
-class Evaluator: public Pass {
+// Block marker will link the block node and jmp/if node together using attribute.pointer.
+// It therefore frees front-ends from maintaining this constraint themselves.
+class Block_marker: public Pass {
+    Instruction* block_end = nullptr;
+
+public:
+    virtual bool before(Instruction* inst) override;
+};
+
+class Evaluator: private Pass {
 public:
     static uint64_t sign_extend(Type type, uint64_t value);
     static uint64_t zero_extend(Type type, uint64_t value);
@@ -90,7 +99,13 @@ private:
 public:
     Evaluator(riscv::Context* ctx): _ctx {ctx} {};
 
+protected:
+    // Evaluator, as a pass, only evaluate a block. A new run function is provided to evaluate the whole graph.
+    virtual bool before(Instruction* inst) override { return inst->opcode() == Opcode::block; }
     virtual void after(Instruction* inst) override;
+
+public:
+    void run(Graph& graph);
 };
 
 class Local_value_numbering: public Pass {
