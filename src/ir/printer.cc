@@ -9,12 +9,13 @@ namespace ir::pass {
 const char* Printer::opcode_name(Opcode opcode) {
     switch (opcode) {
 #define CASE(name) case Opcode::name: return #name;
+        CASE(start)
+        CASE(end)
         CASE(block)
         case Opcode::i_if: return "if";
         CASE(if_true)
         CASE(if_false)
         CASE(jmp)
-        case Opcode::i_return: return "return";
         CASE(constant)
         CASE(cast)
         CASE(fence)
@@ -71,8 +72,16 @@ void Printer::after(Instruction* inst) {
         }
     }
 
-    // As a linear IR printer, we omit the block node.
-    if (inst->opcode() == Opcode::block) return;
+    // As a linear IR printer, we omit some control node.
+    // TODO: Here are some horrible hacks. Once we actually introduce multiple blocks, this needs major change.
+    switch (inst->opcode()) {
+        case Opcode::start:
+        case Opcode::end:
+        case Opcode::block:
+        case Opcode::jmp:
+            return;
+        default: break;
+    }
 
     // As we does not output side-effect dependency, fence is omitted.
     if (inst->opcode() == Opcode::fence) return;
@@ -102,7 +111,6 @@ void Printer::after(Instruction* inst) {
         case Opcode::load_memory:
         case Opcode::store_memory:
         case Opcode::emulate:
-        case Opcode::i_return:
             has_dependency = true;
             break;
         default: break;

@@ -119,7 +119,9 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
 }
 
 void Frontend::compile(const Basic_block& block) {
-    last_side_effect = builder.block();
+    auto start_node = builder.control(ir::Opcode::start, {});
+    auto block_node = builder.control(ir::Opcode::block, {start_node});
+    last_side_effect = block_node;
 
     // Update pc
     auto pc_node = builder.load_register(last_side_effect, 64);
@@ -225,7 +227,9 @@ void Frontend::compile(const Basic_block& block) {
         pc_offset += inst.length();
     }
 
-    graph.root(builder.i_return(last_side_effect));
+    auto jmp_node = builder.control(ir::Opcode::jmp, {last_side_effect});
+    auto end_node = builder.control(ir::Opcode::end, {jmp_node});
+    graph.root(end_node);
 }
 
 ir::Graph compile(const Basic_block& block) {

@@ -29,6 +29,12 @@ static size_t get_type_size(Type type) {
 
 enum class Opcode: uint8_t {
     /** Control flow opcodes **/
+    // Input: None. Output: Memory.
+    start,
+
+    // Input: Control[]. Output: None.
+    end,
+
     // Input: Control[]. Output: Memory.
     block,
 
@@ -41,9 +47,6 @@ enum class Opcode: uint8_t {
 
     // Input: Memory. Output: Control.
     jmp,
-
-    // Input: Memory. Output: None.
-    i_return,
 
     /** Opcodes with side-effects **/
     // Input: Memory. Output: Memory.

@@ -111,7 +111,7 @@ void Register_access_elimination::after(Instruction* inst) {
             break;
         }
         case Opcode::emulate:
-        case Opcode::i_return: {
+        case Opcode::jmp: {
             std::vector<Instruction*> dependencies;
 
             bool need_last_exception = true;

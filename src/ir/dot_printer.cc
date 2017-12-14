@@ -32,6 +32,7 @@ void Dot_printer::after(Instruction* inst) {
     bool control_dependency = false;
     size_t dependency_count = 0;
     switch (inst->opcode()) {
+        case Opcode::end:
         case Opcode::block:
             control_dependency = true;
             dependency_count = inst->operand_count();
@@ -43,7 +44,6 @@ void Dot_printer::after(Instruction* inst) {
             break;
         case Opcode::i_if:
         case Opcode::jmp:
-        case Opcode::i_return:
         case Opcode::emulate:
         case Opcode::load_memory:
         case Opcode::store_memory:

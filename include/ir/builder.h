@@ -11,8 +11,12 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
-    Instruction* block() {
-        return _graph.manage(new Instruction(Type::none, Opcode::block, {}));
+    Instruction* create(Type type, Opcode opcode, std::vector<Instruction*>&& dep) {
+        return _graph.manage(new Instruction(type, opcode, std::move(dep)));
+    }
+
+    Instruction* control(Opcode opcode, std::vector<Instruction*>&& dep) {
+        return create(Type::none, opcode, std::move(dep));
     }
 
     Instruction* constant(Type type, uint64_t value) {
@@ -25,10 +29,6 @@ public:
         auto inst = new Instruction(type, Opcode::cast, {operand});
         inst->attribute(sext);
         return _graph.manage(inst);
-    }
-
-    Instruction* i_return(Instruction* dep) {
-        return _graph.manage(new Instruction(Type::none, Opcode::i_return, {dep}));
     }
 
     Instruction* load_register(Instruction* dep, int regnum) {
