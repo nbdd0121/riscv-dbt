@@ -11,6 +11,7 @@ namespace riscv {
 struct Frontend {
     ir::Graph graph;
     ir::Builder builder {graph};
+    const Basic_block* block;
 
     // The last instruction with side-effect.
     ir::Instruction* last_side_effect = nullptr;
@@ -26,6 +27,7 @@ struct Frontend {
     void emit_alu(Instruction inst, ir::Opcode op, bool w);
     void emit_shift(Instruction inst, ir::Opcode op, bool w);
     void emit_slt(Instruction inst, ir::Opcode op);
+    void emit_branch(Instruction instead, ir::Opcode op);
 
     void emit(Instruction& inst);
     void compile(const Basic_block& block);
@@ -118,7 +120,38 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
     emit_store_register(inst.rd(), rd_node);
 }
 
+void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
+    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
+    auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
+    auto cmp_node = builder.compare(opcode, rs1_node, rs2_node);
+    auto if_node = builder.control(ir::Opcode::i_if, {last_side_effect, cmp_node});
+    auto if_true_node = builder.control(ir::Opcode::if_true, {if_node});
+    auto if_false_node = builder.control(ir::Opcode::if_false, {if_node});
+
+    // Building the true branch.
+    auto true_block_node = builder.control(ir::Opcode::block, {if_true_node});
+    auto pc_node = builder.load_register(true_block_node, 64);
+    auto pc_offset = -inst.length() + inst.imm();
+    auto pc_offset_node = builder.constant(ir::Type::i64, -inst.length() + inst.imm());
+    auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
+    auto store_pc_node = builder.store_register(pc_node, 64, new_pc_node);
+    auto true_jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
+
+    // If the jump target happens to be the basic block itself, create a loop.
+    if (-pc_offset == block->end_pc - block->start_pc) {
+        graph.start()->reference(0)->operand_add(true_jmp_node);
+        auto end_node = builder.control(ir::Opcode::end, {if_false_node});
+        graph.root(end_node);
+        return;
+    }
+
+    auto end_node = builder.control(ir::Opcode::end, {true_jmp_node, if_false_node});
+    graph.root(end_node);
+}
+
 void Frontend::compile(const Basic_block& block) {
+    this->block = &block;
+
     auto start_node = graph.start();
     auto block_node = builder.control(ir::Opcode::block, {start_node});
     last_side_effect = block_node;
@@ -218,6 +251,12 @@ void Frontend::compile(const Basic_block& block) {
                 last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
                 break;
             }
+            case Opcode::beq: emit_branch(inst, ir::Opcode::eq); return;
+            case Opcode::bne: emit_branch(inst, ir::Opcode::ne); return;
+            case Opcode::blt: emit_branch(inst, ir::Opcode::lt); return;
+            case Opcode::bge: emit_branch(inst, ir::Opcode::ge); return;
+            case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu); return;
+            case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu); return;
             default: {
                 last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {last_side_effect}));
                 last_side_effect->attribute(util::read_as<uint64_t>(&inst));
