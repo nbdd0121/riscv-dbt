@@ -24,13 +24,13 @@ void Pass::run_recurse(Instruction* inst) {
     inst->_visited = 1;
 }
 
-void Pass::run(Graph& graph) {
+void Pass::run_on(Graph& graph, Instruction* inst) {
     _graph = &graph;
     for (auto inst: graph._heap) {
         inst->_visited = false;
     }
     start();
-    run_recurse(graph.root());
+    run_recurse(inst);
     finish();
 }
 

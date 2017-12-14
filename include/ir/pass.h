@@ -33,7 +33,8 @@ protected:
     virtual void after(Instruction*) {}
 
 public:
-    void run(Graph& graph);
+    void run_on(Graph& graph, Instruction* inst);
+    void run(Graph& graph) { run_on(graph, graph.root()); }
 };
 
 class Printer: public Pass {
