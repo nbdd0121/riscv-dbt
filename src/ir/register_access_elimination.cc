@@ -32,7 +32,7 @@ void Register_access_elimination::after(Instruction* inst) {
     // need not depend on previous instructions w/ exceptions. We keep `has_store_after_exception` for this purpose.
 
     switch (inst->opcode()) {
-        case Opcode::start: {
+        case Opcode::block: {
             ASSERT(last_effect == nullptr);
             last_effect = inst;
             break;

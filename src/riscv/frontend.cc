@@ -119,7 +119,7 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
 }
 
 void Frontend::compile(const Basic_block& block) {
-    last_side_effect = builder.start();
+    last_side_effect = builder.block();
 
     // Update pc
     auto pc_node = builder.load_register(last_side_effect, 64);

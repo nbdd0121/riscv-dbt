@@ -11,8 +11,8 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
-    Instruction* start() {
-        return _graph.manage(new Instruction(Type::none, Opcode::start, {}));
+    Instruction* block() {
+        return _graph.manage(new Instruction(Type::none, Opcode::block, {}));
     }
 
     Instruction* constant(Type type, uint64_t value) {

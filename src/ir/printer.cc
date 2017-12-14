@@ -9,7 +9,7 @@ namespace ir::pass {
 const char* Printer::opcode_name(Opcode opcode) {
     switch (opcode) {
 #define CASE(name) case Opcode::name: return #name;
-        CASE(start)
+        CASE(block)
         case Opcode::i_if: return "if";
         CASE(if_true)
         CASE(if_false)
@@ -71,8 +71,8 @@ void Printer::after(Instruction* inst) {
         }
     }
 
-    // As a linear IR printer, we omit the start node.
-    if (inst->opcode() == Opcode::start) return;
+    // As a linear IR printer, we omit the block node.
+    if (inst->opcode() == Opcode::block) return;
 
     // As we does not output side-effect dependency, fence is omitted.
     if (inst->opcode() == Opcode::fence) return;

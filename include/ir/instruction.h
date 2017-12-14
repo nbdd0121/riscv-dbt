@@ -30,7 +30,7 @@ static size_t get_type_size(Type type) {
 enum class Opcode: uint8_t {
     /** Control flow opcodes **/
     // Input: Control[]. Output: Memory.
-    start,
+    block,
 
     // Input: Memory, Value. Output: (Control, Control).
     i_if,

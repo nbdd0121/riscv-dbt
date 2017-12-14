@@ -73,7 +73,7 @@ void Evaluator::after(Instruction* inst) {
     uint64_t result = 0;
     auto opcode = inst->opcode();
     switch (opcode) {
-        case Opcode::start:
+        case Opcode::block:
         case Opcode::i_return:
             break;
         case Opcode::constant:

@@ -32,7 +32,7 @@ void Dot_printer::after(Instruction* inst) {
     bool control_dependency = false;
     size_t dependency_count = 0;
     switch (inst->opcode()) {
-        case Opcode::start:
+        case Opcode::block:
             control_dependency = true;
             dependency_count = inst->operand_count();
             break;
