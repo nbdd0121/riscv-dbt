@@ -181,6 +181,11 @@ private:
     void unlink();
     void relink(Instruction* inst);
 
+    // Reference mutators (internal)
+    void reference_add(Instruction* inst) { _references.push_back(inst); }
+    void reference_remove(Instruction* inst);
+    void reference_update(Instruction* oldinst, Instruction* newinst);
+
 public:
     // Field accessors and mutators
     uint64_t scratchpad() const { return _scratchpad.value; }
@@ -211,18 +216,15 @@ public:
     void operand_set(size_t index, Instruction* inst);
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
     void operand_update(Instruction* oldinst, Instruction* newinst);
+    void operand_add(Instruction* inst);
 
-    // Reference accessors and mutators
+    // Reference accessors
     const std::vector<Instruction*>& references() const { return _references; }
     size_t reference_count() { return _references.size(); }
     Instruction* reference(size_t index) const {
         ASSERT(index < _references.size());
         return _references[index];
     }
-    
-    void reference_add(Instruction* inst) { _references.push_back(inst); }
-    void reference_remove(Instruction* inst);
-    void reference_update(Instruction* oldinst, Instruction* newinst);
     
     friend class Graph;
     friend pass::Pass;
@@ -231,10 +233,11 @@ public:
 class Graph {
 private:
     std::vector<Instruction*> _heap;
+    Instruction* _start;
     Instruction* _root = nullptr;
 
 public:
-    Graph() {}
+    Graph();
     Graph(const Graph&) = delete;
     Graph(Graph&&) = default;
     ~Graph();
@@ -250,6 +253,8 @@ public:
     // Free up dead instructions. Not necessary during compilation, but useful for reducing footprint when graph needs
     // to be cached.
     void garbage_collect();
+
+    Instruction* start() const { return _start; }
 
     Instruction* root() const { return _root; }
     void root(Instruction* root) { _root = root; }

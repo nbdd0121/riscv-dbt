@@ -96,6 +96,12 @@ void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
     oldinst->reference_remove(this);
 }
 
+void Instruction::operand_add(Instruction* inst) {
+    ASSERT(inst);
+    _operands.push_back(inst);
+    inst->reference_add(this);
+}
+
 void Instruction::reference_remove(Instruction* inst) {
     ASSERT(inst);
 
@@ -117,6 +123,10 @@ void Instruction::reference_update(Instruction* oldinst, Instruction* newinst) {
     auto ptr = std::find(_references.begin(), _references.end(), oldinst);
     ASSERT(ptr != _references.end());
     *ptr = newinst;
+}
+
+Graph::Graph() {
+    _start = manage(new Instruction(Type::none, Opcode::start, {}));
 }
 
 Graph::~Graph() {

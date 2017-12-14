@@ -119,7 +119,7 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
 }
 
 void Frontend::compile(const Basic_block& block) {
-    auto start_node = builder.control(ir::Opcode::start, {});
+    auto start_node = graph.start();
     auto block_node = builder.control(ir::Opcode::block, {start_node});
     last_side_effect = block_node;
 
