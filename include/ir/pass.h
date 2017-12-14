@@ -52,6 +52,7 @@ class Dot_printer: public Printer {
 protected:
     virtual void start() override;
     virtual void finish() override;
+    virtual bool before(Instruction* inst) override;
     virtual void after(Instruction* inst) override;
 };
 

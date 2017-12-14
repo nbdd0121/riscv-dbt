@@ -15,11 +15,16 @@ void Dot_printer::finish() {
     std::clog << "}" << std::endl;
 }
 
-void Dot_printer::after(Instruction* inst) {
+bool Dot_printer::before(Instruction* inst) {
 
     // Allocate and assign index to the node. In contrast to Printer, we have to assign those returning none as well
     // here, as we are also displaying control and side-effect dependencies in the graph.
+    // This has to be assigned before visiting children as the IR graph can be directed.
     inst->scratchpad(_index++);
+    return false;
+}
+
+void Dot_printer::after(Instruction* inst) {
 
     // Draw the node with type, opcode
     std::clog << "\t" << inst->scratchpad() << " [label=\"";
