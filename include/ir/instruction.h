@@ -206,7 +206,7 @@ public:
 
     // Operand accessors and mutators
     const std::vector<Instruction*>& operands() const { return _operands; }
-    void operands(std::vector<Instruction*>&& operands) { _operands = std::move(operands); }
+    void operands(std::vector<Instruction*>&& operands);
     size_t operand_count() const { return _operands.size(); }
 
     Instruction* operand(size_t index) const { 

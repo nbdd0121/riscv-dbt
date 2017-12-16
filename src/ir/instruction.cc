@@ -76,6 +76,12 @@ void Instruction::relink(Instruction* inst) {
     }
 }
 
+void Instruction::operands(std::vector<Instruction*>&& operands) {
+    unlink();
+    _operands = std::move(operands);
+    link();
+}
+
 void Instruction::operand_set(size_t index, Instruction* inst) {
     ASSERT(index < _operands.size());
     ASSERT(inst);
