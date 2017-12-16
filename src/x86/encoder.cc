@@ -206,7 +206,7 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
 
             emit_byte((reg_num << 3) | 0b100);
 
-            if (it.index == Register::none) {
+            if (it.index != Register::none) {
                 emit_byte((shift << 6) | (index_reg << 3) | 0b101);
             } else {
                 emit_byte(0x25);
