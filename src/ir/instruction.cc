@@ -138,14 +138,30 @@ Graph::~Graph() {
 }
 
 void Graph::garbage_collect() {
+
+    // Mark all reachable nodes.
     pass::Pass{}.run(*this);
+
+    // Unlink to clear up references. This is necessary to maintain correctness of outgoing references.
     size_t size = _heap.size();
     for (size_t i = 0; i < size; i++) {
         if (!_heap[i]->_visited) {
+            _heap[i]->unlink();
+            _heap[i]->_operands.clear();
+        }
+    }
+
+    for (size_t i = 0; i < size; i++) {
+        if (!_heap[i]->_visited) {
+
+            // Reclaim memory.
+            delete _heap[i];
+
             // Move last element to current.
             _heap[i--] = _heap[--size];
         }
     }
+
     _heap.resize(size);
 }
 

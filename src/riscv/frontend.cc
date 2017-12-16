@@ -29,7 +29,6 @@ struct Frontend {
     void emit_slt(Instruction inst, ir::Opcode op);
     void emit_branch(Instruction instead, ir::Opcode op);
 
-    void emit(Instruction& inst);
     void compile(const Basic_block& block);
 };
 
