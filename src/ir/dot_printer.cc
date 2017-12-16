@@ -6,8 +6,60 @@
 
 namespace ir::pass {
 
+const char* Dot_printer::opcode_name(Opcode opcode) {
+    switch (opcode) {
+#define CASE(name) case Opcode::name: return #name;
+        CASE(start)
+        CASE(end)
+        CASE(block)
+        case Opcode::i_if: return "if";
+        CASE(if_true)
+        CASE(if_false)
+        CASE(jmp)
+        CASE(constant)
+        CASE(cast)
+        CASE(fence)
+        CASE(load_register)
+        CASE(store_register)
+        CASE(load_memory)
+        CASE(store_memory)
+        CASE(emulate)
+        CASE(add)
+        CASE(sub)
+        case Opcode::i_xor: return "xor";
+        case Opcode::i_or: return "or";
+        case Opcode::i_and: return "and";
+        CASE(shl)
+        CASE(shr)
+        CASE(sar)
+        CASE(eq)
+        CASE(ne)
+        CASE(lt)
+        CASE(ge)
+        CASE(ltu)
+        CASE(geu)
+        CASE(neg)
+        case Opcode::i_not: return "not";
+#undef CASE
+        default: return "(unknown)";
+    }
+}
+
+const char* Dot_printer::type_name(Type type) {
+    switch (type) {
+#define CASE(name) case Type::name: return #name;
+        CASE(none)
+        CASE(i1)
+        CASE(i8)
+        CASE(i16)
+        CASE(i32)
+        CASE(i64)
+#undef CASE
+        default: return "(unknown)";
+    }
+}
+
 void Dot_printer::start() {
-    _index = 0;
     std::clog << "digraph G {\n\trankdir = BT;\n\tnode [shape=box];\n";
 }
 
@@ -15,19 +67,10 @@ void Dot_printer::finish() {
     std::clog << "}" << std::endl;
 }
 
-bool Dot_printer::before(Instruction* inst) {
-
-    // Allocate and assign index to the node. In contrast to Printer, we have to assign those returning none as well
-    // here, as we are also displaying control and side-effect dependencies in the graph.
-    // This has to be assigned before visiting children as the IR graph can be directed.
-    inst->scratchpad(_index++);
-    return false;
-}
-
 void Dot_printer::after(Instruction* inst) {
 
     // Draw the node with type, opcode
-    std::clog << "\t" << inst->scratchpad() << " [label=\"";
+    util::log("\t\"{:x}\" [label=\"", reinterpret_cast<uintptr_t>(inst));
     if (inst->type() != Type::none) {
         std::clog << type_name(inst->type()) << ' ';
     }
@@ -76,8 +119,8 @@ void Dot_printer::after(Instruction* inst) {
     for (size_t i = 0; i < inst->operand_count(); i++) {
         auto operand = inst->operand(i);
         util::log(
-            "\t{} -> {} [label={}{}];\n",
-            inst->scratchpad(), operand->scratchpad(),
+            "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
+            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand),
             i, i < dependency_count ? (control_dependency ? ",color=red" : ",color=blue") : ""
         );
     }

@@ -37,27 +37,18 @@ public:
     void run(Graph& graph) { run_on(graph, graph.root()); }
 };
 
-class Printer: public Pass {
+class Dot_printer: public Pass {
 public:
     static const char* opcode_name(Opcode opcode);
     static const char* type_name(Type type);
 
 protected:
-    // Used for numbering the output of instructions.
-    uint64_t _index;
-    virtual void start() override { _index = 0; }
-    virtual void after(Instruction* inst) override;
-};
-
-class Dot_printer: public Printer {
-protected:
     virtual void start() override;
     virtual void finish() override;
-    virtual bool before(Instruction* inst) override;
     virtual void after(Instruction* inst) override;
 };
 
-class Register_access_elimination: public Printer {
+class Register_access_elimination: public Pass {
 private:
     std::vector<Instruction*> last_load;
     std::vector<Instruction*> last_store;

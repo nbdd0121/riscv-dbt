@@ -17,7 +17,6 @@ OBJS = \
 	ir/instruction.o \
 	ir/pass.o \
 	ir/local_value_numbering.o \
-	ir/printer.o \
 	ir/register_access_elimination.o \
 	main/dbt.o \
 	main/interpreter.o \
