@@ -69,7 +69,7 @@ uint64_t _Unwind_GetLanguageSpecificData(struct _Unwind_Context *context);
 
 uint64_t _Unwind_GetRegionStart(struct _Unwind_Context *context);
 
-_Unwind_Reason_Code (*__personality_routine)(
+typedef _Unwind_Reason_Code (*__personality_routine)(
     int version,
     _Unwind_Action actions,
     uint64_t exceptionClass,
