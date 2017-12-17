@@ -76,11 +76,15 @@ void Dot_printer::after(Instruction* inst) {
     }
     std::clog << opcode_name(inst->opcode());
 
-    // Also append attributes to node label, and decide number of control or side-effect dependencies operands.
     bool control_dependency = false;
+    bool dependency_need_label = false;
+    bool operand_need_label = inst->operand_count() > 1 && !is_commutative_opcode(inst->opcode());
+
     switch (inst->opcode()) {
-        case Opcode::end:
         case Opcode::block:
+            dependency_need_label = inst->dependency_count() > 1;
+            [[fallthrough]];
+        case Opcode::end:
         case Opcode::if_true:
         case Opcode::if_false:
             control_dependency = true;
@@ -103,20 +107,24 @@ void Dot_printer::after(Instruction* inst) {
     // and side-effect dependnecies are colored blue.
     auto dependencies = inst->dependencies();
     for (size_t i = 0; i < dependencies.size(); i++) {
-        auto operand = dependencies[i];
+        auto dependency = dependencies[i];
+
         util::log(
-            "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
-            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand),
-            i, control_dependency ? ",color=red" : ",color=blue"
+            dependency_need_label
+                ? "\t\"{:x}\" -> \"{:x}\" [label={},color={}];\n"
+                : "\t\"{:x}\" -> \"{:x}\" [color={3}];\n",
+            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(dependency),
+            i, control_dependency ? "red" : "blue"
         );
     }
 
     auto operands = inst->operands();
     for (size_t i = 0; i < operands.size(); i++) {
         auto operand = operands[i];
+
         util::log(
-            "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
-            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand), i, ""
+            operand_need_label ? "\t\"{:x}\" -> \"{:x}\" [label={}];\n" : "\t\"{:x}\" -> \"{:x}\";\n",
+            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand), i
         );
     }
 }
