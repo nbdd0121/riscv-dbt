@@ -4,8 +4,8 @@
 namespace ir::pass {
 
 void Pass::replace(Instruction* oldnode, Instruction* newnode) {
-    while (oldnode->reference_count()) {
-        oldnode->references().back()->operand_update(oldnode, newnode);
+    while (!oldnode->references().empty()) {
+        (*oldnode->references().rbegin())->operand_update(oldnode, newnode);
     }
 }
 

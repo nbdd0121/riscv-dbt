@@ -60,19 +60,19 @@ void Instruction::operator =(Instruction&& inst) {
 
 void Instruction::link() {
     for (auto operand: _operands) {
-        operand->reference_add(this);
+        operand->_references.insert(this);
     }
 }
 
 void Instruction::unlink() {
     for (auto operand: _operands) {
-        operand->reference_remove(this);
+        operand->_references.remove(this);
     }
 }
 
 void Instruction::relink(Instruction* inst) {
     for (auto operand: _operands) {
-        operand->reference_update(inst, this);
+        operand->_references.replace(inst, this);
     }
 }
 
@@ -87,8 +87,8 @@ void Instruction::operand_set(size_t index, Instruction* inst) {
     ASSERT(inst);
 
     auto& ptr = _operands[index];
-    inst->reference_add(this);
-    ptr->reference_remove(this);
+    inst->_references.insert(this);
+    ptr->_references.remove(this);
     ptr = inst;
 }
 
@@ -98,37 +98,14 @@ void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
     auto ptr = std::find(_operands.begin(), _operands.end(), oldinst);
     ASSERT(ptr != _operands.end());
     *ptr = newinst;
-    newinst->reference_add(this);
-    oldinst->reference_remove(this);
+    newinst->_references.insert(this);
+    oldinst->_references.remove(this);
 }
 
 void Instruction::operand_add(Instruction* inst) {
     ASSERT(inst);
     _operands.push_back(inst);
-    inst->reference_add(this);
-}
-
-void Instruction::reference_remove(Instruction* inst) {
-    ASSERT(inst);
-
-    auto ptr = std::find(_references.begin(), _references.end(), inst);
-    ASSERT(ptr != _references.end());
-
-    // Swap the last element to the current place
-    auto last_element = _references.end() - 1;
-    if (ptr != last_element) {
-        *ptr = *last_element;
-    }
-
-    _references.pop_back();
-}
-
-void Instruction::reference_update(Instruction* oldinst, Instruction* newinst) {
-    ASSERT(oldinst && newinst);
-
-    auto ptr = std::find(_references.begin(), _references.end(), oldinst);
-    ASSERT(ptr != _references.end());
-    *ptr = newinst;
+    inst->_references.insert(this);
 }
 
 Graph::Graph() {

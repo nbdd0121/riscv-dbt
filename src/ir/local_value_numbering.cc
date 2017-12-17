@@ -217,7 +217,7 @@ void Local_value_numbering::after(Instruction* inst) {
         }
 
         // More folding for add
-        if (opcode == Opcode::add && y->reference_count() == 1) {
+        if (opcode == Opcode::add && y->references().size() == 1) {
             if (x->opcode() == Opcode::add && x->operand(1)->opcode() == Opcode::constant) {
                 y->attribute(Evaluator::sign_extend(inst->type(), y->attribute() + x->operand(1)->attribute()));
                 x = x->operand(0);

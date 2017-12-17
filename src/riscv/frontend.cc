@@ -138,7 +138,7 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
 
     // If the jump target happens to be the basic block itself, create a loop.
     if (-pc_offset == block->end_pc - block->start_pc) {
-        graph.start()->reference(0)->operand_add(true_jmp_node);
+        (*graph.start()->references().begin())->operand_add(true_jmp_node);
         auto end_node = builder.control(ir::Opcode::end, {if_false_node});
         graph.root(end_node);
         return;

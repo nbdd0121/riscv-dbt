@@ -142,8 +142,8 @@ void Evaluator::after(Instruction* inst) {
 
 void Evaluator::run(Graph& graph) {
     auto start = graph.start();
-    ASSERT(start->reference_count() == 1);
-    auto block = start->reference(0);
+    ASSERT(start->references().size() == 1);
+    auto block = *start->references().begin();
 
     // While the control does not reach the end node.
     while (block != graph.root()) {
@@ -175,7 +175,7 @@ void Evaluator::run(Graph& graph) {
             ASSERT(end->opcode() == ir::Opcode::jmp);
         }
 
-        block = end->reference(0);
+        block = *end->references().begin();
     }
 }
 

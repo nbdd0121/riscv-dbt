@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "util/assert.h"
+#include "util/array_multiset.h"
 
 namespace ir {
 
@@ -142,8 +143,8 @@ private:
     // Instructions that this instruction references.
     std::vector<Instruction*> _operands;
 
-    // Instructions that references this instruction.
-    std::vector<Instruction*> _references;
+    // Nodes that references the value of this node.
+    util::Array_multiset<Instruction*> _references;
 
     // Additional attributes for some instructions.
     union {
@@ -182,11 +183,6 @@ private:
     void unlink();
     void relink(Instruction* inst);
 
-    // Reference mutators (internal)
-    void reference_add(Instruction* inst) { _references.push_back(inst); }
-    void reference_remove(Instruction* inst);
-    void reference_update(Instruction* oldinst, Instruction* newinst);
-
 public:
     // Field accessors and mutators
     uint64_t scratchpad() const { return _scratchpad.value; }
@@ -220,13 +216,8 @@ public:
     void operand_add(Instruction* inst);
 
     // Reference accessors
-    const std::vector<Instruction*>& references() const { return _references; }
-    size_t reference_count() { return _references.size(); }
-    Instruction* reference(size_t index) const {
-        ASSERT(index < _references.size());
-        return _references[index];
-    }
-    
+    const util::Array_multiset<Instruction*>& references() const { return _references; }
+
     friend class Graph;
     friend pass::Pass;
 };
