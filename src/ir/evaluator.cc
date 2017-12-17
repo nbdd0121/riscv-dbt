@@ -89,11 +89,11 @@ void Evaluator::after(Instruction* inst) {
         case Opcode::store_register:
             util::write_as<uint64_t>(
                 reinterpret_cast<uint64_t*>(_ctx->registers) + inst->attribute(),
-                inst->operand(1)->scratchpad()
+                inst->operand(0)->scratchpad()
             );
             break;
         case Opcode::load_memory: {
-            uint64_t address = inst->operand(1)->scratchpad();
+            uint64_t address = inst->operand(0)->scratchpad();
             switch (inst->type()) {
                 case Type::i8: result = sign_extend(Type::i8, _ctx->mmu->load_memory<uint8_t>(address)); break;
                 case Type::i16: result = sign_extend(Type::i16, _ctx->mmu->load_memory<uint16_t>(address)); break;
@@ -104,9 +104,9 @@ void Evaluator::after(Instruction* inst) {
             break;
         }
         case Opcode::store_memory: {
-            uint64_t address = inst->operand(1)->scratchpad();
-            uint64_t value = inst->operand(2)->scratchpad();
-            switch (inst->operand(2)->type()) {
+            uint64_t address = inst->operand(0)->scratchpad();
+            uint64_t value = inst->operand(1)->scratchpad();
+            switch (inst->operand(1)->type()) {
                 case Type::i8: _ctx->mmu->store_memory<uint8_t>(address, value); break;
                 case Type::i16: _ctx->mmu->store_memory<uint16_t>(address, value); break;
                 case Type::i32: _ctx->mmu->store_memory<uint32_t>(address, value); break;
@@ -142,8 +142,8 @@ void Evaluator::after(Instruction* inst) {
 
 void Evaluator::run(Graph& graph) {
     auto start = graph.start();
-    ASSERT(start->references().size() == 1);
-    auto block = *start->references().begin();
+    ASSERT(start->dependants().size() == 1);
+    auto block = *start->dependants().begin();
 
     // While the control does not reach the end node.
     while (block != graph.root()) {
@@ -158,9 +158,9 @@ void Evaluator::run(Graph& graph) {
         if (end->opcode() == ir::Opcode::i_if) {
 
             // Get the result of comparision.
-            bool result = end->operand(1)->scratchpad();
+            bool result = end->operand(0)->scratchpad();
 
-            for (auto ref: end->references()) {
+            for (auto ref: end->dependants()) {
                 bool expected;
                 if (ref->opcode() == ir::Opcode::if_true) expected = true;
                 else if (ref->opcode() == ir::Opcode::if_false) expected = false;
@@ -175,7 +175,7 @@ void Evaluator::run(Graph& graph) {
             ASSERT(end->opcode() == ir::Opcode::jmp);
         }
 
-        block = *end->references().begin();
+        block = *end->dependants().begin();
     }
 }
 

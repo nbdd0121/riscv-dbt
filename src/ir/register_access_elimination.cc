@@ -8,7 +8,7 @@ namespace ir::pass {
 Instruction* Register_access_elimination::dependency(std::vector<Instruction*>&& dep) {
     if (dep.empty()) return nullptr;
     if (dep.size() == 1) return dep[0];
-    return _graph->manage(new Instruction(Type::none, Opcode::fence, {}, std::move(dep)));
+    return _graph->manage(new Instruction(Type::none, Opcode::fence, std::move(dep), {}));
 }
 
 void Register_access_elimination::after(Instruction* inst) {
@@ -52,12 +52,12 @@ void Register_access_elimination::after(Instruction* inst) {
 
             // Eliminate load immediately after store
             if (dep && dep->opcode() == Opcode::store_register) {
-                replace(inst, dep->operand(1));
+                replace(inst, dep->operand(0));
                 break;
             }
 
             if (!dep) dep = last_effect;
-            inst->operand_set(0, dep);
+            inst->dependencies({dep});
 
             last_load[regnum] = inst;
             break;
@@ -74,18 +74,18 @@ void Register_access_elimination::after(Instruction* inst) {
                 if (!dep) {
                     dep = last_exception;
                 } else if (last_exception) {
-                    dep = _graph->manage(new Instruction(Type::none, Opcode::fence, {}, {dep, last_exception}));
+                    dep = _graph->manage(new Instruction(Type::none, Opcode::fence, {dep, last_exception}, {}));
                 }
             } else if (!dep) {
                 // In this case we have store after previous instruction w/ exceptions, and there is no load after the
                 // store. We will only depend on last store in this case.
                 dep = last_store[regnum];
                 // Eliminate store after store.
-                dep = dep->operand(0);
+                dep = dep->dependencies()[0];
             }
 
             if (!dep) dep = last_effect;
-            inst->operand_set(0, dep);
+            inst->dependencies({dep});
 
             last_load[regnum] = nullptr;
             last_store[regnum] = inst;
@@ -105,7 +105,7 @@ void Register_access_elimination::after(Instruction* inst) {
             auto dep = dependency(std::move(dependencies));
             if (!dep) dep = last_exception;
             if (!dep) dep = last_effect;
-            inst->operand_set(0, dep);
+            inst->dependencies({dep});
 
             last_exception = inst;
             break;
@@ -133,7 +133,7 @@ void Register_access_elimination::after(Instruction* inst) {
             if (need_last_exception && last_exception) dependencies.push_back(last_exception); 
             auto dep = dependency(std::move(dependencies));
             if (!dep) dep = last_effect;
-            inst->operand_set(0, dep);
+            inst->dependencies({dep});
 
             last_exception = nullptr;
 

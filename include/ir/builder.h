@@ -16,7 +16,7 @@ public:
     }
 
     Instruction* control(Opcode opcode, std::vector<Instruction*>&& dep) {
-        return create(Type::none, opcode, {}, std::move(dep));
+        return create(Type::none, opcode, std::move(dep), {});
     }
 
     Instruction* constant(Type type, uint64_t value) {
@@ -32,23 +32,23 @@ public:
     }
 
     Instruction* load_register(Instruction* dep, int regnum) {
-        auto inst = new Instruction(Type::i64, Opcode::load_register, {}, {dep});
+        auto inst = create(Type::i64, Opcode::load_register, {dep}, {});
         inst->attribute(regnum);
-        return _graph.manage(inst);
+        return inst;
     }
 
     Instruction* store_register(Instruction* dep, int regnum, Instruction* operand) {
-        auto inst = new Instruction(Type::none, Opcode::store_register, {}, {dep, operand});
+        auto inst = create(Type::none, Opcode::store_register, {dep}, {operand});
         inst->attribute(regnum);
-        return _graph.manage(inst);
+        return inst;
     }
 
     Instruction* load_memory(Instruction* dep, Type type, Instruction* address) {
-        return create(type, Opcode::load_memory, {}, {dep, address});
+        return create(type, Opcode::load_memory, {dep}, {address});
     }
 
     Instruction* store_memory(Instruction* dep, Instruction* address, Instruction* value) {
-        return create(Type::none, Opcode::store_memory, {}, {dep, address, value});
+        return create(Type::none, Opcode::store_memory, {dep}, {address, value});
     }
 
     Instruction* arithmetic(Opcode opcode, Instruction* left, Instruction* right) {

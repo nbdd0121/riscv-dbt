@@ -111,6 +111,12 @@ void Instruction::dependency_update(Instruction* oldinst, Instruction* newinst) 
     oldinst->_dependants.remove(this);
 }
 
+void Instruction::dependency_add(Instruction* inst) {
+    ASSERT(inst);
+    _dependencies.push_back(inst);
+    inst->_dependants.insert(this);
+}
+
 void Instruction::operands(std::vector<Instruction*>&& operands) {
     operand_unlink();
     _operands = std::move(operands);
@@ -135,12 +141,6 @@ void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
     *ptr = newinst;
     newinst->_references.insert(this);
     oldinst->_references.remove(this);
-}
-
-void Instruction::operand_add(Instruction* inst) {
-    ASSERT(inst);
-    _operands.push_back(inst);
-    inst->_references.insert(this);
 }
 
 Graph::Graph() {

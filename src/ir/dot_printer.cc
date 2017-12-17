@@ -78,27 +78,12 @@ void Dot_printer::after(Instruction* inst) {
 
     // Also append attributes to node label, and decide number of control or side-effect dependencies operands.
     bool control_dependency = false;
-    size_t dependency_count = 0;
     switch (inst->opcode()) {
         case Opcode::end:
         case Opcode::block:
-            control_dependency = true;
-            dependency_count = inst->operand_count();
-            break;
         case Opcode::if_true:
         case Opcode::if_false:
             control_dependency = true;
-            dependency_count = 1;
-            break;
-        case Opcode::i_if:
-        case Opcode::jmp:
-        case Opcode::emulate:
-        case Opcode::load_memory:
-        case Opcode::store_memory:
-            dependency_count = 1;
-            break;
-        case Opcode::fence:
-            dependency_count = inst->operand_count();
             break;
         case Opcode::constant:
             std::clog << ' ' << static_cast<int64_t>(inst->attribute());
@@ -108,7 +93,6 @@ void Dot_printer::after(Instruction* inst) {
             break;
         case Opcode::load_register:
         case Opcode::store_register:
-            dependency_count = 1;
             std::clog << " r" << inst->attribute();
             break;
         default: break;
@@ -132,8 +116,7 @@ void Dot_printer::after(Instruction* inst) {
         auto operand = operands[i];
         util::log(
             "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
-            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand),
-            i, i < dependency_count ? (control_dependency ? ",color=red" : ",color=blue") : ""
+            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand), i, ""
         );
     }
 }

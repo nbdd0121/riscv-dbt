@@ -123,7 +123,7 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
     auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
     auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
     auto cmp_node = builder.compare(opcode, rs1_node, rs2_node);
-    auto if_node = builder.control(ir::Opcode::i_if, {last_side_effect, cmp_node});
+    auto if_node = builder.create(ir::Type::none, ir::Opcode::i_if, {last_side_effect}, {cmp_node});
     auto if_true_node = builder.control(ir::Opcode::if_true, {if_node});
     auto if_false_node = builder.control(ir::Opcode::if_false, {if_node});
 
@@ -138,7 +138,7 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
 
     // If the jump target happens to be the basic block itself, create a loop.
     if (-pc_offset == block->end_pc - block->start_pc) {
-        (*graph.start()->references().begin())->operand_add(true_jmp_node);
+        (*graph.start()->dependants().begin())->dependency_add(true_jmp_node);
         auto end_node = builder.control(ir::Opcode::end, {if_false_node});
         graph.root(end_node);
         return;

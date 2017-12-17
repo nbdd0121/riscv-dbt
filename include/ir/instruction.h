@@ -225,6 +225,7 @@ public:
     size_t dependency_count() const { return _dependencies.size(); }
 
     void dependency_update(Instruction* oldinst, Instruction* newinst);
+    void dependency_add(Instruction* inst);
 
     // Operand accessors and mutators
     const std::vector<Instruction*>& operands() const { return _operands; }
@@ -239,7 +240,6 @@ public:
     void operand_set(size_t index, Instruction* inst);
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
     void operand_update(Instruction* oldinst, Instruction* newinst);
-    void operand_add(Instruction* inst);
 
     // Dependants accessors
     const util::Array_multiset<Instruction*>& dependants() const { return _dependants; }

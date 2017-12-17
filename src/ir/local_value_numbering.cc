@@ -5,6 +5,8 @@ namespace ir::pass {
 
 size_t Local_value_numbering::Hash::operator ()(Instruction* inst) const noexcept {
 
+    ASSERT(is_pure_opcode(inst->opcode()));
+
     size_t hash = static_cast<uint8_t>(inst->opcode());
     hash ^= static_cast<uint8_t>(inst->type());
 
@@ -15,9 +17,6 @@ size_t Local_value_numbering::Hash::operator ()(Instruction* inst) const noexcep
     switch (inst->opcode()) {
         case Opcode::constant:
         case Opcode::cast:
-        case Opcode::emulate:
-        case Opcode::load_register:
-        case Opcode::store_register:
             hash ^= inst->attribute();
             break;
         default: break;
@@ -28,6 +27,9 @@ size_t Local_value_numbering::Hash::operator ()(Instruction* inst) const noexcep
 
 bool Local_value_numbering::Equal_to::operator ()(Instruction* a, Instruction* b) const noexcept {
     if (a->opcode() != b->opcode()) return false;
+
+    ASSERT(is_pure_opcode(a->opcode()));
+
     if (a->type() != b->type()) return false;
 
     size_t operand_count = a->operand_count();
@@ -40,9 +42,6 @@ bool Local_value_numbering::Equal_to::operator ()(Instruction* a, Instruction* b
     switch (a->opcode()) {
         case Opcode::constant:
         case Opcode::cast:
-        case Opcode::emulate:
-        case Opcode::load_register:
-        case Opcode::store_register:
             if (a->attribute() != b->attribute()) return false;
             break;
         default: break;
