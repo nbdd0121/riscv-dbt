@@ -5,12 +5,6 @@
 
 namespace ir::pass {
 
-Instruction* Register_access_elimination::dependency(std::vector<Instruction*>&& dep) {
-    if (dep.empty()) return nullptr;
-    if (dep.size() == 1) return dep[0];
-    return _graph->manage(new Instruction(Type::none, Opcode::fence, std::move(dep), {}));
-}
-
 void Register_access_elimination::after(Instruction* inst) {
 
     // load_register needs to happen after previous stores.
@@ -65,27 +59,33 @@ void Register_access_elimination::after(Instruction* inst) {
         case Opcode::store_register: {
             int regnum = inst->attribute();
 
-            auto dep = last_load[regnum];
+            std::vector<Instruction*> dependencies;
 
             // If the load is after previous store, and the store is after previous exception, the depending solely on
             // last_load is sufficient. Otherwise we will in addition need to depend on last_store or last_exception.
 
-            if (!has_store_after_exception[regnum]) {
-                if (!dep) {
-                    dep = last_exception;
-                } else if (last_exception) {
-                    dep = _graph->manage(new Instruction(Type::none, Opcode::fence, {dep, last_exception}, {}));
+            if (last_load[regnum]) dependencies.push_back(last_load[regnum]);
+
+            if (has_store_after_exception[regnum]) {
+                if (dependencies.empty()) {
+
+                    // In this case we have store after previous instruction w/ exceptions, and there is no load after
+                    // the store. We will only depend on last store in this case. Note that this store is not a
+                    // dependency of other instructions, so we can also eliminate the store by depending directly on
+                    // its dependencies.
+                    dependencies = last_store[regnum]->dependencies();
                 }
-            } else if (!dep) {
-                // In this case we have store after previous instruction w/ exceptions, and there is no load after the
-                // store. We will only depend on last store in this case.
-                dep = last_store[regnum];
-                // Eliminate store after store.
-                dep = dep->dependencies()[0];
+
+            } else {
+                if (last_exception) dependencies.push_back(last_exception);
             }
 
-            if (!dep) dep = last_effect;
-            inst->dependencies({dep});
+            if (dependencies.empty()) {
+                ASSERT(last_effect);
+                dependencies.push_back(last_effect);
+            }
+
+            inst->dependencies(std::move(dependencies));
 
             last_load[regnum] = nullptr;
             last_store[regnum] = inst;
@@ -102,10 +102,17 @@ void Register_access_elimination::after(Instruction* inst) {
                 has_store_after_exception[regnum] = 0;
             }
 
-            auto dep = dependency(std::move(dependencies));
-            if (!dep) dep = last_exception;
-            if (!dep) dep = last_effect;
-            inst->dependencies({dep});
+            // We need to depend on last_exception or last_effect if we do not depend on them indirectly.
+            if (dependencies.empty()) {
+                if (last_exception) {
+                    dependencies.push_back(last_exception);
+                } else {
+                    ASSERT(last_effect);
+                    dependencies.push_back(last_effect);
+                }
+            }
+
+            inst->dependencies(std::move(dependencies));
 
             last_exception = inst;
             break;
@@ -117,7 +124,7 @@ void Register_access_elimination::after(Instruction* inst) {
 
             bool need_last_exception = true;
             for (size_t regnum = 0; regnum < last_load.size(); regnum++) {
-                
+
                 // The following logic is similar to store_register.
                 if (last_load[regnum]) dependencies.push_back(last_load[regnum]);
                 if (has_store_after_exception[regnum]) {
@@ -130,10 +137,13 @@ void Register_access_elimination::after(Instruction* inst) {
                 last_store[regnum] = nullptr;
             }
 
-            if (need_last_exception && last_exception) dependencies.push_back(last_exception); 
-            auto dep = dependency(std::move(dependencies));
-            if (!dep) dep = last_effect;
-            inst->dependencies({dep});
+            if (need_last_exception && last_exception) dependencies.push_back(last_exception);
+            if (dependencies.empty()) {
+                ASSERT(last_effect);
+                dependencies.push_back(last_effect);
+            }
+
+            inst->dependencies(std::move(dependencies));
 
             last_exception = nullptr;
 

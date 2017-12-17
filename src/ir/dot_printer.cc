@@ -18,7 +18,6 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(jmp)
         CASE(constant)
         CASE(cast)
-        CASE(fence)
         CASE(load_register)
         CASE(store_register)
         CASE(load_memory)
@@ -77,13 +76,11 @@ void Dot_printer::after(Instruction* inst) {
     std::clog << opcode_name(inst->opcode());
 
     bool control_dependency = false;
-    bool dependency_need_label = false;
+    bool dependency_need_label = inst->opcode() == Opcode::block && inst->dependency_count() > 1;
     bool operand_need_label = inst->operand_count() > 1 && !is_commutative_opcode(inst->opcode());
 
     switch (inst->opcode()) {
         case Opcode::block:
-            dependency_need_label = inst->dependency_count() > 1;
-            [[fallthrough]];
         case Opcode::end:
         case Opcode::if_true:
         case Opcode::if_false:

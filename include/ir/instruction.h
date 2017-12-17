@@ -54,9 +54,6 @@ enum class Opcode: uint8_t {
     // Input: Memory. Output: Memory.
     emulate,
 
-    // Input: Memory[]. Output: Memory.
-    fence,
-
     /* Machine register load/store */
     // Input: Memory. Output: Memory, Value.
     load_register,

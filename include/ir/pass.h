@@ -60,8 +60,6 @@ private:
 public:
     Register_access_elimination(int regcount):
         last_load(regcount), last_store(regcount), has_store_after_exception(regcount) {}
-private:
-    Instruction* dependency(std::vector<Instruction*>&& dep);
 
 protected:
     virtual void after(Instruction* inst) override;

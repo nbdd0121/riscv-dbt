@@ -121,8 +121,6 @@ void Evaluator::after(Instruction* inst) {
             riscv::step(_ctx, rinst);
             break;
         }
-        case Opcode::fence:
-            break;
         case Opcode::neg:
             result = sign_extend(inst->type(), -inst->operand(0)->scratchpad());
             break;
