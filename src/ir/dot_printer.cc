@@ -115,9 +115,21 @@ void Dot_printer::after(Instruction* inst) {
     }
     std::clog << "\"];\n";
 
-    // Draw operand dependencies as edges. For side-effect dependencies, we additionally color it blue.
-    for (size_t i = 0; i < inst->operand_count(); i++) {
-        auto operand = inst->operand(i);
+    // Draw dependencies as edges. Data flow dependencies are colored black, control flow dependencies are colored red,
+    // and side-effect dependnecies are colored blue.
+    auto dependencies = inst->dependencies();
+    for (size_t i = 0; i < dependencies.size(); i++) {
+        auto operand = dependencies[i];
+        util::log(
+            "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
+            reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand),
+            i, control_dependency ? ",color=red" : ",color=blue"
+        );
+    }
+
+    auto operands = inst->operands();
+    for (size_t i = 0; i < operands.size(); i++) {
+        auto operand = operands[i];
         util::log(
             "\t\"{:x}\" -> \"{:x}\" [label={}{}];\n",
             reinterpret_cast<uintptr_t>(inst), reinterpret_cast<uintptr_t>(operand),

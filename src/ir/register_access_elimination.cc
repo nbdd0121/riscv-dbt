@@ -8,7 +8,7 @@ namespace ir::pass {
 Instruction* Register_access_elimination::dependency(std::vector<Instruction*>&& dep) {
     if (dep.empty()) return nullptr;
     if (dep.size() == 1) return dep[0];
-    return _graph->manage(new Instruction(Type::none, Opcode::fence, std::move(dep)));
+    return _graph->manage(new Instruction(Type::none, Opcode::fence, {}, std::move(dep)));
 }
 
 void Register_access_elimination::after(Instruction* inst) {
@@ -74,7 +74,7 @@ void Register_access_elimination::after(Instruction* inst) {
                 if (!dep) {
                     dep = last_exception;
                 } else if (last_exception) {
-                    dep = _graph->manage(new Instruction(Type::none, Opcode::fence, {dep, last_exception}));
+                    dep = _graph->manage(new Instruction(Type::none, Opcode::fence, {}, {dep, last_exception}));
                 }
             } else if (!dep) {
                 // In this case we have store after previous instruction w/ exceptions, and there is no load after the

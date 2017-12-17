@@ -257,7 +257,7 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu); return;
             case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu); return;
             default: {
-                last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {last_side_effect}));
+                last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {}, {last_side_effect}));
                 last_side_effect->attribute(util::read_as<uint64_t>(&inst));
                 break;
             }

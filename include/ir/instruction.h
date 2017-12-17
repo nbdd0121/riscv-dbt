@@ -140,8 +140,19 @@ static bool is_commutative_opcode(Opcode opcode) {
 class Instruction {
 private:
 
-    // Instructions that this instruction references.
+    // We divide dependencies into two types. Data flow dependencies and control flow dependencies. The second one also
+    // indicates partial ordering of side effects besides control flow. Different names are given for these two types
+    // of dependencies. The former one is named operands/references, and the latter one is named
+    // dependencies/dependants.
+
+    // Control & memory dependency that this node references.
+    std::vector<Instruction*> _dependencies;
+
+    // Values that this node references.
     std::vector<Instruction*> _operands;
+
+    // Nodes that depends on this node.
+    util::Array_multiset<Instruction*> _dependants;
 
     // Nodes that references the value of this node.
     util::Array_multiset<Instruction*> _references;
@@ -169,18 +180,26 @@ private:
     uint8_t _visited;
 
 public:
-    Instruction(Type type, Opcode opcode, std::vector<Instruction*>&& operands);
+    Instruction(
+        Type type, Opcode opcode,
+        std::vector<Instruction*>&& dependencies,
+        std::vector<Instruction*>&& operands
+    );
+
     Instruction(const Instruction& inst);
     Instruction(Instruction&& inst);
     ~Instruction();
-    
+
     void operator =(const Instruction& inst);
     void operator =(Instruction&& inst);
 
 private:
-    // Controls whether this instruction should be added as themselves as referencing its operands.
-    void link();
-    void unlink();
+    void dependency_link();
+    void dependency_unlink();
+    void operand_link();
+    void operand_unlink();
+    void link() { dependency_link(); operand_link(); }
+    void unlink() { dependency_unlink(); operand_unlink(); }
     void relink(Instruction* inst);
 
 public:
@@ -200,12 +219,19 @@ public:
     Opcode opcode() const { return _opcode; }
     void opcode(Opcode opcode) { _opcode = opcode; }
 
+    // Dependency acccessors and mutators
+    const std::vector<Instruction*>& dependencies() const { return _dependencies; }
+    void dependencies(std::vector<Instruction*>&& dependencies);
+    size_t dependency_count() const { return _dependencies.size(); }
+
+    void dependency_update(Instruction* oldinst, Instruction* newinst);
+
     // Operand accessors and mutators
     const std::vector<Instruction*>& operands() const { return _operands; }
     void operands(std::vector<Instruction*>&& operands);
     size_t operand_count() const { return _operands.size(); }
 
-    Instruction* operand(size_t index) const { 
+    Instruction* operand(size_t index) const {
         ASSERT(index < _operands.size());
         return _operands[index];
     }
@@ -214,6 +240,9 @@ public:
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
     void operand_update(Instruction* oldinst, Instruction* newinst);
     void operand_add(Instruction* inst);
+
+    // Dependants accessors
+    const util::Array_multiset<Instruction*>& dependants() const { return _dependants; }
 
     // Reference accessors
     const util::Array_multiset<Instruction*>& references() const { return _references; }

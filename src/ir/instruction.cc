@@ -5,20 +5,22 @@
 
 namespace ir {
 
-Instruction::Instruction(Type type, Opcode opcode, std::vector<Instruction*>&& operands):
-    _operands(std::move(operands)), _type {type}, _opcode{opcode} {
+Instruction::Instruction(Type type, Opcode opcode, std::vector<Instruction*>&& dependencies, std::vector<Instruction*>&& operands):
+    _dependencies(std::move(dependencies)), _operands(std::move(operands)), _type {type}, _opcode{opcode} {
 
     link();
 }
 
 Instruction::Instruction(const Instruction& inst):
-    _operands(inst._operands), _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
+    _dependencies(inst._dependencies), _operands(inst._operands),
+    _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
 
     link();
 }
 
 Instruction::Instruction(Instruction&& inst):
-    _operands(std::move(inst._operands)), _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
+    _dependencies(std::move(inst._dependencies)), _operands(std::move(inst._operands)),
+    _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
 
     relink(&inst);
 }
@@ -30,10 +32,11 @@ Instruction::~Instruction() {
 
 void Instruction::operator =(const Instruction& inst) {
 
-    // Unlike will not create dangling reference here.
+    // Unlink will not create dangling reference here.
     unlink();
 
     // Copy _operands but not _references, as they are technically not part of the instruction.
+    _dependencies = inst._dependencies;
     _operands = inst._operands;
     link();
 
@@ -45,10 +48,11 @@ void Instruction::operator =(const Instruction& inst) {
 
 void Instruction::operator =(Instruction&& inst) {
 
-    // Unlike will not create dangling reference here.
+    // Unlink will not create dangling reference here.
     unlink();
 
     // Move _operands but not _references, as they are technically not part of the instruction.
+    _dependencies = std::move(inst._dependencies);
     _operands = std::move(inst._operands);
     relink(&inst);
 
@@ -58,13 +62,25 @@ void Instruction::operator =(Instruction&& inst) {
     _opcode = inst._opcode;
 }
 
-void Instruction::link() {
+void Instruction::dependency_link() {
+    for (auto dependency: _dependencies) {
+        dependency->_dependants.insert(this);
+    }
+}
+
+void Instruction::dependency_unlink() {
+    for (auto dependency: _dependencies) {
+        dependency->_dependants.remove(this);
+    }
+}
+
+void Instruction::operand_link() {
     for (auto operand: _operands) {
         operand->_references.insert(this);
     }
 }
 
-void Instruction::unlink() {
+void Instruction::operand_unlink() {
     for (auto operand: _operands) {
         operand->_references.remove(this);
     }
@@ -74,12 +90,31 @@ void Instruction::relink(Instruction* inst) {
     for (auto operand: _operands) {
         operand->_references.replace(inst, this);
     }
+    for (auto dependency: _dependencies) {
+        dependency->_dependants.replace(inst, this);
+    }
+}
+
+void Instruction::dependencies(std::vector<Instruction*>&& dependencies) {
+    dependency_unlink();
+    _dependencies = std::move(dependencies);
+    dependency_link();
+}
+
+void Instruction::dependency_update(Instruction* oldinst, Instruction* newinst) {
+    ASSERT(oldinst && newinst);
+
+    auto ptr = std::find(_dependencies.begin(), _dependencies.end(), oldinst);
+    ASSERT(ptr != _dependencies.end());
+    *ptr = newinst;
+    newinst->_dependants.insert(this);
+    oldinst->_dependants.remove(this);
 }
 
 void Instruction::operands(std::vector<Instruction*>&& operands) {
-    unlink();
+    operand_unlink();
     _operands = std::move(operands);
-    link();
+    operand_link();
 }
 
 void Instruction::operand_set(size_t index, Instruction* inst) {
@@ -109,12 +144,14 @@ void Instruction::operand_add(Instruction* inst) {
 }
 
 Graph::Graph() {
-    _start = manage(new Instruction(Type::none, Opcode::start, {}));
+    _start = manage(new Instruction(Type::none, Opcode::start, {}, {}));
 }
 
 Graph::~Graph() {
     for (auto inst: _heap) {
+        inst->_dependencies.clear();
         inst->_operands.clear();
+        inst->_dependants.clear();
         inst->_references.clear();
         delete inst;
     }
@@ -130,6 +167,7 @@ void Graph::garbage_collect() {
     for (size_t i = 0; i < size; i++) {
         if (!_heap[i]->_visited) {
             _heap[i]->unlink();
+            _heap[i]->_dependencies.clear();
             _heap[i]->_operands.clear();
         }
     }
