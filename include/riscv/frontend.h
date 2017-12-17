@@ -3,11 +3,15 @@
 
 #include "ir/instruction.h"
 
+namespace emu {
+struct State;
+}
+
 namespace riscv {
 
 class Basic_block;
 
-ir::Graph compile(const Basic_block& block);
+ir::Graph compile(emu::State& state, const Basic_block& block);
 
 } // riscv
 

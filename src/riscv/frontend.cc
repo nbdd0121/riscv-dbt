@@ -1,3 +1,4 @@
+#include "emu/state.h"
 #include "ir/builder.h"
 #include "ir/instruction.h"
 #include "riscv/basic_block.h"
@@ -11,10 +12,13 @@ namespace riscv {
 struct Frontend {
     ir::Graph graph;
     ir::Builder builder {graph};
+    emu::State& state;
     const Basic_block* block;
 
     // The last instruction with side-effect.
     ir::Instruction* last_side_effect = nullptr;
+
+    Frontend(emu::State& state): state{state} {}
 
     ir::Instruction* emit_load_register(ir::Type type, int reg);
     void emit_store_register(int reg, ir::Instruction* value, bool sext = false);
@@ -162,10 +166,12 @@ void Frontend::compile(const Basic_block& block) {
     last_side_effect = builder.store_register(pc_node, 64, new_pc_node);
 
     // Update instret
-    auto instret_node = builder.load_register(last_side_effect, 65);
-    auto instret_offset_node = builder.constant(ir::Type::i64, block.instructions.size());
-    auto new_instret_node = builder.arithmetic(ir::Opcode::add, instret_node, instret_offset_node);
-    last_side_effect = builder.store_register(instret_node, 65, new_instret_node);
+    if (!state.no_instret) {
+        auto instret_node = builder.load_register(last_side_effect, 65);
+        auto instret_offset_node = builder.constant(ir::Type::i64, block.instructions.size());
+        auto new_instret_node = builder.arithmetic(ir::Opcode::add, instret_node, instret_offset_node);
+        last_side_effect = builder.store_register(instret_node, 65, new_instret_node);
+    }
 
     riscv::reg_t pc_offset = block.start_pc - block.end_pc;
     for (auto& inst: block.instructions) {
@@ -270,8 +276,8 @@ void Frontend::compile(const Basic_block& block) {
     graph.root(end_node);
 }
 
-ir::Graph compile(const Basic_block& block) {
-    Frontend compiler;
+ir::Graph compile(emu::State& state, const Basic_block& block) {
+    Frontend compiler {state};
     compiler.compile(block);
     return std::move(compiler.graph);
 }
