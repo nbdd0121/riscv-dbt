@@ -23,6 +23,8 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(load_memory)
         CASE(store_memory)
         CASE(emulate)
+        CASE(neg)
+        case Opcode::i_not: return "not";
         CASE(add)
         CASE(sub)
         case Opcode::i_xor: return "xor";
@@ -37,8 +39,7 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(ge)
         CASE(ltu)
         CASE(geu)
-        CASE(neg)
-        case Opcode::i_not: return "not";
+        CASE(mux)
 #undef CASE
         default: return "(unknown)";
     }

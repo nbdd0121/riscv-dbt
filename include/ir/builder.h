@@ -20,15 +20,15 @@ public:
     }
 
     Instruction* constant(Type type, uint64_t value) {
-        auto inst = new Instruction(type, Opcode::constant, {}, {});
+        auto inst = create(type, Opcode::constant, {}, {});
         inst->attribute(value);
-        return _graph.manage(inst);
+        return inst;
     }
 
     Instruction* cast(Type type, bool sext, Instruction* operand) {
-        auto inst = new Instruction(type, Opcode::cast, {}, {operand});
+        auto inst = create(type, Opcode::cast, {}, {operand});
         inst->attribute(sext);
-        return _graph.manage(inst);
+        return inst;
     }
 
     Instruction* load_register(Instruction* dep, int regnum) {
@@ -64,6 +64,11 @@ public:
     Instruction* compare(Opcode opcode, Instruction* left, Instruction* right) {
         ASSERT(left->type() == right->type());
         return create(Type::i1, opcode, {}, {left, right});
+    }
+
+    Instruction* mux(Instruction* cond, Instruction* left, Instruction* right) {
+        ASSERT(cond->type() == Type::i1 && left->type() == right->type());
+        return create(left->type(), Opcode::mux, {}, {cond, left, right});
     }
 };
 

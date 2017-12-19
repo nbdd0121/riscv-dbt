@@ -224,6 +224,15 @@ void Local_value_numbering::after(Instruction* inst) {
                 goto lvn;
             }
         }
+    } else if (opcode == Opcode::mux) {
+        auto x = inst->operand(0);
+        auto y = inst->operand(1);
+        auto z = inst->operand(2);
+
+        if (x->opcode() == Opcode::constant) {
+            replace(inst, x->attribute() ? y : z);
+            return;
+        }
     }
 
 lvn:

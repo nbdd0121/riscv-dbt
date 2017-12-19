@@ -106,6 +106,12 @@ enum class Opcode: uint8_t {
     ge,
     ltu,
     geu,
+
+    /*
+     * Ternary op
+     * Input: Value, Value, Value. Output: Value.
+     */
+    mux,
 };
 
 [[maybe_unused]]

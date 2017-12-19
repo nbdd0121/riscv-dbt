@@ -127,6 +127,9 @@ void Evaluator::after(Instruction* inst) {
         case Opcode::i_not:
             result = ~inst->operand(0)->scratchpad();
             break;
+        case Opcode::mux:
+            result = inst->operand(0)->scratchpad() ? inst->operand(1)->scratchpad() : inst->operand(2)->scratchpad();
+            break;
         default: {
             ASSERT(is_binary_opcode(opcode));
             uint64_t l = inst->operand(0)->scratchpad();
