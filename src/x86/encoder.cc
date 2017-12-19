@@ -128,6 +128,11 @@ void Encoder::emit_rex(const Operand& operand, Register reg, uint8_t rex) {
     if (operand.is_register()) {
         uint8_t it_num = static_cast<uint8_t>(operand.as_register());
 
+        // For spl, bpl, sil, di, rex prefix is required.
+        if ((it_num & 0xF0) == reg_gpb2) {
+            rex |= 0x40;
+        }
+
         // With REX prefix, r/m8 cannot be encoded to access AH, BH, CH, DH
         ASSERT(!rex || !(it_num >= static_cast<uint8_t>(Register::ah) &&
                             it_num <= static_cast<uint8_t>(Register::bh)));
