@@ -35,6 +35,7 @@ private:
     void emit_jmp(const Instruction& inst);
     void emit_lea(const Instruction& inst);
     void emit_mov(const Instruction& inst);
+    void emit_movabs(const Instruction& inst);
     void emit_movsx(const Instruction& inst);
     void emit_movzx(const Instruction& inst);
     void emit_pop(const Instruction& inst);

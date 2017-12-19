@@ -72,7 +72,7 @@ const char *opcode_name(Opcode opcode) {
         CASE(jmp)
         CASE(lea)
         CASE(mov)
-        case Opcode::movabs: return "mov";
+        CASE(movabs)
         CASE(movsx)
         CASE(movzx)
         CASE(mul)

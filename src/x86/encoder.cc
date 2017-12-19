@@ -565,6 +565,38 @@ void Encoder::emit_mov(const Instruction& inst) {
     emit_r_rm(op_size, src, dst.as_register(), op_size == 1 ? 0x8A : 0x8B);
 }
 
+// Emit code for movabs.
+void Encoder::emit_movabs(const Instruction& inst) {
+    const Operand& dst = inst.operands[0];
+    const Operand& src = inst.operands[1];
+    uint64_t imm;
+    int op_size;
+    uint8_t opcode;
+
+    if (src.is_immediate()) {
+        ASSERT(dst.is_register() && (static_cast<uint8_t>(dst.as_register()) & 0xF) == 0);
+
+        imm = src.as_immediate();
+        op_size = get_size(dst);
+        opcode = 0xA0;
+    } else {
+        ASSERT(dst.is_immediate() && src.is_register() && (static_cast<uint8_t>(src.as_register()) & 0xF) == 0);
+
+        imm = dst.as_immediate();
+        op_size = get_size(src);
+        opcode = 0xA2;
+    }
+
+    if (op_size == 2) {
+        emit_byte(0x66);
+    } else if (op_size == 8) {
+        emit_byte(0x48);
+    }
+
+    emit_byte(op_size == 1 ? opcode : opcode + 1);
+    emit_immediate(op_size, imm);
+}
+
 // Emit code for movsx.
 void Encoder::emit_movsx(const Instruction& inst) {
     const Operand& dst = inst.operands[0];
@@ -735,6 +767,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::jmp: emit_jmp(inst); break;
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;
+        case Opcode::movabs: emit_movabs(inst); break;
         case Opcode::movsx: emit_movsx(inst); break;
         case Opcode::movzx: emit_movzx(inst); break;
         case Opcode::mul: emit_rm(inst, 0xF6, 4); break;
