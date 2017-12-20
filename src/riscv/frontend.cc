@@ -127,6 +127,22 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
     auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
     auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
     auto cmp_node = builder.compare(opcode, rs1_node, rs2_node);
+
+    auto pc_offset = -inst.length() + inst.imm();
+    auto pc_offset_node = builder.constant(ir::Type::i64, pc_offset);
+
+#if 1
+
+    auto pc_node = builder.load_register(last_side_effect, 64);
+    auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
+    auto mux_node = builder.mux(cmp_node, new_pc_node, pc_node);
+    auto store_pc_node = builder.store_register(pc_node, 64, mux_node);
+    auto jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
+    auto end_node = builder.control(ir::Opcode::end, {jmp_node});
+    graph.root(end_node);
+
+#else
+
     auto if_node = builder.create(ir::Type::none, ir::Opcode::i_if, {last_side_effect}, {cmp_node});
     auto if_true_node = builder.control(ir::Opcode::if_true, {if_node});
     auto if_false_node = builder.control(ir::Opcode::if_false, {if_node});
@@ -134,8 +150,6 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
     // Building the true branch.
     auto true_block_node = builder.control(ir::Opcode::block, {if_true_node});
     auto pc_node = builder.load_register(true_block_node, 64);
-    auto pc_offset = -inst.length() + inst.imm();
-    auto pc_offset_node = builder.constant(ir::Type::i64, -inst.length() + inst.imm());
     auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
     auto store_pc_node = builder.store_register(pc_node, 64, new_pc_node);
     auto true_jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
@@ -150,6 +164,9 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
 
     auto end_node = builder.control(ir::Opcode::end, {true_jmp_node, if_false_node});
     graph.root(end_node);
+
+#endif
+
 }
 
 void Frontend::compile(const Basic_block& block) {
