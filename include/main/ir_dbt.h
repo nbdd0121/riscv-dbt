@@ -16,6 +16,8 @@ namespace riscv {
 struct Context;
 }
 
+struct Ir_block;
+
 class Ir_dbt {
 private:
     emu::State& state_;
@@ -25,12 +27,11 @@ private:
     std::unique_ptr<std::byte*[]> icache_;
 
     // The "slow" instruction cache that contains all code that are compiled previously.
-    std::unordered_map<emu::reg_t, util::Code_buffer> inst_cache_;
-
-    std::unordered_map<emu::reg_t, ir::Graph> graph_cache_;
+    std::unordered_map<emu::reg_t, std::unique_ptr<Ir_block>> inst_cache_;
 
 public:
     Ir_dbt(emu::State& state) noexcept;
+    ~Ir_dbt();
     void step(riscv::Context& context);
     void compile(emu::reg_t pc);
 };

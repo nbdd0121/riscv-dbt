@@ -21,6 +21,25 @@
 extern "C" void __register_frame(void*);
 extern "C" void __deregister_frame(void*);
 
+// Denotes a translated block.
+struct Ir_block {
+
+    // Translated code.
+    util::Code_buffer code;
+
+    // Graph representing the basic block.
+    ir::Graph graph;
+
+    // Exception handling frame
+    std::unique_ptr<uint8_t[]> cie;
+
+    ~Ir_block() {
+        if (cie) {
+            __deregister_frame(cie.get());
+        }
+    }
+};
+
 _Unwind_Reason_Code ir_dbt_personality(
     [[maybe_unused]] int version,
     [[maybe_unused]] _Unwind_Action actions,
@@ -31,7 +50,7 @@ _Unwind_Reason_Code ir_dbt_personality(
     return _URC_CONTINUE_UNWIND;
 }
 
-static void generate_eh_frame(std::byte* data) {
+static void generate_eh_frame(Ir_block& block) {
     // TODO: Create an dwarf generation to replace this hard-coded template.
     static const unsigned char cie_template[] = {
         // CIE
@@ -83,11 +102,12 @@ static void generate_eh_frame(std::byte* data) {
         0x00, 0x00, 0x00, 0x00
     };
 
-    uint8_t *cie = new uint8_t[sizeof(cie_template)];
+    block.cie = std::make_unique<uint8_t[]>(sizeof(cie_template));
+    uint8_t *cie = block.cie.get();
 
     memcpy(cie, cie_template, sizeof(cie_template));
     util::write_as<uint64_t>(cie + 0x12, reinterpret_cast<uint64_t>(ir_dbt_personality));
-    util::write_as<uint64_t>(cie + 0x28, reinterpret_cast<uint64_t>(data));
+    util::write_as<uint64_t>(cie + 0x28, reinterpret_cast<uint64_t>(block.code.data()));
     util::write_as<uint64_t>(cie + 0x30, 4096);
     util::write_as<uint64_t>(cie + 0x39, 0);
 
@@ -101,6 +121,8 @@ Ir_dbt::Ir_dbt(emu::State& state) noexcept: state_{state} {
         icache_tag_[i] = 0;
     }
 }
+
+Ir_dbt::~Ir_dbt() {}
 
 void Ir_dbt::step(riscv::Context& context) {
     const emu::reg_t pc = context.pc;
@@ -120,12 +142,13 @@ void Ir_dbt::step(riscv::Context& context) {
 
 void Ir_dbt::compile(emu::reg_t pc) {
     const ptrdiff_t tag = (pc >> 1) & 4095;
-    auto& code_buffer = inst_cache_[pc];
+    auto& block_ptr = inst_cache_[pc];
 
-    if (!code_buffer.size()) {
-        code_buffer.reserve(4096);
+    if (!block_ptr) {
+        block_ptr = std::make_unique<Ir_block>();
+        block_ptr->code.reserve(4096);
 
-        ir::Graph& graph = graph_cache_[pc];
+        ir::Graph& graph = block_ptr->graph;
         riscv::Decoder decoder {&state_, pc};
         riscv::Basic_block basic_block = decoder.decode_basic_block();
 
@@ -135,17 +158,17 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         if (state_.disassemble) {
             // ir::pass::Dot_printer{}.run(graph);
-            util::log("Translating {:x} to {:x}\n", pc, (uintptr_t)code_buffer.data());
+            util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
         ir::pass::Block_marker{}.run(graph);
         graph.garbage_collect();
 
-        x86::Backend{state_, code_buffer}.run(graph);
-        generate_eh_frame(code_buffer.data());
+        x86::Backend{state_, block_ptr->code}.run(graph);
+        generate_eh_frame(*block_ptr);
     }
 
     // Update tag to reflect newly compiled code.
-    icache_[tag] = code_buffer.data();
+    icache_[tag] = block_ptr->code.data();
     icache_tag_[tag] = pc;
 }
