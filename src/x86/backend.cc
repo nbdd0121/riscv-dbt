@@ -154,13 +154,13 @@ void Backend::spill_register(Register reg) {
     auto ptr = memory_location.find(inst);
     if (ptr == memory_location.end()) {
         Memory mem;
-        if (free_memory_location.empty()) {
+        // if (free_memory_location.empty()) {
             stack_size -= 8;
             mem = qword(Register::none + ((uintptr_t)spill_area - stack_size));
-        } else {
-            mem = free_memory_location.back();
-            free_memory_location.pop_back();
-        }
+        // } else {
+            // mem = free_memory_location.back();
+            // free_memory_location.pop_back();
+        // }
         mem.size = get_type_size(inst->type()) / 8;
         memory_location[inst] = mem;
         move_location(inst, mem);
