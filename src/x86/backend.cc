@@ -607,7 +607,6 @@ void Backend::after(ir::Instruction* inst) {
                     pin_register(loc_value);
                 } else if (!is_int32(value->attribute())) {
                     loc_value = alloc_register(value->type());
-                    register_content[register_id(loc_value)] = inst;
                     emit(mov(loc_value, value->attribute()));
                     pin_register(loc_value);
                 }
@@ -651,11 +650,7 @@ void Backend::after(ir::Instruction* inst) {
 
                 if (loc_value != Register::none) {
                     unpin_register(loc_value);
-                    if (value->opcode() != ir::Opcode::constant) {
-                        decrease_reference(value);
-                    } else {
-                        register_content[register_id(loc_value)] = nullptr;
-                    }
+                    decrease_reference(value);
                 }
 
                 break;
