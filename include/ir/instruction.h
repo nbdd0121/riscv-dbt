@@ -267,7 +267,7 @@ public:
     ~Graph();
 
     Graph& operator =(const Graph&) = delete;
-    Graph& operator =(Graph&&) = default;
+    Graph& operator =(Graph&&);
 
     Instruction* manage(Instruction* inst) {
         _heap.push_back(inst);

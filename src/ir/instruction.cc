@@ -147,6 +147,13 @@ Graph::Graph() {
     _start = manage(new Instruction(Type::none, Opcode::start, {}, {}));
 }
 
+Graph& Graph::operator=(Graph&& graph) {
+    _heap.swap(graph._heap);
+    _start = graph._start;
+    _root = graph._root;
+    return *this;
+}
+
 Graph::~Graph() {
     for (auto inst: _heap) {
         inst->_dependencies.clear();
