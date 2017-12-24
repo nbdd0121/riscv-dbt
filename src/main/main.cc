@@ -7,6 +7,7 @@
 #include "emu/state.h"
 #include "main/dbt.h"
 #include "main/interpreter.h"
+#include "main/ir_dbt.h"
 #include "main/signal.h"
 #include "riscv/basic_block.h"
 #include "riscv/context.h"
@@ -18,13 +19,14 @@
 
 static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
 Options:\n\
-  --paging      Use soft paging MMU instead of a flat MMU. The emulated program\n\
-                will have larger address space in expense of performance.\n\
-  --strace      Log system calls.\n\
-  --disassemble Log decoded instructions.\n\
-  --disable-dbt Disable dynamic binary translation and use interpretation instead.\n\
-  --no-instret  Disable precise instret updating in binary translated code.\n\
-  --help        Display this help message.\n\
+  --paging              Use soft paging MMU instead of a flat MMU. The emulated program\n\
+                        will have larger address space in expense of performance.\n\
+  --strace              Log system calls.\n\
+  --disassemble         Log decoded instructions.\n\
+  --engine=interpreter  Use interpreter instead of dynamic binary translator.\n\
+  --engine=dbt          Use simple binary translator instead of IR-based optimising binary translator.\n\
+  --no-instret          Disable precise instret updating in binary translated code.\n\
+  --help                Display this help message.\n\
 ";
 
 int main(int argc, const char **argv) {
@@ -36,7 +38,8 @@ int main(int argc, const char **argv) {
     bool use_paging = false;
     bool strace = false;
     bool disassemble = false;
-    bool use_dbt = true;
+    bool use_dbt = false;
+    bool use_ir = true;
     bool no_instret = false;
 
     // Parsing arguments
@@ -55,7 +58,11 @@ int main(int argc, const char **argv) {
             strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
             disassemble = true;
-        } else if (strcmp(arg, "--disable-dbt") == 0) {
+        } else if (strcmp(arg, "--engine=dbt") == 0) {
+            use_ir = false;
+            use_dbt = true;
+        } else if (strcmp(arg, "--engine=interpreter") == 0) {
+            use_ir = false;
             use_dbt = false;
         } else if (strcmp(arg, "--no-instret") == 0) {
             no_instret = true;
@@ -149,7 +156,12 @@ int main(int argc, const char **argv) {
     context->lr = 0;
 
     try {
-        if (use_dbt) {
+        if (use_ir) {
+            Ir_dbt executor { state };
+            while (true) {
+                executor.step(*context);
+            }
+        } else if (use_dbt) {
             Dbt_runtime executor { state };
             while (true) {
                 executor.step(*context);

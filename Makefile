@@ -20,6 +20,7 @@ OBJS = \
 	ir/register_access_elimination.o \
 	main/dbt.o \
 	main/interpreter.o \
+	main/ir_dbt.o \
 	main/main.o \
 	main/signal.o \
 	riscv/decoder.o \
@@ -31,6 +32,7 @@ OBJS = \
 	util/code_buffer.o \
 	util/format.o \
 	util/safe_memory.o \
+	x86/backend.o \
 	x86/disassembler.o \
 	x86/encoder.o
 
