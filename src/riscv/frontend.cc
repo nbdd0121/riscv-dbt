@@ -31,7 +31,7 @@ struct Frontend {
     void emit_alu(Instruction inst, ir::Opcode op, bool w);
     void emit_shift(Instruction inst, ir::Opcode op, bool w);
     void emit_slt(Instruction inst, ir::Opcode op);
-    void emit_branch(Instruction instead, ir::Opcode op);
+    void emit_branch(Instruction instead, ir::Opcode op, emu::reg_t pc);
 
     void compile(const Basic_block& block);
 };
@@ -123,22 +123,20 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
     emit_store_register(inst.rd(), rd_node);
 }
 
-void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
+void Frontend::emit_branch(Instruction inst, ir::Opcode opcode, emu::reg_t pc) {
     auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
     auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
     auto cmp_node = builder.compare(opcode, rs1_node, rs2_node);
 
-    auto pc_offset = -inst.length() + inst.imm();
-    auto pc_offset_node = builder.constant(ir::Type::i64, pc_offset);
+    auto new_pc_node = builder.constant(ir::Type::i64, pc + inst.imm());
 
     bool use_mux = true;
-    if (-pc_offset == block->end_pc - block->start_pc) use_mux = false;
+    if (pc + inst.imm() == block->start_pc) use_mux = false;
 
     if (use_mux) {
-        auto pc_node = builder.load_register(last_side_effect, 64);
-        auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
+        auto pc_node = builder.constant(ir::Type::i64, block->end_pc);
         auto mux_node = builder.mux(cmp_node, new_pc_node, pc_node);
-        auto store_pc_node = builder.store_register(pc_node, 64, mux_node);
+        auto store_pc_node = builder.store_register(last_side_effect, 64, mux_node);
         auto jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
         auto end_node = builder.control(ir::Opcode::end, {jmp_node});
         graph.root(end_node);
@@ -150,13 +148,11 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode) {
 
         // Building the true branch.
         auto true_block_node = builder.control(ir::Opcode::block, {if_true_node});
-        auto pc_node = builder.load_register(true_block_node, 64);
-        auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
-        auto store_pc_node = builder.store_register(pc_node, 64, new_pc_node);
+        auto store_pc_node = builder.store_register(true_block_node, 64, new_pc_node);
         auto true_jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
 
         // If the jump target happens to be the basic block itself, create a loop.
-        if (-pc_offset == block->end_pc - block->start_pc) {
+        if (pc + inst.imm() == block->start_pc) {
             (*graph.start()->dependants().begin())->dependency_add(true_jmp_node);
             auto end_node = builder.control(ir::Opcode::end, {if_false_node});
             graph.root(end_node);
@@ -176,10 +172,8 @@ void Frontend::compile(const Basic_block& block) {
     last_side_effect = block_node;
 
     // Update pc
-    auto pc_node = builder.load_register(last_side_effect, 64);
-    auto pc_offset_node = builder.constant(ir::Type::i64, block.end_pc - block.start_pc);
-    auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
-    last_side_effect = builder.store_register(pc_node, 64, new_pc_node);
+    auto end_pc_node = builder.constant(ir::Type::i64, block.end_pc);
+    last_side_effect = builder.store_register(last_side_effect, 64, end_pc_node);
 
     // Update instret
     if (!state.no_instret) {
@@ -189,15 +183,13 @@ void Frontend::compile(const Basic_block& block) {
         last_side_effect = builder.store_register(instret_node, 65, new_instret_node);
     }
 
-    riscv::reg_t pc_offset = block.start_pc - block.end_pc;
+    riscv::reg_t pc = block.start_pc;
     for (auto& inst: block.instructions) {
         switch (inst.opcode()) {
             case Opcode::auipc: {
                 if (inst.rd() == 0) break;
-                auto pc_node = builder.load_register(last_side_effect, 64);
-                auto offset_node = builder.constant(ir::Type::i64, pc_offset + inst.imm());
-                auto rd_node = builder.arithmetic(ir::Opcode::add, pc_node, offset_node);
-                last_side_effect = builder.store_register(pc_node, inst.rd(), rd_node);
+                auto rd_node = builder.constant(ir::Type::i64, pc + inst.imm());
+                last_side_effect = builder.store_register(last_side_effect, inst.rd(), rd_node);
                 break;
             }
             case Opcode::lui: {
@@ -246,14 +238,11 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::srlw: emit_shift(inst, ir::Opcode::shr, true); break;
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
             case Opcode::jal: {
-                auto pc_node = builder.load_register(last_side_effect, 64);
-                last_side_effect = pc_node;
                 if (inst.rd()) {
-                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), pc_node);
+                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), end_pc_node);
                 }
-                ASSERT(pc_offset + inst.length() == 0);
-                auto pc_offset_node = builder.constant(ir::Type::i64, -inst.length() + inst.imm());
-                auto new_pc_node = builder.arithmetic(ir::Opcode::add, pc_node, pc_offset_node);
+                ASSERT(pc + inst.length() == block.end_pc);
+                auto new_pc_node = builder.constant(ir::Type::i64, pc + inst.imm());
                 last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
                 break;
             }
@@ -266,25 +255,24 @@ void Frontend::compile(const Basic_block& block) {
                     builder.constant(ir::Type::i64, ~1)
                 );
                 if (inst.rd()) {
-                    auto pc_node = builder.load_register(last_side_effect, 64);
-                    last_side_effect = builder.store_register(pc_node, inst.rd(), pc_node);
+                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), end_pc_node);
                 }
                 last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
                 break;
             }
-            case Opcode::beq: emit_branch(inst, ir::Opcode::eq); return;
-            case Opcode::bne: emit_branch(inst, ir::Opcode::ne); return;
-            case Opcode::blt: emit_branch(inst, ir::Opcode::lt); return;
-            case Opcode::bge: emit_branch(inst, ir::Opcode::ge); return;
-            case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu); return;
-            case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu); return;
+            case Opcode::beq: emit_branch(inst, ir::Opcode::eq, pc); return;
+            case Opcode::bne: emit_branch(inst, ir::Opcode::ne, pc); return;
+            case Opcode::blt: emit_branch(inst, ir::Opcode::lt, pc); return;
+            case Opcode::bge: emit_branch(inst, ir::Opcode::ge, pc); return;
+            case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
+            case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
             default: {
                 last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {}, {last_side_effect}));
                 last_side_effect->attribute(util::read_as<uint64_t>(&inst));
                 break;
             }
         }
-        pc_offset += inst.length();
+        pc += inst.length();
     }
 
     auto jmp_node = builder.control(ir::Opcode::jmp, {last_side_effect});
