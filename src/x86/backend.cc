@@ -260,39 +260,25 @@ Operand Backend::get_location(ir::Instruction* inst) {
     return ptr->second;
 }
 
-Operand Backend::get_location_ex(ir::Instruction* inst) {
+Operand Backend::get_location_ex(ir::Instruction* inst, bool allow_mem, bool allow_imm) {
     if (inst->opcode() == ir::Opcode::constant) {
-        if (is_int32(inst->attribute())) {
+        if (allow_imm && is_int32(inst->attribute())) {
             return inst->attribute();
         }
         Register reg = alloc_register(inst->type());
         emit(mov(reg, inst->attribute()));
         return reg;
     }
-    auto ptr = location.find(inst);
-    ASSERT(ptr != location.end());
-    return ptr->second;
-}
-
-Register Backend::get_register_location(ir::Instruction* inst) {
     Operand loc = get_location(inst);
-    if (loc.is_register()) return loc.as_register();
+    if (allow_mem || loc.is_register()) return loc;
 
     Register reg = alloc_register(inst->type());
     move_location(inst, reg);
     return reg;
 }
 
-Operand Backend::get_register_or_immediate_location(ir::Instruction* inst) {
-    if (inst->opcode() == ir::Opcode::constant) {
-        if (is_int32(inst->attribute())) {
-            return inst->attribute();
-        }
-        Register reg = alloc_register(inst->type());
-        emit(mov(reg, inst->attribute()));
-        return reg;
-    }
-    return get_register_location(inst);
+Register Backend::get_register_location(ir::Instruction* inst) {
+    return get_location_ex(inst, false, false).as_register();
 }
 
 void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
@@ -333,7 +319,7 @@ void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
     }
 
     pin_register(reg);
-    emit(binary(opcode, reg, get_location_ex(op1)));
+    emit(binary(opcode, reg, get_location_ex(op1, true, true)));
     unpin_register(reg);
     decrease_reference(op1);
 }
@@ -450,7 +436,7 @@ Condition_code Backend::emit_compare(ir::Instruction* inst) {
     // Decrease reference early, so if it is the last use we can eliminate one move.
     Register loc0 = get_register_location(op0);
     pin_register(loc0);
-    emit(cmp(loc0, get_location_ex(op1)));
+    emit(cmp(loc0, get_location_ex(op1, true, true)));
     unpin_register(loc0);
 
     if (--refcount == 0) {
@@ -484,7 +470,7 @@ void Backend::after(ir::Instruction* inst) {
         case ir::Opcode::store_register: {
             auto op = inst->operand(0);
 
-            Operand loc = get_register_or_immediate_location(op);
+            Operand loc = get_location_ex(op, false, true);
             decrease_reference(op);
 
             // Move the allocated machine register back to the emulated register.
@@ -767,7 +753,7 @@ void Backend::after(ir::Instruction* inst) {
             bind_register(inst, reg);
 
             // Move false operand to register.
-            if (!same_location(loc2, reg)) {
+            if ((loc2.is_register() && loc2.as_register() == Register::none) || !same_location(loc2, reg)) {
                 if (op2->opcode() == ir::Opcode::constant) {
                     emit(mov(reg, op2->attribute()));
                 } else {
@@ -776,7 +762,7 @@ void Backend::after(ir::Instruction* inst) {
             }
 
             pin_register(reg);
-            emit(cmovcc(cc, reg, get_location_ex(op1)));
+            emit(cmovcc(cc, reg, get_location_ex(op1, true, false)));
             unpin_register(reg);
             decrease_reference(op1);
             break;

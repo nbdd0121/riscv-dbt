@@ -69,11 +69,10 @@ public:
     void decrease_reference(ir::Instruction* inst);
 
     Operand get_location(ir::Instruction* inst);
-    Operand get_location_ex(ir::Instruction* inst);
+    Operand get_location_ex(ir::Instruction* inst, bool allow_mem, bool allow_imm);
 
     // Get location, but guaranteed to be a register. This call might cause register to spill.
     Register get_register_location(ir::Instruction* inst);
-    Operand get_register_or_immediate_location(ir::Instruction* inst);
 
     void emit_alu(ir::Instruction* inst, Opcode opcode);
     void emit_shift(ir::Instruction* inst, Opcode opcode);
