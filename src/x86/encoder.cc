@@ -485,6 +485,24 @@ void Encoder::emit_imul(const Instruction& inst) {
     emit_r_rm(op_size, inst.operands[1], inst.operands[0].as_register(), 0x0FAF);
 }
 
+// Emit code for jcc
+void Encoder::emit_jcc(const Instruction& inst) {
+    const Operand& dst = inst.operands[0];
+    ASSERT(inst.operands[1].is_empty() && dst.is_immediate());
+
+    uint64_t imm = dst.as_immediate();
+    if (is_int8(imm)) {
+        emit_byte(0x70 + static_cast<uint8_t>(inst.cond));
+        emit_byte(imm);
+        return;
+    }
+
+    ASSERT(is_int32(imm));
+    emit_byte(0x0F);
+    emit_byte(0x80 + static_cast<uint8_t>(inst.cond));
+    emit_dword(imm);
+}
+
 // Emit code for jmp
 void Encoder::emit_jmp(const Instruction& inst) {
     const Operand& dst = inst.operands[0];
@@ -764,6 +782,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::div: emit_rm(inst, 0xF6, 6); break;
         case Opcode::idiv: emit_rm(inst, 0xF6, 7); break;
         case Opcode::imul: emit_imul(inst); break;
+        case Opcode::jcc: emit_jcc(inst); break;
         case Opcode::jmp: emit_jmp(inst); break;
         case Opcode::lea: emit_lea(inst); break;
         case Opcode::mov: emit_mov(inst); break;

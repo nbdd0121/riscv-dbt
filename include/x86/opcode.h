@@ -35,6 +35,7 @@ enum class Opcode: uint16_t {
     div,
     idiv,
     imul,
+    jcc,
     jmp,
     lea,
     mov,

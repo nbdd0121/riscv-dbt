@@ -182,6 +182,8 @@ void print_instruction(uint64_t pc, const char *code, size_t length, const Instr
 
     if (inst.opcode == Opcode::cmovcc) {
         util::log("        cmov{:-4}", condition_code_name(inst.cond));
+    } else if (inst.opcode == Opcode::jcc) {
+        util::log("        j{:-7}", condition_code_name(inst.cond));
     } else if (inst.opcode == Opcode::setcc) {
         util::log("        set{:-5}", condition_code_name(inst.cond));
     } else {

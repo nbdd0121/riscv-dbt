@@ -153,6 +153,16 @@ NULLARY(cdq) NULLARY(cqo)
 UNARY(div)
 UNARY(idiv)
 UNARY(imul) BINARY(imul)
+
+[[maybe_unused]]
+static Instruction jcc(Condition_code cc, const Operand& op) {
+    Instruction ret;
+    ret.opcode = Opcode::jcc;
+    ret.cond = cc;
+    ret.operands[0] = op;
+    return ret;
+}
+
 UNARY(jmp)
 BINARY(lea)
 BINARY(mov)

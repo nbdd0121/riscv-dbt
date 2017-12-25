@@ -32,6 +32,7 @@ private:
 
     void emit_call(const Instruction& inst);
     void emit_imul(const Instruction& inst);
+    void emit_jcc(const Instruction& inst);
     void emit_jmp(const Instruction& inst);
     void emit_lea(const Instruction& inst);
     void emit_mov(const Instruction& inst);
