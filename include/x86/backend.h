@@ -34,8 +34,6 @@ private:
     // Tracks whether a register can be spilled, i.e. not pinned.
     std::array<bool, 16> pinned {};
 
-    std::vector<Memory> free_memory_location;
-
 public:
     Backend(emu::State& state, util::Code_buffer& buffer): _state {state}, _encoder{buffer} {}
 
@@ -82,8 +80,14 @@ public:
     void emit_unary(ir::Instruction* inst, Opcode opcode);
     Condition_code emit_compare(ir::Instruction* inst);
 
+    void clear();
+
 protected:
+    virtual bool before(ir::Instruction* inst) override { return inst->opcode() == ir::Opcode::block; }
     virtual void after(ir::Instruction* inst) override;
+
+public:
+    void run(ir::Graph& graph);
 };
 
 }

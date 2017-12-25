@@ -3,6 +3,7 @@
 #include "riscv/context.h"
 #include "util/format.h"
 #include "util/functional.h"
+#include "util/memory.h"
 #include "x86/backend.h"
 #include "x86/builder.h"
 #include "x86/disassembler.h"
@@ -154,13 +155,8 @@ void Backend::spill_register(Register reg) {
     auto ptr = memory_location.find(inst);
     if (ptr == memory_location.end()) {
         Memory mem;
-        // if (free_memory_location.empty()) {
-            stack_size -= 8;
-            mem = qword(Register::none + ((uintptr_t)spill_area - stack_size));
-        // } else {
-            // mem = free_memory_location.back();
-            // free_memory_location.pop_back();
-        // }
+        stack_size -= 8;
+        mem = qword(Register::none + ((uintptr_t)spill_area - stack_size));
         mem.size = get_type_size(inst->type()) / 8;
         memory_location[inst] = mem;
         move_location(inst, mem);
@@ -245,12 +241,6 @@ void Backend::decrease_reference(ir::Instruction* inst) {
 
         if (loc.is_register()) {
             register_content[register_id(loc.as_register())] = nullptr;
-        }
-
-        auto ptr = memory_location.find(inst);
-        if (ptr != memory_location.end()) {
-            free_memory_location.push_back(ptr->second);
-            memory_location.erase(ptr);
         }
 
         location.erase(inst);
@@ -473,26 +463,10 @@ Condition_code Backend::emit_compare(ir::Instruction* inst) {
 
 void Backend::after(ir::Instruction* inst) {
     switch (inst->opcode()) {
-        case ir::Opcode::start:
-            // util::log("start!\n");
-            emit(push(Register::rbp));
-            emit(mov(Register::rbp, Register::rdi));
-            break;
-        case ir::Opcode::end:
-            // util::log("end!\n");
-            emit(pop(Register::rbp));
-            emit(ret());
-            break;
         case ir::Opcode::block:
-            // util::log("start of block\n");
-            break;
         case ir::Opcode::jmp:
         case ir::Opcode::i_if:
-            // util::log("end of block\n");
-            break;
-        case ir::Opcode::if_true:
-        case ir::Opcode::if_false:
-            // util::log("some branching code here\n");
+            // These are not handled here.
             break;
         case ir::Opcode::constant:
             // constants are handled specially with in generation of each instruction that takes a value.
@@ -826,6 +800,134 @@ void Backend::after(ir::Instruction* inst) {
         case ir::Opcode::geu: break;
         default: ASSERT(0);
     }
+}
+
+// Clear all code generation information. These are relevant only in a basic block.
+void Backend::clear() {
+    stack_size = 0;
+    reference_count.clear();
+    location.clear();
+    memory_location.clear();
+    for (auto& loc: register_content) loc = nullptr;
+    for (auto& loc: pinned) loc = false;
+}
+
+void Backend::run(ir::Graph& graph) {
+    std::vector<ir::Instruction*> blocks;
+    std::vector<ir::Instruction*> to_process;
+
+    auto start = graph.start();
+    ASSERT(start->dependants().size() == 1);
+    to_process.push_back(*start->dependants().begin());
+
+    // Some very naive basic block scheduling.
+    while (!to_process.empty()) {
+        auto block = to_process.back();
+        to_process.pop_back();
+
+        if (block->opcode() == ir::Opcode::end) continue;
+
+        // Make sure the block is not yet in the list.
+        if (std::find(blocks.begin(), blocks.end(), block) != blocks.end()) {
+            continue;
+        }
+
+        blocks.push_back(block);
+
+        ASSERT(block->opcode() == ir::Opcode::block);
+
+        // Use attribute.pointer to find the last node of the block.
+        auto end = static_cast<ir::Instruction*>(block->attribute_pointer());
+
+        if (end->opcode() == ir::Opcode::i_if) {
+            for (auto ref: end->dependants()) {
+                to_process.push_back(*ref->dependants().begin());
+            }
+
+        } else {
+            ASSERT(end->opcode() == ir::Opcode::jmp);
+            to_process.push_back(*end->dependants().begin());
+        }
+    }
+
+    // Now we have a linear list of blocks.
+
+    // Generate epilogue.
+    emit(push(Register::rbp));
+    emit(mov(Register::rbp, Register::rdi));
+
+    // In the simple case, we don't have to do relocations.
+    if (blocks.size() == 1) {
+        run_on(graph, static_cast<ir::Instruction*>(blocks[0]->attribute_pointer()));
+        emit(pop(Register::rbp));
+        emit(ret());
+        return;
+    }
+
+    // Push end to the block list to ease processing.
+    blocks.push_back(graph.root());
+
+    // These are used for relocation
+    std::unordered_map<ir::Instruction*, int> label_def;
+    std::unordered_map<ir::Instruction*, std::vector<int>> label_use;
+
+    for (size_t i = 0; i < blocks.size() - 1; i++) {
+        auto block = blocks[i];
+        auto next_block = blocks[i + 1];
+        auto end = static_cast<ir::Instruction*>(block->attribute_pointer());
+
+        // Store the label for relocation purpose.
+        label_def[block] = _encoder.buffer().size();
+
+        // Generate code for the block.
+        run_on(graph, end);
+
+        // This records the fallthrough target.
+        ir::Instruction* target = nullptr;
+
+        if (end->opcode() == ir::Opcode::i_if) {
+
+            // Extract targets
+            ir::Instruction *true_target;
+            for (auto ref: end->dependants()) {
+                if (ref->opcode() == ir::Opcode::if_true) true_target = *ref->dependants().begin();
+                else if (ref->opcode() == ir::Opcode::if_false) target = *ref->dependants().begin();
+            }
+            ASSERT(true_target && target);
+
+            auto op = end->operand(0);
+            if (op->opcode() == ir::Opcode::constant) {
+                if (op->attribute()) target = true_target;
+            } else {
+                Condition_code cc = emit_compare(op);
+                emit(jcc(cc, 0xCAFE));
+                label_use[true_target].push_back(_encoder.buffer().size());
+            }
+        } else {
+            ASSERT(end->opcode() == ir::Opcode::jmp);
+            target = *end->dependants().begin();
+        }
+
+        if (target != next_block) {
+            emit(jmp(0xBEEF));
+            label_use[target].push_back(_encoder.buffer().size());
+        }
+
+        clear();
+    }
+
+    label_def[graph.root()] = _encoder.buffer().size();
+
+    // Patching labels
+    for (const auto& pair: label_def) {
+        auto& uses = label_use[pair.first];
+        for (auto use: uses) {
+            util::write_as<uint32_t>(_encoder.buffer().data() + use - 4, pair.second - use);
+        }
+    }
+
+    emit(pop(Register::rbp));
+    emit(ret());
 }
 
 }
