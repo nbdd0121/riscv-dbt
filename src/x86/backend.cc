@@ -854,8 +854,8 @@ void Backend::run(ir::Graph& graph) {
     blocks.push_back(graph.root());
 
     // These are used for relocation
-    std::unordered_map<ir::Instruction*, int> label_def;
-    std::unordered_map<ir::Instruction*, std::vector<int>> label_use;
+    std::unordered_map<ir::Instruction*, size_t> label_def;
+    std::unordered_map<ir::Instruction*, std::vector<size_t>> label_use;
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
@@ -886,6 +886,11 @@ void Backend::run(ir::Graph& graph) {
                 if (op->attribute()) target = true_target;
             } else {
                 Condition_code cc = emit_compare(op);
+                if (true_target == next_block) {
+                    // Invert condition code.
+                    cc = static_cast<Condition_code>(static_cast<uint8_t>(cc) ^ 1);
+                    std::swap(true_target, target);
+                }
                 emit(jcc(cc, 0xCAFE));
                 label_use[true_target].push_back(_encoder.buffer().size());
             }
