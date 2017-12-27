@@ -11,55 +11,9 @@ Node::Node(Type type, Opcode opcode, std::vector<Node*>&& dependencies, std::vec
     link();
 }
 
-Node::Node(const Node& node):
-    _dependencies(node._dependencies), _operands(node._operands),
-    _attribute {node._attribute}, _type {node._type}, _opcode{node._opcode} {
-
-    link();
-}
-
-Node::Node(Node&& node):
-    _dependencies(std::move(node._dependencies)), _operands(std::move(node._operands)),
-    _attribute {node._attribute}, _type {node._type}, _opcode{node._opcode} {
-
-    relink(&node);
-}
-
 Node::~Node() {
     ASSERT(_references.size() == 0);
     unlink();
-}
-
-void Node::operator =(const Node& node) {
-
-    // Unlink will not create dangling reference here.
-    unlink();
-
-    // Copy _operands but not _references, as they are technically not part of the node.
-    _dependencies = node._dependencies;
-    _operands = node._operands;
-    link();
-
-    // Copy fields
-    _attribute = node._attribute;
-    _type = node._type;
-    _opcode = node._opcode;
-}
-
-void Node::operator =(Node&& node) {
-
-    // Unlink will not create dangling reference here.
-    unlink();
-
-    // Move _operands but not _references, as they are technically not part of the node.
-    _dependencies = std::move(node._dependencies);
-    _operands = std::move(node._operands);
-    relink(&node);
-
-    // Copy fields
-    _attribute = node._attribute;
-    _type = node._type;
-    _opcode = node._opcode;
 }
 
 void Node::dependency_link() {
@@ -83,15 +37,6 @@ void Node::operand_link() {
 void Node::operand_unlink() {
     for (auto operand: _operands) {
         operand->_references.remove(this);
-    }
-}
-
-void Node::relink(Node* node) {
-    for (auto operand: _operands) {
-        operand->_references.replace(node, this);
-    }
-    for (auto dependency: _dependencies) {
-        dependency->_dependants.replace(node, this);
     }
 }
 

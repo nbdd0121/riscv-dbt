@@ -140,6 +140,8 @@ static bool is_commutative_opcode(Opcode opcode) {
     }
 }
 
+class Graph;
+
 class Node {
 private:
 
@@ -189,12 +191,13 @@ public:
         std::vector<Node*>&& operands
     );
 
-    Node(const Node& node);
-    Node(Node&& node);
     ~Node();
 
-    void operator =(const Node& node);
-    void operator =(Node&& node);
+    // Disable copy construction and assignment. Node should live on heap.
+    Node(const Node& node) = delete;
+    Node(Node&& node) = delete;
+    void operator =(const Node& node) = delete;
+    void operator =(Node&& node) = delete;
 
 private:
     void dependency_link();
@@ -203,7 +206,6 @@ private:
     void operand_unlink();
     void link() { dependency_link(); operand_link(); }
     void unlink() { dependency_unlink(); operand_unlink(); }
-    void relink(Node* node);
 
 public:
     // Field accessors and mutators
@@ -250,7 +252,7 @@ public:
     // Reference accessors
     const util::Array_multiset<Node*>& references() const { return _references; }
 
-    friend class Graph;
+    friend Graph;
     friend pass::Pass;
 };
 
