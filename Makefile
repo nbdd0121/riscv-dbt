@@ -14,7 +14,7 @@ OBJS = \
 	ir/block_marker.o \
 	ir/dot_printer.o \
 	ir/evaluator.o \
-	ir/instruction.o \
+	ir/node.o \
 	ir/pass.o \
 	ir/local_value_numbering.o \
 	ir/register_access_elimination.o \

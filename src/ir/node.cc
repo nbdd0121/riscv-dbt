@@ -1,107 +1,107 @@
 #include <algorithm>
 
-#include "ir/instruction.h"
+#include "ir/node.h"
 #include "ir/pass.h"
 
 namespace ir {
 
-Instruction::Instruction(Type type, Opcode opcode, std::vector<Instruction*>&& dependencies, std::vector<Instruction*>&& operands):
+Node::Node(Type type, Opcode opcode, std::vector<Node*>&& dependencies, std::vector<Node*>&& operands):
     _dependencies(std::move(dependencies)), _operands(std::move(operands)), _type {type}, _opcode{opcode} {
 
     link();
 }
 
-Instruction::Instruction(const Instruction& inst):
-    _dependencies(inst._dependencies), _operands(inst._operands),
-    _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
+Node::Node(const Node& node):
+    _dependencies(node._dependencies), _operands(node._operands),
+    _attribute {node._attribute}, _type {node._type}, _opcode{node._opcode} {
 
     link();
 }
 
-Instruction::Instruction(Instruction&& inst):
-    _dependencies(std::move(inst._dependencies)), _operands(std::move(inst._operands)),
-    _attribute {inst._attribute}, _type {inst._type}, _opcode{inst._opcode} {
+Node::Node(Node&& node):
+    _dependencies(std::move(node._dependencies)), _operands(std::move(node._operands)),
+    _attribute {node._attribute}, _type {node._type}, _opcode{node._opcode} {
 
-    relink(&inst);
+    relink(&node);
 }
 
-Instruction::~Instruction() {
+Node::~Node() {
     ASSERT(_references.size() == 0);
     unlink();
 }
 
-void Instruction::operator =(const Instruction& inst) {
+void Node::operator =(const Node& node) {
 
     // Unlink will not create dangling reference here.
     unlink();
 
-    // Copy _operands but not _references, as they are technically not part of the instruction.
-    _dependencies = inst._dependencies;
-    _operands = inst._operands;
+    // Copy _operands but not _references, as they are technically not part of the node.
+    _dependencies = node._dependencies;
+    _operands = node._operands;
     link();
 
     // Copy fields
-    _attribute = inst._attribute;
-    _type = inst._type;
-    _opcode = inst._opcode;
+    _attribute = node._attribute;
+    _type = node._type;
+    _opcode = node._opcode;
 }
 
-void Instruction::operator =(Instruction&& inst) {
+void Node::operator =(Node&& node) {
 
     // Unlink will not create dangling reference here.
     unlink();
 
-    // Move _operands but not _references, as they are technically not part of the instruction.
-    _dependencies = std::move(inst._dependencies);
-    _operands = std::move(inst._operands);
-    relink(&inst);
+    // Move _operands but not _references, as they are technically not part of the node.
+    _dependencies = std::move(node._dependencies);
+    _operands = std::move(node._operands);
+    relink(&node);
 
     // Copy fields
-    _attribute = inst._attribute;
-    _type = inst._type;
-    _opcode = inst._opcode;
+    _attribute = node._attribute;
+    _type = node._type;
+    _opcode = node._opcode;
 }
 
-void Instruction::dependency_link() {
+void Node::dependency_link() {
     for (auto dependency: _dependencies) {
         dependency->_dependants.insert(this);
     }
 }
 
-void Instruction::dependency_unlink() {
+void Node::dependency_unlink() {
     for (auto dependency: _dependencies) {
         dependency->_dependants.remove(this);
     }
 }
 
-void Instruction::operand_link() {
+void Node::operand_link() {
     for (auto operand: _operands) {
         operand->_references.insert(this);
     }
 }
 
-void Instruction::operand_unlink() {
+void Node::operand_unlink() {
     for (auto operand: _operands) {
         operand->_references.remove(this);
     }
 }
 
-void Instruction::relink(Instruction* inst) {
+void Node::relink(Node* node) {
     for (auto operand: _operands) {
-        operand->_references.replace(inst, this);
+        operand->_references.replace(node, this);
     }
     for (auto dependency: _dependencies) {
-        dependency->_dependants.replace(inst, this);
+        dependency->_dependants.replace(node, this);
     }
 }
 
-void Instruction::dependencies(std::vector<Instruction*>&& dependencies) {
+void Node::dependencies(std::vector<Node*>&& dependencies) {
     dependency_unlink();
     _dependencies = std::move(dependencies);
     dependency_link();
 }
 
-void Instruction::dependency_update(Instruction* oldinst, Instruction* newinst) {
+void Node::dependency_update(Node* oldinst, Node* newinst) {
     ASSERT(oldinst && newinst);
 
     auto ptr = std::find(_dependencies.begin(), _dependencies.end(), oldinst);
@@ -111,29 +111,29 @@ void Instruction::dependency_update(Instruction* oldinst, Instruction* newinst) 
     oldinst->_dependants.remove(this);
 }
 
-void Instruction::dependency_add(Instruction* inst) {
-    ASSERT(inst);
-    _dependencies.push_back(inst);
-    inst->_dependants.insert(this);
+void Node::dependency_add(Node* node) {
+    ASSERT(node);
+    _dependencies.push_back(node);
+    node->_dependants.insert(this);
 }
 
-void Instruction::operands(std::vector<Instruction*>&& operands) {
+void Node::operands(std::vector<Node*>&& operands) {
     operand_unlink();
     _operands = std::move(operands);
     operand_link();
 }
 
-void Instruction::operand_set(size_t index, Instruction* inst) {
+void Node::operand_set(size_t index, Node* node) {
     ASSERT(index < _operands.size());
-    ASSERT(inst);
+    ASSERT(node);
 
     auto& ptr = _operands[index];
-    inst->_references.insert(this);
+    node->_references.insert(this);
     ptr->_references.remove(this);
-    ptr = inst;
+    ptr = node;
 }
 
-void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
+void Node::operand_update(Node* oldinst, Node* newinst) {
     ASSERT(oldinst && newinst);
 
     auto ptr = std::find(_operands.begin(), _operands.end(), oldinst);
@@ -144,7 +144,7 @@ void Instruction::operand_update(Instruction* oldinst, Instruction* newinst) {
 }
 
 Graph::Graph() {
-    _start = manage(new Instruction(Type::none, Opcode::start, {}, {}));
+    _start = manage(new Node(Type::none, Opcode::start, {}, {}));
 }
 
 Graph& Graph::operator=(Graph&& graph) {
@@ -155,12 +155,12 @@ Graph& Graph::operator=(Graph&& graph) {
 }
 
 Graph::~Graph() {
-    for (auto inst: _heap) {
-        inst->_dependencies.clear();
-        inst->_operands.clear();
-        inst->_dependants.clear();
-        inst->_references.clear();
-        delete inst;
+    for (auto node: _heap) {
+        node->_dependencies.clear();
+        node->_operands.clear();
+        node->_dependants.clear();
+        node->_references.clear();
+        delete node;
     }
 }
 

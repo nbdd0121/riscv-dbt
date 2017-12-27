@@ -5,7 +5,7 @@
 #include <unordered_map>
 
 #include "emu/typedef.h"
-#include "ir/instruction.h"
+#include "ir/node.h"
 #include "util/code_buffer.h"
 
 namespace emu {

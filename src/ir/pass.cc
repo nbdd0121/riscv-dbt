@@ -1,9 +1,9 @@
-#include "ir/instruction.h"
+#include "ir/node.h"
 #include "ir/pass.h"
 
 namespace ir::pass {
 
-void Pass::replace(Instruction* oldnode, Instruction* newnode) {
+void Pass::replace(Node* oldnode, Node* newnode) {
     while (!oldnode->dependants().empty()) {
         (*oldnode->dependants().rbegin())->dependency_update(oldnode, newnode);
     }
@@ -13,29 +13,29 @@ void Pass::replace(Instruction* oldnode, Instruction* newnode) {
     }
 }
 
-void Pass::run_recurse(Instruction* inst) {
-    if (inst->_visited) return;
-    if (before(inst)) {
-        inst->_visited = 1;
+void Pass::run_recurse(Node* node) {
+    if (node->_visited) return;
+    if (before(node)) {
+        node->_visited = 1;
         return;
     }
 
-    inst->_visited = 2;
+    node->_visited = 2;
 
     // Visit all dependencies
-    for (auto dependency: inst->dependencies()) run_recurse(dependency);
-    for (auto operand: inst->operands()) run_recurse(operand);
-    after(inst);
-    inst->_visited = 1;
+    for (auto dependency: node->dependencies()) run_recurse(dependency);
+    for (auto operand: node->operands()) run_recurse(operand);
+    after(node);
+    node->_visited = 1;
 }
 
-void Pass::run_on(Graph& graph, Instruction* inst) {
+void Pass::run_on(Graph& graph, Node* node) {
     _graph = &graph;
-    for (auto inst: graph._heap) {
-        inst->_visited = false;
+    for (auto node: graph._heap) {
+        node->_visited = false;
     }
     start();
-    run_recurse(inst);
+    run_recurse(node);
     finish();
 }
 

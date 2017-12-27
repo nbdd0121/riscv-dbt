@@ -1,23 +1,23 @@
-#include "ir/instruction.h"
+#include "ir/node.h"
 #include "ir/pass.h"
 
 namespace ir::pass {
 
-size_t Local_value_numbering::Hash::operator ()(Instruction* inst) const noexcept {
+size_t Local_value_numbering::Hash::operator ()(Node* node) const noexcept {
 
-    ASSERT(is_pure_opcode(inst->opcode()));
+    ASSERT(is_pure_opcode(node->opcode()));
 
-    size_t hash = static_cast<uint8_t>(inst->opcode());
-    hash ^= static_cast<uint8_t>(inst->type());
+    size_t hash = static_cast<uint8_t>(node->opcode());
+    hash ^= static_cast<uint8_t>(node->type());
 
-    for (auto operand: inst->operands()) {
+    for (auto operand: node->operands()) {
         hash ^= reinterpret_cast<uintptr_t>(operand);
     }
 
-    switch (inst->opcode()) {
+    switch (node->opcode()) {
         case Opcode::constant:
         case Opcode::cast:
-            hash ^= inst->attribute();
+            hash ^= node->attribute();
             break;
         default: break;
     }
@@ -25,7 +25,7 @@ size_t Local_value_numbering::Hash::operator ()(Instruction* inst) const noexcep
     return hash;
 }
 
-bool Local_value_numbering::Equal_to::operator ()(Instruction* a, Instruction* b) const noexcept {
+bool Local_value_numbering::Equal_to::operator ()(Node* a, Node* b) const noexcept {
     if (a->opcode() != b->opcode()) return false;
 
     ASSERT(is_pure_opcode(a->opcode()));
@@ -50,25 +50,25 @@ bool Local_value_numbering::Equal_to::operator ()(Instruction* a, Instruction* b
     return true;
 }
 
-// Helper function that replaces current instruction with a constant node. It will keep type intact.
-void Local_value_numbering::replace_with_constant(Instruction* inst, uint64_t value) {
-    inst->attribute(value);
-    inst->opcode(Opcode::constant);
-    inst->operands({});
+// Helper function that replaces current node with a constant node. It will keep type intact.
+void Local_value_numbering::replace_with_constant(Node* node, uint64_t value) {
+    node->attribute(value);
+    node->opcode(Opcode::constant);
+    node->operands({});
 }
 
-void Local_value_numbering::after(Instruction* inst) {
-    auto opcode = inst->opcode();
+void Local_value_numbering::after(Node* node) {
+    auto opcode = node->opcode();
 
     if (!is_pure_opcode(opcode)) return;
 
     if (opcode == Opcode::cast) {
         // Folding cast node.
-        auto x = inst->operand(0);
+        auto x = node->operand(0);
 
         // If the operand is constant, then perform constant folding.
         if (x->opcode() == Opcode::constant) {
-            replace_with_constant(inst, Evaluator::cast(inst->type(), x->type(), inst->attribute(), x->attribute()));
+            replace_with_constant(node, Evaluator::cast(node->type(), x->type(), node->attribute(), x->attribute()));
             goto lvn;
         }
 
@@ -76,11 +76,11 @@ void Local_value_numbering::after(Instruction* inst) {
         if (x->opcode() == Opcode::cast) {
             auto y = x->operand(0);
             size_t ysize = get_type_size(y->type());
-            size_t size = get_type_size(inst->type());
+            size_t size = get_type_size(node->type());
 
             // If the size is same, then eliminate.
             if (ysize == size) {
-                replace(inst, y);
+                replace(node, y);
                 return;
             }
 
@@ -89,26 +89,26 @@ void Local_value_numbering::after(Instruction* inst) {
             if (ysize > xsize && xsize < size) goto lvn;
 
             // An up-cast followed by an up-cast cannot be folded if sext does not match.
-            if (ysize < xsize && xsize < size && x->attribute() != inst->attribute()) goto lvn;
+            if (ysize < xsize && xsize < size && x->attribute() != node->attribute()) goto lvn;
 
             // This can either be up-cast followed by up-cast, up-cast followed by down-cast.
             // As the result is an up-cast, we need to select the correct sext.
             if (ysize < size) {
-                inst->attribute(x->attribute());
+                node->attribute(x->attribute());
             }
 
-            inst->operand_set(0, y);
+            node->operand_set(0, y);
             goto lvn;
         }
 
     } else if (is_binary_opcode(opcode)) {
         // Folding binary operation node.
-        auto x = inst->operand(0);
-        auto y = inst->operand(1);
+        auto x = node->operand(0);
+        auto y = node->operand(1);
 
         // If both operands are constant, then perform constant folding.
         if (x->opcode() == Opcode::constant && y->opcode() == Opcode::constant) {
-            replace_with_constant(inst, Evaluator::binary(x->type(), inst->opcode(), x->attribute(), y->attribute()));
+            replace_with_constant(node, Evaluator::binary(x->type(), node->opcode(), x->attribute(), y->attribute()));
             goto lvn;
         }
 
@@ -117,30 +117,30 @@ void Local_value_numbering::after(Instruction* inst) {
         // immediate.
         if (x->opcode() == Opcode::constant) {
             if (is_commutative_opcode(opcode)) {
-                inst->operand_swap(0, 1);
+                node->operand_swap(0, 1);
                 std::swap(x, y);
             } else {
                 if (x->attribute() == 0) {
                     // Arithmetic identity folding for non-abelian operations.
                     switch (opcode) {
                         case Opcode::sub:
-                            inst->opcode(Opcode::neg);
-                            inst->operands({y});
+                            node->opcode(Opcode::neg);
+                            node->operands({y});
                             goto lvn;
                         case Opcode::shl:
                         case Opcode::shr:
                         case Opcode::sar:
-                            replace_with_constant(inst, 0);
+                            replace_with_constant(node, 0);
                             goto lvn;
                         // 0 < unsigned is identical to unsigned != 0
                         case Opcode::ltu:
-                            inst->opcode(Opcode::ne);
-                            inst->operand_swap(0, 1);
+                            node->opcode(Opcode::ne);
+                            node->operand_swap(0, 1);
                             goto lvn;
                         // 0 >= unsigned is identical to unsigned == 0
                         case Opcode::geu:
-                            inst->opcode(Opcode::eq);
-                            inst->operand_swap(0, 1);
+                            node->opcode(Opcode::eq);
+                            node->operand_swap(0, 1);
                             goto lvn;
                         default: break;
                     }
@@ -155,7 +155,7 @@ void Local_value_numbering::after(Instruction* inst) {
         if (y->opcode() == Opcode::constant) {
             if (y->attribute() == 0) {
                 switch (opcode) {
-                    // For these instruction x @ 0 == x
+                    // For these node x @ 0 == x
                     case Opcode::add:
                     case Opcode::sub:
                     case Opcode::i_xor:
@@ -163,30 +163,30 @@ void Local_value_numbering::after(Instruction* inst) {
                     case Opcode::shl:
                     case Opcode::shr:
                     case Opcode::sar:
-                        replace(inst, x);
+                        replace(node, x);
                         return;
-                    // For these instruction x @ 0 == 0
+                    // For these node x @ 0 == 0
                     case Opcode::i_and:
                     case Opcode::ltu:
-                        replace_with_constant(inst, 0);
+                        replace_with_constant(node, 0);
                         goto lvn;
                     // unsigned >= 0 is tautology
                     case Opcode::geu:
-                        replace_with_constant(inst, 1);
+                        replace_with_constant(node, 1);
                         goto lvn;
                     default: break;
                 }
             } else if (y->attribute() == static_cast<uint64_t>(-1)) {
                 switch (opcode) {
                     case Opcode::i_xor:
-                        inst->opcode(Opcode::i_not);
-                        inst->operands({x});
+                        node->opcode(Opcode::i_not);
+                        node->operands({x});
                         goto lvn;
                     case Opcode::i_and:
-                        replace(inst, x);
+                        replace(node, x);
                         return;
                     case Opcode::i_or:
-                        replace_with_constant(inst, -1);
+                        replace_with_constant(node, -1);
                         goto lvn;
                     default: break;
                 }
@@ -200,16 +200,16 @@ void Local_value_numbering::after(Instruction* inst) {
                 case Opcode::ne:
                 case Opcode::lt:
                 case Opcode::ltu:
-                    replace_with_constant(inst, 0);
+                    replace_with_constant(node, 0);
                     goto lvn;
                 case Opcode::i_or:
                 case Opcode::i_and:
-                    replace(inst, x);
+                    replace(node, x);
                     return;
                 case Opcode::eq:
                 case Opcode::ge:
                 case Opcode::geu:
-                    replace_with_constant(inst, 1);
+                    replace_with_constant(node, 1);
                     goto lvn;
                 default: break;
             }
@@ -218,19 +218,19 @@ void Local_value_numbering::after(Instruction* inst) {
         // More folding for add
         if (opcode == Opcode::add && y->references().size() == 1) {
             if (x->opcode() == Opcode::add && x->operand(1)->opcode() == Opcode::constant) {
-                y->attribute(Evaluator::sign_extend(inst->type(), y->attribute() + x->operand(1)->attribute()));
+                y->attribute(Evaluator::sign_extend(node->type(), y->attribute() + x->operand(1)->attribute()));
                 x = x->operand(0);
-                inst->operand_set(0, x);
+                node->operand_set(0, x);
                 goto lvn;
             }
         }
     } else if (opcode == Opcode::mux) {
-        auto x = inst->operand(0);
-        auto y = inst->operand(1);
-        auto z = inst->operand(2);
+        auto x = node->operand(0);
+        auto y = node->operand(1);
+        auto z = node->operand(2);
 
         if (x->opcode() == Opcode::constant) {
-            replace(inst, x->attribute() ? y : z);
+            replace(node, x->attribute() ? y : z);
             return;
         }
     }
@@ -238,11 +238,11 @@ void Local_value_numbering::after(Instruction* inst) {
 lvn:
     // Now perform the actual local value numbering.
     // Try insert into the set. If insertion succeeded, then this is a new node, so return.
-    auto pair = _set.insert(inst);
+    auto pair = _set.insert(node);
     if (pair.second) return;
 
     // Otherwise replace with the existing one.
-    replace(inst, *pair.first);
+    replace(node, *pair.first);
 }
 
 }

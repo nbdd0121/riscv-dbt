@@ -1,6 +1,6 @@
 #include "emu/state.h"
 #include "ir/builder.h"
-#include "ir/instruction.h"
+#include "ir/node.h"
 #include "riscv/basic_block.h"
 #include "riscv/frontend.h"
 #include "riscv/instruction.h"
@@ -15,13 +15,13 @@ struct Frontend {
     emu::State& state;
     const Basic_block* block;
 
-    // The last instruction with side-effect.
-    ir::Instruction* last_side_effect = nullptr;
+    // The last node with side-effect.
+    ir::Node* last_side_effect = nullptr;
 
     Frontend(emu::State& state): state{state} {}
 
-    ir::Instruction* emit_load_register(ir::Type type, int reg);
-    void emit_store_register(int reg, ir::Instruction* value, bool sext = false);
+    ir::Node* emit_load_register(ir::Type type, int reg);
+    void emit_store_register(int reg, ir::Node* value, bool sext = false);
 
     void emit_load(Instruction inst, ir::Type type, bool sext);
     void emit_store(Instruction inst, ir::Type type);
@@ -36,8 +36,8 @@ struct Frontend {
     void compile(const Basic_block& block);
 };
 
-ir::Instruction* Frontend::emit_load_register(ir::Type type, int reg) {
-    ir::Instruction* ret;
+ir::Node* Frontend::emit_load_register(ir::Type type, int reg) {
+    ir::Node* ret;
     if (reg == 0) {
         ret = builder.constant(type, 0);
     } else {
@@ -48,7 +48,7 @@ ir::Instruction* Frontend::emit_load_register(ir::Type type, int reg) {
     return ret;
 }
 
-void Frontend::emit_store_register(int reg, ir::Instruction* value, bool sext) {
+void Frontend::emit_store_register(int reg, ir::Node* value, bool sext) {
     ASSERT(reg != 0);
     if (value->type() != ir::Type::i64) value = builder.cast(ir::Type::i64, sext, value);
     last_side_effect = builder.store_register(last_side_effect, reg, value);
@@ -267,7 +267,7 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
             case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
             default: {
-                last_side_effect = graph.manage(new ir::Instruction(ir::Type::none, ir::Opcode::emulate, {}, {last_side_effect}));
+                last_side_effect = graph.manage(new ir::Node(ir::Type::none, ir::Opcode::emulate, {}, {last_side_effect}));
                 last_side_effect->attribute(util::read_as<uint64_t>(&inst));
                 break;
             }

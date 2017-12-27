@@ -19,17 +19,17 @@ private:
     x86::Encoder _encoder;
 
     int stack_size = 0;
-    std::unordered_map<ir::Instruction*, int> reference_count;
+    std::unordered_map<ir::Node*, int> reference_count;
 
-    // Location of an instruction.
-    std::unordered_map<ir::Instruction*, Operand> location;
+    // Location of an node.
+    std::unordered_map<ir::Node*, Operand> location;
 
-    // Spilled location of an instruction. This is used to avoid re-loading into memory if spilled again.
-    std::unordered_map<ir::Instruction*, Memory> memory_location;
+    // Spilled location of an node. This is used to avoid re-loading into memory if spilled again.
+    std::unordered_map<ir::Node*, Memory> memory_location;
 
     // Tracks what is stored in each register. Note that not all registers are used, but for easiness we still make its
     // size 16.
-    std::array<ir::Instruction*, 16> register_content {};
+    std::array<ir::Node*, 16> register_content {};
 
     // Tracks whether a register can be spilled, i.e. not pinned.
     std::array<bool, 16> pinned {};
@@ -61,29 +61,29 @@ public:
     void unpin_register(Register reg);
 
     // Move a result to another location.
-    void move_location(ir::Instruction* inst, const Operand& loc);
+    void move_location(ir::Node* inst, const Operand& loc);
 
-    // Bind a register to a instruction, and set up reference count.
-    void bind_register(ir::Instruction* inst, Register reg);
-    void ensure_register(ir::Instruction* inst, Register reg);
-    void decrease_reference(ir::Instruction* inst);
+    // Bind a register to a node, and set up reference count.
+    void bind_register(ir::Node* inst, Register reg);
+    void ensure_register(ir::Node* inst, Register reg);
+    void decrease_reference(ir::Node* inst);
 
-    Operand get_location(ir::Instruction* inst);
-    Operand get_location_ex(ir::Instruction* inst, bool allow_mem, bool allow_imm);
+    Operand get_location(ir::Node* inst);
+    Operand get_location_ex(ir::Node* inst, bool allow_mem, bool allow_imm);
 
     // Get location, but guaranteed to be a register. This call might cause register to spill.
-    Register get_register_location(ir::Instruction* inst);
+    Register get_register_location(ir::Node* inst);
 
-    void emit_alu(ir::Instruction* inst, Opcode opcode);
-    void emit_shift(ir::Instruction* inst, Opcode opcode);
-    void emit_unary(ir::Instruction* inst, Opcode opcode);
-    Condition_code emit_compare(ir::Instruction* inst);
+    void emit_alu(ir::Node* inst, Opcode opcode);
+    void emit_shift(ir::Node* inst, Opcode opcode);
+    void emit_unary(ir::Node* inst, Opcode opcode);
+    Condition_code emit_compare(ir::Node* inst);
 
     void clear();
 
 protected:
-    virtual bool before(ir::Instruction* inst) override { return inst->opcode() == ir::Opcode::block; }
-    virtual void after(ir::Instruction* inst) override;
+    virtual bool before(ir::Node* inst) override { return inst->opcode() == ir::Opcode::block; }
+    virtual void after(ir::Node* inst) override;
 
 public:
     void run(ir::Graph& graph);

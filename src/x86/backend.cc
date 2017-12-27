@@ -149,20 +149,20 @@ Register Backend::alloc_register(ir::Type type, const Operand& op) {
 }
 
 void Backend::spill_register(Register reg) {
-    auto inst = register_content[register_id(reg)];
-    ASSERT(inst);
+    auto node = register_content[register_id(reg)];
+    ASSERT(node);
 
-    auto ptr = memory_location.find(inst);
+    auto ptr = memory_location.find(node);
     if (ptr == memory_location.end()) {
         Memory mem;
         stack_size -= 8;
         mem = qword(Register::none + ((uintptr_t)spill_area - stack_size));
-        mem.size = get_type_size(inst->type()) / 8;
-        memory_location[inst] = mem;
-        move_location(inst, mem);
+        mem.size = get_type_size(node->type()) / 8;
+        memory_location[node] = mem;
+        move_location(node, mem);
     } else {
         register_content[register_id(reg)] = nullptr;
-        location[inst] = ptr->second;
+        location[node] = ptr->second;
     }
 }
 
@@ -182,33 +182,33 @@ void Backend::unpin_register(Register reg) {
     pinned[register_id(reg)] = false;
 }
 
-void Backend::move_location(ir::Instruction* inst, const Operand& loc) {
-    Operand old_loc = get_location(inst);
+void Backend::move_location(ir::Node* node, const Operand& loc) {
+    Operand old_loc = get_location(node);
 
     if (old_loc.is_register()) {
         int reg = register_id(old_loc.as_register());
-        ASSERT(register_content[reg] == inst);
+        ASSERT(register_content[reg] == node);
         register_content[reg] = nullptr;
     }
 
     if (loc.is_register()) {
         int reg = register_id(loc.as_register());
         ASSERT(!register_content[reg]);
-        register_content[reg] = inst;
+        register_content[reg] = node;
     }
 
-    location[inst] = loc;
-    emit_move(inst->type(), loc, old_loc);
+    location[node] = loc;
+    emit_move(node->type(), loc, old_loc);
 }
 
-void Backend::bind_register(ir::Instruction* inst, Register loc) {
-    location[inst] = loc;
-    register_content[register_id(loc)] = inst;
-    reference_count[inst] = inst->references().size();
+void Backend::bind_register(ir::Node* node, Register loc) {
+    location[node] = loc;
+    register_content[register_id(loc)] = node;
+    reference_count[node] = node->references().size();
 }
 
-void Backend::ensure_register(ir::Instruction* inst, Register reg) {
-    Operand loc = get_location(inst);
+void Backend::ensure_register(ir::Node* node, Register reg) {
+    Operand loc = get_location(node);
 
     // If it is already in that register, then good.
     if (same_location(loc, reg)) return;
@@ -224,66 +224,66 @@ void Backend::ensure_register(ir::Instruction* inst, Register reg) {
     }
 
     // Move to target location.
-    move_location(inst, reg);
+    move_location(node, reg);
 }
 
-void Backend::decrease_reference(ir::Instruction* inst) {
-    if (inst->opcode() == ir::Opcode::constant) {
+void Backend::decrease_reference(ir::Node* node) {
+    if (node->opcode() == ir::Opcode::constant) {
         return;
     }
 
-    int& ref = reference_count.at(inst);
+    int& ref = reference_count.at(node);
     ref--;
 
     // When reference count reaches zero the value could be wiped out.
     if (ref == 0) {
-        const auto& loc = location.at(inst);
+        const auto& loc = location.at(node);
 
         if (loc.is_register()) {
             register_content[register_id(loc.as_register())] = nullptr;
         }
 
-        location.erase(inst);
+        location.erase(node);
         return;
     }
 
     ASSERT(ref > 0);
 }
 
-Operand Backend::get_location(ir::Instruction* inst) {
-    if (inst->opcode() == ir::Opcode::constant) {
-        ASSERT(is_int32(inst->attribute()));
-        return inst->attribute();
+Operand Backend::get_location(ir::Node* node) {
+    if (node->opcode() == ir::Opcode::constant) {
+        ASSERT(is_int32(node->attribute()));
+        return node->attribute();
     }
-    auto ptr = location.find(inst);
+    auto ptr = location.find(node);
     ASSERT(ptr != location.end());
     return ptr->second;
 }
 
-Operand Backend::get_location_ex(ir::Instruction* inst, bool allow_mem, bool allow_imm) {
-    if (inst->opcode() == ir::Opcode::constant) {
-        if (allow_imm && is_int32(inst->attribute())) {
-            return inst->attribute();
+Operand Backend::get_location_ex(ir::Node* node, bool allow_mem, bool allow_imm) {
+    if (node->opcode() == ir::Opcode::constant) {
+        if (allow_imm && is_int32(node->attribute())) {
+            return node->attribute();
         }
-        Register reg = alloc_register(inst->type());
-        emit(mov(reg, inst->attribute()));
+        Register reg = alloc_register(node->type());
+        emit(mov(reg, node->attribute()));
         return reg;
     }
-    Operand loc = get_location(inst);
+    Operand loc = get_location(node);
     if (allow_mem || loc.is_register()) return loc;
 
-    Register reg = alloc_register(inst->type());
-    move_location(inst, reg);
+    Register reg = alloc_register(node->type());
+    move_location(node, reg);
     return reg;
 }
 
-Register Backend::get_register_location(ir::Instruction* inst) {
-    return get_location_ex(inst, false, false).as_register();
+Register Backend::get_register_location(ir::Node* node) {
+    return get_location_ex(node, false, false).as_register();
 }
 
-void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
-    auto op0 = inst->operand(0);
-    auto op1 = inst->operand(1);
+void Backend::emit_alu(ir::Node* node, Opcode opcode) {
+    auto op0 = node->operand(0);
+    auto op1 = node->operand(1);
 
     if (op0->opcode() == ir::Opcode::constant) {
 
@@ -291,8 +291,8 @@ void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
         ASSERT(op1->opcode() != ir::Opcode::constant);
 
         // Allocate and bind register.
-        Register reg = alloc_register(inst->type());
-        bind_register(inst, reg);
+        Register reg = alloc_register(node->type());
+        bind_register(node, reg);
 
         // Move immediate to register.
         emit(mov(reg, op0->attribute()));
@@ -310,12 +310,12 @@ void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
     decrease_reference(op0);
 
     // Allocate and bind register. Try to use loc0 if possible to eliminate move.
-    Register reg = alloc_register(inst->type(), loc0);
-    bind_register(inst, reg);
+    Register reg = alloc_register(node->type(), loc0);
+    bind_register(node, reg);
 
     // Move left operand to register.
     if (!same_location(loc0, reg)) {
-        emit_move(inst->type(), reg, loc0);
+        emit_move(node->type(), reg, loc0);
     }
 
     pin_register(reg);
@@ -324,9 +324,9 @@ void Backend::emit_alu(ir::Instruction* inst, Opcode opcode) {
     decrease_reference(op1);
 }
 
-void Backend::emit_shift(ir::Instruction* inst, Opcode opcode) {
-    auto op0 = inst->operand(0);
-    auto op1 = inst->operand(1);
+void Backend::emit_shift(ir::Node* node, Opcode opcode) {
+    auto op0 = node->operand(0);
+    auto op1 = node->operand(1);
 
     if (op1->opcode() != ir::Opcode::constant) {
         // The operand must be in CL.
@@ -341,7 +341,7 @@ void Backend::emit_shift(ir::Instruction* inst, Opcode opcode) {
 
         // Allocate and bind register.
         Register reg = alloc_register(op0->type());
-        bind_register(inst, reg);
+        bind_register(node, reg);
 
         // Move immediate to register.
         emit(mov(reg, op0->attribute()));
@@ -356,12 +356,12 @@ void Backend::emit_shift(ir::Instruction* inst, Opcode opcode) {
         decrease_reference(op0);
 
         // Allocate and bind register. Try to use loc0 if possible to eliminate move.
-        Register reg = alloc_register(inst->type(), loc0);
-        bind_register(inst, reg);
+        Register reg = alloc_register(node->type(), loc0);
+        bind_register(node, reg);
 
         // Move left operand to register.
         if (!same_location(loc0, reg)) {
-            emit_move(inst->type(), reg, loc0);
+            emit_move(node->type(), reg, loc0);
         }
 
         if (op1->opcode() == ir::Opcode::constant) {
@@ -377,8 +377,8 @@ void Backend::emit_shift(ir::Instruction* inst, Opcode opcode) {
     }
 }
 
-void Backend::emit_unary(ir::Instruction* inst, Opcode opcode) {
-    auto op = inst->operand(0);
+void Backend::emit_unary(ir::Node* node, Opcode opcode) {
+    auto op = node->operand(0);
 
     ASSERT(op->opcode() != ir::Opcode::constant);
 
@@ -387,26 +387,26 @@ void Backend::emit_unary(ir::Instruction* inst, Opcode opcode) {
     decrease_reference(op);
 
     // Allocate and bind register. Try to use loc if possible to eliminate move.
-    Register reg = alloc_register(inst->type(), loc);
-    bind_register(inst, reg);
+    Register reg = alloc_register(node->type(), loc);
+    bind_register(node, reg);
 
     // Move left operand to register.
     if (!same_location(loc, reg)) {
-        emit_move(inst->type(), reg, loc);
+        emit_move(node->type(), reg, loc);
     }
 
     emit(unary(opcode, reg));
 }
 
-Condition_code Backend::emit_compare(ir::Instruction* inst) {
+Condition_code Backend::emit_compare(ir::Node* node) {
 
-    int& refcount = reference_count[inst];
+    int& refcount = reference_count[node];
     if (refcount == 0) {
-        refcount = inst->references().size();
+        refcount = node->references().size();
     }
 
     Condition_code cc;
-    switch (inst->opcode()) {
+    switch (node->opcode()) {
         case ir::Opcode::eq: cc = Condition_code::equal; break;
         case ir::Opcode::ne: cc = Condition_code::not_equal; break;
         case ir::Opcode::lt: cc = Condition_code::less; break;
@@ -416,8 +416,8 @@ Condition_code Backend::emit_compare(ir::Instruction* inst) {
         default: ASSERT(0);
     }
 
-    auto op0 = inst->operand(0);
-    auto op1 = inst->operand(1);
+    auto op0 = node->operand(0);
+    auto op1 = node->operand(1);
 
     if (op0->opcode() == ir::Opcode::constant) {
         std::swap(op0, op1);
@@ -447,43 +447,43 @@ Condition_code Backend::emit_compare(ir::Instruction* inst) {
     return cc;
 }
 
-void Backend::after(ir::Instruction* inst) {
-    switch (inst->opcode()) {
+void Backend::after(ir::Node* node) {
+    switch (node->opcode()) {
         case ir::Opcode::block:
         case ir::Opcode::jmp:
         case ir::Opcode::i_if:
             // These are not handled here.
             break;
         case ir::Opcode::constant:
-            // constants are handled specially with in generation of each instruction that takes a value.
+            // constants are handled specially with in generation of each node that takes a value.
             break;
         case ir::Opcode::load_register: {
 
             // Allocate and bind register.
-            Register reg = alloc_register(inst->type());
-            bind_register(inst, reg);
+            Register reg = alloc_register(node->type());
+            bind_register(node, reg);
 
             // Move the emulated register to 64-bit version of allocated machine register.
-            emit(mov(reg, qword(Register::rbp + inst->attribute() * 8)));
+            emit(mov(reg, qword(Register::rbp + node->attribute() * 8)));
             break;
         }
         case ir::Opcode::store_register: {
-            auto op = inst->operand(0);
+            auto op = node->operand(0);
 
             Operand loc = get_location_ex(op, false, true);
             decrease_reference(op);
 
             // Move the allocated machine register back to the emulated register.
-            emit(mov(qword(Register::rbp + inst->attribute() * 8), loc));
+            emit(mov(qword(Register::rbp + node->attribute() * 8), loc));
             break;
         }
         case ir::Opcode::load_memory: {
-            auto address = inst->operand(0);
+            auto address = node->operand(0);
 
             if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
-                Register reg = alloc_register(inst->type());
+                Register reg = alloc_register(node->type());
                 Register reg64 = modify_size(ir::Type::i64, reg).as_register();
-                bind_register(inst, reg);
+                bind_register(node, reg);
                 Operand mem_operand;
 
                 if (address->opcode() == ir::Opcode::constant) {
@@ -492,7 +492,7 @@ void Backend::after(ir::Instruction* inst) {
                     } else {
                         emit(mov(reg64, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + address->attribute()));
                         Memory mem = qword(reg64 + 0);
-                        mem.size = get_type_size(inst->type()) / 8;
+                        mem.size = get_type_size(node->type()) / 8;
                         mem_operand = mem;
                     }
                 } else {
@@ -505,7 +505,7 @@ void Backend::after(ir::Instruction* inst) {
                         emit(add(reg64, get_location(address)));
                         mem = qword(reg64 + 0);
                     }
-                    mem.size = get_type_size(inst->type()) / 8;
+                    mem.size = get_type_size(node->type()) / 8;
                     mem_operand = mem;
                     decrease_reference(address);
                 }
@@ -534,7 +534,7 @@ void Backend::after(ir::Instruction* inst) {
             emit(mov(Register::rdi, reinterpret_cast<uintptr_t>(_state.mmu.get())));
 
             uintptr_t func;
-            switch (inst->type()) {
+            switch (node->type()) {
                 case ir::Type::i8: func = reinterpret_cast<uintptr_t>(
                     AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint8_t>)
                 ); break;
@@ -553,12 +553,12 @@ void Backend::after(ir::Instruction* inst) {
             emit(mov(Register::rax, func));
             emit(call(Register::rax));
 
-            bind_register(inst, register_of_id(inst->type(), 0));
+            bind_register(node, register_of_id(node->type(), 0));
             break;
         }
         case ir::Opcode::store_memory: {
-            auto address = inst->operand(0);
-            auto value = inst->operand(1);
+            auto address = node->operand(0);
+            auto value = node->operand(1);
 
             if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
                 Register loc_value = Register::none;
@@ -662,24 +662,24 @@ void Backend::after(ir::Instruction* inst) {
         }
         case ir::Opcode::emulate: {
             spill_all_registers();
-            emit(mov(Register::rsi, inst->attribute()));
+            emit(mov(Register::rsi, node->attribute()));
             emit(mov(Register::rdi, Register::rbp));
             emit(mov(Register::rax, reinterpret_cast<uintptr_t>(riscv::step)));
             emit(call(Register::rax));
             break;
         }
         case ir::Opcode::cast: {
-            auto op = inst->operand(0);
+            auto op = node->operand(0);
 
             // Special handling for i1 upcast
             if (op->type() == ir::Type::i1) {
                 Condition_code cc = emit_compare(op);
 
                 // Allocate and bind register.
-                Register reg = alloc_register(inst->type());
-                bind_register(inst, reg);
+                Register reg = alloc_register(node->type());
+                bind_register(node, reg);
 
-                if (inst->type() != ir::Type::i8) {
+                if (node->type() != ir::Type::i8) {
                     emit(mov(modify_size(ir::Type::i32, reg), 0));
                 }
                 emit(setcc(cc, modify_size(ir::Type::i8, reg)));
@@ -691,13 +691,13 @@ void Backend::after(ir::Instruction* inst) {
             decrease_reference(op);
 
             // Allocate and bind register. Try to use loc0 if possible to eliminate move.
-            Register reg = alloc_register(inst->type(), loc0);
-            bind_register(inst, reg);
+            Register reg = alloc_register(node->type(), loc0);
+            bind_register(node, reg);
 
             // Get size before and after the cast.
             auto op_type = op->type();
             int old_size = ir::get_type_size(op_type);
-            int new_size = ir::get_type_size(inst->type());
+            int new_size = ir::get_type_size(node->type());
 
             if (old_size == 1) op_type = ir::Type::i8;
 
@@ -705,13 +705,13 @@ void Backend::after(ir::Instruction* inst) {
 
                 // Down-cast can be treated as simple move. If the size is less than 32-bit, we use 32-bit move.
                 if (!same_location(loc0, reg)) {
-                    emit_move(inst->type(), reg, modify_size(inst->type(), loc0));
+                    emit_move(node->type(), reg, modify_size(node->type(), loc0));
                 }
 
             } else {
 
                 // Up-cast needs actual work.
-                if (inst->attribute()) {
+                if (node->attribute()) {
                     if (loc0.is_register()) {
                         Register loc0reg = loc0.as_register();
                         if (loc0reg == Register::eax && reg == Register::rax) {
@@ -735,9 +735,9 @@ void Backend::after(ir::Instruction* inst) {
         }
         case ir::Opcode::mux: {
 
-            auto op0 = inst->operand(0);
-            auto op1 = inst->operand(1);
-            auto op2 = inst->operand(2);
+            auto op0 = node->operand(0);
+            auto op1 = node->operand(1);
+            auto op2 = node->operand(2);
 
             Condition_code cc = emit_compare(op0);
 
@@ -749,15 +749,15 @@ void Backend::after(ir::Instruction* inst) {
             }
 
             // Allocate and bind register. Try to use loc2 if possible to eliminate move.
-            Register reg = alloc_register(inst->type(), loc2);
-            bind_register(inst, reg);
+            Register reg = alloc_register(node->type(), loc2);
+            bind_register(node, reg);
 
             // Move false operand to register.
             if ((loc2.is_register() && loc2.as_register() == Register::none) || !same_location(loc2, reg)) {
                 if (op2->opcode() == ir::Opcode::constant) {
                     emit(mov(reg, op2->attribute()));
                 } else {
-                    emit_move(inst->type(), reg, loc2);
+                    emit_move(node->type(), reg, loc2);
                 }
             }
 
@@ -767,17 +767,17 @@ void Backend::after(ir::Instruction* inst) {
             decrease_reference(op1);
             break;
         }
-        case ir::Opcode::add: emit_alu(inst, Opcode::add); break;
-        case ir::Opcode::sub: emit_alu(inst, Opcode::sub); break;
-        case ir::Opcode::i_xor: emit_alu(inst, Opcode::i_xor); break;
-        case ir::Opcode::i_and: emit_alu(inst, Opcode::i_and); break;
-        case ir::Opcode::i_or: emit_alu(inst, Opcode::i_or); break;
-        case ir::Opcode::shl: emit_shift(inst, Opcode::shl); break;
-        case ir::Opcode::shr: emit_shift(inst, Opcode::shr); break;
-        case ir::Opcode::sar: emit_shift(inst, Opcode::sar); break;
-        case ir::Opcode::i_not: emit_unary(inst, Opcode::i_not); break;
-        case ir::Opcode::neg: emit_unary(inst, Opcode::neg); break;
-        // i1 instructions are handled by users.
+        case ir::Opcode::add: emit_alu(node, Opcode::add); break;
+        case ir::Opcode::sub: emit_alu(node, Opcode::sub); break;
+        case ir::Opcode::i_xor: emit_alu(node, Opcode::i_xor); break;
+        case ir::Opcode::i_and: emit_alu(node, Opcode::i_and); break;
+        case ir::Opcode::i_or: emit_alu(node, Opcode::i_or); break;
+        case ir::Opcode::shl: emit_shift(node, Opcode::shl); break;
+        case ir::Opcode::shr: emit_shift(node, Opcode::shr); break;
+        case ir::Opcode::sar: emit_shift(node, Opcode::sar); break;
+        case ir::Opcode::i_not: emit_unary(node, Opcode::i_not); break;
+        case ir::Opcode::neg: emit_unary(node, Opcode::neg); break;
+        // i1 nodes are handled by their users.
         case ir::Opcode::eq:
         case ir::Opcode::ne:
         case ir::Opcode::lt:
@@ -799,8 +799,8 @@ void Backend::clear() {
 }
 
 void Backend::run(ir::Graph& graph) {
-    std::vector<ir::Instruction*> blocks;
-    std::vector<ir::Instruction*> to_process;
+    std::vector<ir::Node*> blocks;
+    std::vector<ir::Node*> to_process;
 
     auto start = graph.start();
     ASSERT(start->dependants().size() == 1);
@@ -823,7 +823,7 @@ void Backend::run(ir::Graph& graph) {
         ASSERT(block->opcode() == ir::Opcode::block);
 
         // Use attribute.pointer to find the last node of the block.
-        auto end = static_cast<ir::Instruction*>(block->attribute_pointer());
+        auto end = static_cast<ir::Node*>(block->attribute_pointer());
 
         if (end->opcode() == ir::Opcode::i_if) {
             for (auto ref: end->dependants()) {
@@ -844,7 +844,7 @@ void Backend::run(ir::Graph& graph) {
 
     // In the simple case, we don't have to do relocations.
     if (blocks.size() == 1) {
-        run_on(graph, static_cast<ir::Instruction*>(blocks[0]->attribute_pointer()));
+        run_on(graph, static_cast<ir::Node*>(blocks[0]->attribute_pointer()));
         emit(pop(Register::rbp));
         emit(ret());
         return;
@@ -854,13 +854,13 @@ void Backend::run(ir::Graph& graph) {
     blocks.push_back(graph.root());
 
     // These are used for relocation
-    std::unordered_map<ir::Instruction*, size_t> label_def;
-    std::unordered_map<ir::Instruction*, std::vector<size_t>> label_use;
+    std::unordered_map<ir::Node*, size_t> label_def;
+    std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
         auto next_block = blocks[i + 1];
-        auto end = static_cast<ir::Instruction*>(block->attribute_pointer());
+        auto end = static_cast<ir::Node*>(block->attribute_pointer());
 
         // Store the label for relocation purpose.
         label_def[block] = _encoder.buffer().size();
@@ -869,12 +869,12 @@ void Backend::run(ir::Graph& graph) {
         run_on(graph, end);
 
         // This records the fallthrough target.
-        ir::Instruction* target = nullptr;
+        ir::Node* target = nullptr;
 
         if (end->opcode() == ir::Opcode::i_if) {
 
             // Extract targets
-            ir::Instruction *true_target;
+            ir::Node *true_target;
             for (auto ref: end->dependants()) {
                 if (ref->opcode() == ir::Opcode::if_true) true_target = *ref->dependants().begin();
                 else if (ref->opcode() == ir::Opcode::if_false) target = *ref->dependants().begin();

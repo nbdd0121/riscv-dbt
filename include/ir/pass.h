@@ -3,7 +3,7 @@
 
 #include <unordered_set>
 
-#include "ir/instruction.h"
+#include "ir/node.h"
 
 namespace riscv {
     struct Context;
@@ -13,13 +13,13 @@ namespace ir::pass {
 
 class Pass {
 public:
-    static void replace(Instruction* oldnode, Instruction* newnode);
+    static void replace(Node* oldnode, Node* newnode);
 
 protected:
     Graph* _graph;
 
 private:
-    void run_recurse(Instruction* inst);
+    void run_recurse(Node* node);
 
 protected:
 
@@ -27,13 +27,13 @@ protected:
     virtual void start() {}
     // After visiting the tree.
     virtual void finish() {}
-    // Before visiting children of the instruction. Returning true will abort children visit.
-    virtual bool before(Instruction*) { return false; }
+    // Before visiting children of the node. Returning true will abort children visit.
+    virtual bool before(Node*) { return false; }
     // After all children has been visited.
-    virtual void after(Instruction*) {}
+    virtual void after(Node*) {}
 
 public:
-    void run_on(Graph& graph, Instruction* inst);
+    void run_on(Graph& graph, Node* node);
     void run(Graph& graph) { run_on(graph, graph.root()); }
 };
 
@@ -45,33 +45,33 @@ public:
 protected:
     virtual void start() override;
     virtual void finish() override;
-    virtual void after(Instruction* inst) override;
+    virtual void after(Node* node) override;
 };
 
 class Register_access_elimination: public Pass {
 private:
-    std::vector<Instruction*> last_load;
-    std::vector<Instruction*> last_store;
+    std::vector<Node*> last_load;
+    std::vector<Node*> last_store;
     // Do not use std::vector<bool> as we don't need its space optimization.
     std::vector<char> has_store_after_exception;
 
-    Instruction* last_exception = nullptr;
-    Instruction* last_effect = nullptr;
+    Node* last_exception = nullptr;
+    Node* last_effect = nullptr;
 public:
     Register_access_elimination(int regcount):
         last_load(regcount), last_store(regcount), has_store_after_exception(regcount) {}
 
 protected:
-    virtual void after(Instruction* inst) override;
+    virtual void after(Node* node) override;
 };
 
 // Block marker will link the block node and jmp/if node together using attribute.pointer.
 // It therefore frees front-ends from maintaining this constraint themselves.
 class Block_marker: public Pass {
-    Instruction* block_end = nullptr;
+    Node* block_end = nullptr;
 
 public:
-    virtual bool before(Instruction* inst) override;
+    virtual bool before(Node* node) override;
 };
 
 class Evaluator: private Pass {
@@ -90,8 +90,8 @@ public:
 
 protected:
     // Evaluator, as a pass, only evaluate a block. A new run function is provided to evaluate the whole graph.
-    virtual bool before(Instruction* inst) override { return inst->opcode() == Opcode::block; }
-    virtual void after(Instruction* inst) override;
+    virtual bool before(Node* node) override { return node->opcode() == Opcode::block; }
+    virtual void after(Node* node) override;
 
 public:
     void run(Graph& graph);
@@ -100,19 +100,19 @@ public:
 class Local_value_numbering: public Pass {
 private:
     struct Hash {
-        size_t operator ()(Instruction* inst) const noexcept;
+        size_t operator ()(Node* node) const noexcept;
     };
     struct Equal_to {
-        bool operator ()(Instruction* a, Instruction* b) const noexcept;
+        bool operator ()(Node* a, Node* b) const noexcept;
     };
 public:
-    static void replace_with_constant(Instruction* inst, uint64_t value);
+    static void replace_with_constant(Node* node, uint64_t value);
 
 private:
-    std::unordered_set<Instruction*, Hash, Equal_to> _set;
+    std::unordered_set<Node*, Hash, Equal_to> _set;
 
 protected:
-    virtual void after(Instruction* inst) override;
+    virtual void after(Node* node) override;
 };
 
 }

@@ -1,7 +1,7 @@
 #ifndef RISCV_FRONTEND_H
 #define RISCV_FRONTEND_H
 
-#include "ir/instruction.h"
+#include "ir/node.h"
 
 namespace emu {
 struct State;

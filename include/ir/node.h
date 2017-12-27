@@ -1,5 +1,5 @@
-#ifndef IR_INSTRUCTION_H
-#define IR_INSTRUCTION_H
+#ifndef IR_NODE_H
+#define IR_NODE_H
 
 #include <cstdint>
 #include <utility>
@@ -37,7 +37,7 @@ enum class Opcode: uint8_t {
     end,
 
     // Input: Control[]. Output: Memory.
-    // attribute.pointer is used to reference the last instruction in the block, i.e. jmp/if.
+    // attribute.pointer is used to reference the last node in the block, i.e. jmp/if.
     block,
 
     // Input: Memory, Value. Output: (Control, Control).
@@ -140,7 +140,7 @@ static bool is_commutative_opcode(Opcode opcode) {
     }
 }
 
-class Instruction {
+class Node {
 private:
 
     // We divide dependencies into two types. Data flow dependencies and control flow dependencies. The second one also
@@ -149,18 +149,18 @@ private:
     // dependencies/dependants.
 
     // Control & memory dependency that this node references.
-    std::vector<Instruction*> _dependencies;
+    std::vector<Node*> _dependencies;
 
     // Values that this node references.
-    std::vector<Instruction*> _operands;
+    std::vector<Node*> _operands;
 
     // Nodes that depends on this node.
-    util::Array_multiset<Instruction*> _dependants;
+    util::Array_multiset<Node*> _dependants;
 
     // Nodes that references the value of this node.
-    util::Array_multiset<Instruction*> _references;
+    util::Array_multiset<Node*> _references;
 
-    // Additional attributes for some instructions.
+    // Additional attributes for some nodes.
     union {
         uint64_t value;
         void *pointer;
@@ -172,29 +172,29 @@ private:
         void *pointer;
     } _scratchpad;
 
-    // The output type of this instruction.
+    // The output type of this node.
     Type _type;
 
-    // Opcode of the instruction.
+    // Opcode of the node.
     Opcode _opcode;
 
-    // Whether the instruction is visited. For graph walking only.
+    // Whether the node is visited. For graph walking only.
     // 0 - not visited, 1 - visited, 2 - visiting.
     uint8_t _visited;
 
 public:
-    Instruction(
+    Node(
         Type type, Opcode opcode,
-        std::vector<Instruction*>&& dependencies,
-        std::vector<Instruction*>&& operands
+        std::vector<Node*>&& dependencies,
+        std::vector<Node*>&& operands
     );
 
-    Instruction(const Instruction& inst);
-    Instruction(Instruction&& inst);
-    ~Instruction();
+    Node(const Node& node);
+    Node(Node&& node);
+    ~Node();
 
-    void operator =(const Instruction& inst);
-    void operator =(Instruction&& inst);
+    void operator =(const Node& node);
+    void operator =(Node&& node);
 
 private:
     void dependency_link();
@@ -203,7 +203,7 @@ private:
     void operand_unlink();
     void link() { dependency_link(); operand_link(); }
     void unlink() { dependency_unlink(); operand_unlink(); }
-    void relink(Instruction* inst);
+    void relink(Node* node);
 
 public:
     // Field accessors and mutators
@@ -223,32 +223,32 @@ public:
     void opcode(Opcode opcode) { _opcode = opcode; }
 
     // Dependency acccessors and mutators
-    const std::vector<Instruction*>& dependencies() const { return _dependencies; }
-    void dependencies(std::vector<Instruction*>&& dependencies);
+    const std::vector<Node*>& dependencies() const { return _dependencies; }
+    void dependencies(std::vector<Node*>&& dependencies);
     size_t dependency_count() const { return _dependencies.size(); }
 
-    void dependency_update(Instruction* oldinst, Instruction* newinst);
-    void dependency_add(Instruction* inst);
+    void dependency_update(Node* oldnode, Node* newnode);
+    void dependency_add(Node* node);
 
     // Operand accessors and mutators
-    const std::vector<Instruction*>& operands() const { return _operands; }
-    void operands(std::vector<Instruction*>&& operands);
+    const std::vector<Node*>& operands() const { return _operands; }
+    void operands(std::vector<Node*>&& operands);
     size_t operand_count() const { return _operands.size(); }
 
-    Instruction* operand(size_t index) const {
+    Node* operand(size_t index) const {
         ASSERT(index < _operands.size());
         return _operands[index];
     }
 
-    void operand_set(size_t index, Instruction* inst);
+    void operand_set(size_t index, Node* node);
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
-    void operand_update(Instruction* oldinst, Instruction* newinst);
+    void operand_update(Node* oldnode, Node* newnode);
 
     // Dependants accessors
-    const util::Array_multiset<Instruction*>& dependants() const { return _dependants; }
+    const util::Array_multiset<Node*>& dependants() const { return _dependants; }
 
     // Reference accessors
-    const util::Array_multiset<Instruction*>& references() const { return _references; }
+    const util::Array_multiset<Node*>& references() const { return _references; }
 
     friend class Graph;
     friend pass::Pass;
@@ -256,9 +256,9 @@ public:
 
 class Graph {
 private:
-    std::vector<Instruction*> _heap;
-    Instruction* _start;
-    Instruction* _root = nullptr;
+    std::vector<Node*> _heap;
+    Node* _start;
+    Node* _root = nullptr;
 
 public:
     Graph();
@@ -269,19 +269,19 @@ public:
     Graph& operator =(const Graph&) = delete;
     Graph& operator =(Graph&&);
 
-    Instruction* manage(Instruction* inst) {
-        _heap.push_back(inst);
-        return inst;
+    Node* manage(Node* node) {
+        _heap.push_back(node);
+        return node;
     }
 
-    // Free up dead instructions. Not necessary during compilation, but useful for reducing footprint when graph needs
-    // to be cached.
+    // Free up dead nodes. Not necessary during compilation, but useful for reducing footprint when graph needs to be
+    // cached.
     void garbage_collect();
 
-    Instruction* start() const { return _start; }
+    Node* start() const { return _start; }
 
-    Instruction* root() const { return _root; }
-    void root(Instruction* root) { _root = root; }
+    Node* root() const { return _root; }
+    void root(Node* root) { _root = root; }
 
     friend pass::Pass;
 };
