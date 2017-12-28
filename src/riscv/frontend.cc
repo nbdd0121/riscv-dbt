@@ -15,13 +15,13 @@ struct Frontend {
     emu::State& state;
     const Basic_block* block;
 
-    // The last node with side-effect.
-    ir::Node* last_side_effect = nullptr;
+    // The latest memory value.
+    ir::Value last_memory;
 
     Frontend(emu::State& state): state{state} {}
 
-    ir::Node* emit_load_register(ir::Type type, int reg);
-    void emit_store_register(int reg, ir::Node* value, bool sext = false);
+    ir::Value emit_load_register(ir::Type type, int reg);
+    void emit_store_register(int reg, ir::Value value, bool sext = false);
 
     void emit_load(Instruction inst, ir::Type type, bool sext);
     void emit_store(Instruction inst, ir::Type type);
@@ -36,151 +36,149 @@ struct Frontend {
     void compile(const Basic_block& block);
 };
 
-ir::Node* Frontend::emit_load_register(ir::Type type, int reg) {
-    ir::Node* ret;
+ir::Value Frontend::emit_load_register(ir::Type type, int reg) {
+    ir::Value ret;
     if (reg == 0) {
         ret = builder.constant(type, 0);
     } else {
-        ret = builder.load_register(last_side_effect, reg);
-        last_side_effect = ret;
+        std::tie(last_memory, ret) = builder.load_register(last_memory, reg);
         if (type != ir::Type::i64) ret = builder.cast(type, false, ret);
     }
     return ret;
 }
 
-void Frontend::emit_store_register(int reg, ir::Node* value, bool sext) {
+void Frontend::emit_store_register(int reg, ir::Value value, bool sext) {
     ASSERT(reg != 0);
-    if (value->type() != ir::Type::i64) value = builder.cast(ir::Type::i64, sext, value);
-    last_side_effect = builder.store_register(last_side_effect, reg, value);
+    if (value.type() != ir::Type::i64) value = builder.cast(ir::Type::i64, sext, value);
+    last_memory = builder.store_register(last_memory, reg, value);
 }
 
 void Frontend::emit_load(Instruction inst, ir::Type type, bool sext) {
-    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
-    auto imm_node = builder.constant(ir::Type::i64, inst.imm());
-    auto address = builder.arithmetic(ir::Opcode::add, rs1_node, imm_node);
-    auto rd_node = builder.load_memory(last_side_effect, type, address);
-    last_side_effect = rd_node;
-    emit_store_register(inst.rd(), rd_node, sext);
+    auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
+    auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+    auto address = builder.arithmetic(ir::Opcode::add, rs1_value, imm_value);
+    ir::Value rd_value;
+    std::tie(last_memory, rd_value) = builder.load_memory(last_memory, type, address);
+    emit_store_register(inst.rd(), rd_value, sext);
 }
 
 void Frontend::emit_store(Instruction inst, ir::Type type) {
-    auto rs2_node = emit_load_register(type, inst.rs2());
-    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
-    auto imm_node = builder.constant(ir::Type::i64, inst.imm());
-    auto address = builder.arithmetic(ir::Opcode::add, rs1_node, imm_node);
-    last_side_effect = builder.store_memory(last_side_effect, address, rs2_node);
+    auto rs2_value = emit_load_register(type, inst.rs2());
+    auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
+    auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+    auto address = builder.arithmetic(ir::Opcode::add, rs1_value, imm_value);
+    last_memory = builder.store_memory(last_memory, address, rs2_value);
 }
 
 void Frontend::emit_alui(Instruction inst, ir::Opcode opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
-    auto rs1_node = emit_load_register(type, inst.rs1());
-    auto imm_node = builder.constant(type, inst.imm());
-    auto rd_node = builder.arithmetic(opcode, rs1_node, imm_node);
-    emit_store_register(inst.rd(), rd_node, true);
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto imm_value = builder.constant(type, inst.imm());
+    auto rd_value = builder.arithmetic(opcode, rs1_value, imm_value);
+    emit_store_register(inst.rd(), rd_value, true);
 }
 
 void Frontend::emit_shifti(Instruction inst, ir::Opcode opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
-    auto rs1_node = emit_load_register(type, inst.rs1());
-    auto imm_node = builder.constant(ir::Type::i8, inst.imm());
-    auto rd_node = builder.shift(opcode, rs1_node, imm_node);
-    emit_store_register(inst.rd(), rd_node, true);
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto imm_value = builder.constant(ir::Type::i8, inst.imm());
+    auto rd_value = builder.shift(opcode, rs1_value, imm_value);
+    emit_store_register(inst.rd(), rd_value, true);
 }
 
 void Frontend::emit_slti(Instruction inst, ir::Opcode opcode) {
     if (inst.rd() == 0) return;
-    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
-    auto imm_node = builder.constant(ir::Type::i64, inst.imm());
-    auto rd_node = builder.compare(opcode, rs1_node, imm_node);
-    emit_store_register(inst.rd(), rd_node);
+    auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
+    auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+    auto rd_value = builder.compare(opcode, rs1_value, imm_value);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_alu(Instruction inst, ir::Opcode opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
-    auto rs1_node = emit_load_register(type, inst.rs1());
-    auto rs2_node = emit_load_register(type, inst.rs2());
-    auto rd_node = builder.arithmetic(opcode, rs1_node, rs2_node);
-    emit_store_register(inst.rd(), rd_node, true);
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto rs2_value = emit_load_register(type, inst.rs2());
+    auto rd_value = builder.arithmetic(opcode, rs1_value, rs2_value);
+    emit_store_register(inst.rd(), rd_value, true);
 }
 
 void Frontend::emit_shift(Instruction inst, ir::Opcode opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
-    auto rs1_node = emit_load_register(type, inst.rs1());
-    auto rs2_node = emit_load_register(ir::Type::i8, inst.rs2());
-    auto rd_node = builder.shift(opcode, rs1_node, rs2_node);
-    emit_store_register(inst.rd(), rd_node, true);
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto rs2_value = emit_load_register(ir::Type::i8, inst.rs2());
+    auto rd_value = builder.shift(opcode, rs1_value, rs2_value);
+    emit_store_register(inst.rd(), rd_value, true);
 }
 
 void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
     if (inst.rd() == 0) return;
-    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
-    auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
-    auto rd_node = builder.compare(opcode, rs1_node, rs2_node);
-    emit_store_register(inst.rd(), rd_node);
+    auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
+    auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
+    auto rd_value = builder.compare(opcode, rs1_value, rs2_value);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_branch(Instruction inst, ir::Opcode opcode, emu::reg_t pc) {
-    auto rs1_node = emit_load_register(ir::Type::i64, inst.rs1());
-    auto rs2_node = emit_load_register(ir::Type::i64, inst.rs2());
-    auto cmp_node = builder.compare(opcode, rs1_node, rs2_node);
+    auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
+    auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
+    auto cmp_value = builder.compare(opcode, rs1_value, rs2_value);
 
-    auto new_pc_node = builder.constant(ir::Type::i64, pc + inst.imm());
+    auto new_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
 
     bool use_mux = true;
     if (pc + inst.imm() == block->start_pc) use_mux = false;
 
     if (use_mux) {
-        auto pc_node = builder.constant(ir::Type::i64, block->end_pc);
-        auto mux_node = builder.mux(cmp_node, new_pc_node, pc_node);
-        auto store_pc_node = builder.store_register(last_side_effect, 64, mux_node);
-        auto jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
-        auto end_node = builder.control(ir::Opcode::end, {jmp_node});
-        graph.root(end_node);
+        auto pc_value = builder.constant(ir::Type::i64, block->end_pc);
+        auto mux_value = builder.mux(cmp_value, new_pc_value, pc_value);
+        auto store_pc_value = builder.store_register(last_memory, 64, mux_value);
+        auto jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
+        auto end_value = builder.control(ir::Opcode::end, {jmp_value});
+        graph.root(end_value.node());
 
     } else {
-        auto if_node = builder.create(ir::Type::none, ir::Opcode::i_if, {last_side_effect}, {cmp_node});
-        auto if_true_node = builder.control(ir::Opcode::if_true, {if_node});
-        auto if_false_node = builder.control(ir::Opcode::if_false, {if_node});
+        auto if_node = builder.create(ir::Opcode::i_if, {ir::Type::control, ir::Type::control}, {last_memory, cmp_value});
 
         // Building the true branch.
-        auto true_block_node = builder.control(ir::Opcode::block, {if_true_node});
-        auto store_pc_node = builder.store_register(true_block_node, 64, new_pc_node);
-        auto true_jmp_node = builder.control(ir::Opcode::jmp, {store_pc_node});
+        auto true_block_value = builder.create(ir::Opcode::block, {ir::Type::memory}, {if_node->value(0)})->value(0);
+        auto store_pc_value = builder.store_register(true_block_value, 64, new_pc_value);
+        auto true_jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
 
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
-            (*graph.start()->dependants().begin())->dependency_add(true_jmp_node);
-            auto end_node = builder.control(ir::Opcode::end, {if_false_node});
-            graph.root(end_node);
+            (*graph.start()->value(0).references().begin())->operand_add(true_jmp_value);
+            auto end_value = builder.control(ir::Opcode::end, {if_node->value(1)});
+            graph.root(end_value.node());
             return;
         }
 
-        auto end_node = builder.control(ir::Opcode::end, {true_jmp_node, if_false_node});
-        graph.root(end_node);
+        auto end_value = builder.control(ir::Opcode::end, {true_jmp_value, if_node->value(1)});
+        graph.root(end_value.node());
     }
 }
 
 void Frontend::compile(const Basic_block& block) {
     this->block = &block;
 
-    auto start_node = graph.start();
-    auto block_node = builder.control(ir::Opcode::block, {start_node});
-    last_side_effect = block_node;
+    auto start_value = graph.start()->value(0);
+    auto block_value = builder.create(ir::Opcode::block, {ir::Type::memory}, {start_value})->value(0);
+    last_memory = block_value;
 
     // Update pc
-    auto end_pc_node = builder.constant(ir::Type::i64, block.end_pc);
-    last_side_effect = builder.store_register(last_side_effect, 64, end_pc_node);
+    auto end_pc_value = builder.constant(ir::Type::i64, block.end_pc);
+    last_memory = builder.store_register(last_memory, 64, end_pc_value);
 
     // Update instret
     if (!state.no_instret) {
-        auto instret_node = builder.load_register(last_side_effect, 65);
-        auto instret_offset_node = builder.constant(ir::Type::i64, block.instructions.size());
-        auto new_instret_node = builder.arithmetic(ir::Opcode::add, instret_node, instret_offset_node);
-        last_side_effect = builder.store_register(instret_node, 65, new_instret_node);
+        ir::Value instret_value;
+        std::tie(last_memory, instret_value) = builder.load_register(last_memory, 65);
+        auto instret_offset_value = builder.constant(ir::Type::i64, block.instructions.size());
+        auto new_instret_value = builder.arithmetic(ir::Opcode::add, instret_value, instret_offset_value);
+        last_memory = builder.store_register(last_memory, 65, new_instret_value);
     }
 
     riscv::reg_t pc = block.start_pc;
@@ -188,14 +186,14 @@ void Frontend::compile(const Basic_block& block) {
         switch (inst.opcode()) {
             case Opcode::auipc: {
                 if (inst.rd() == 0) break;
-                auto rd_node = builder.constant(ir::Type::i64, pc + inst.imm());
-                last_side_effect = builder.store_register(last_side_effect, inst.rd(), rd_node);
+                auto rd_value = builder.constant(ir::Type::i64, pc + inst.imm());
+                last_memory = builder.store_register(last_memory, inst.rd(), rd_value);
                 break;
             }
             case Opcode::lui: {
                 if (inst.rd() == 0) break;
-                auto imm_node = builder.constant(ir::Type::i64, inst.imm());
-                last_side_effect = builder.store_register(last_side_effect, inst.rd(), imm_node);
+                auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+                last_memory = builder.store_register(last_memory, inst.rd(), imm_value);
                 break;
             }
             case Opcode::lb: emit_load(inst, ir::Type::i8, true); break;
@@ -239,25 +237,25 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
             case Opcode::jal: {
                 if (inst.rd()) {
-                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), end_pc_node);
+                    last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
                 }
                 ASSERT(pc + inst.length() == block.end_pc);
-                auto new_pc_node = builder.constant(ir::Type::i64, pc + inst.imm());
-                last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
+                auto new_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
+                last_memory = builder.store_register(last_memory, 64, new_pc_value);
                 break;
             }
             case Opcode::jalr: {
-                auto rs_node = emit_load_register(ir::Type::i64, inst.rs1());
-                auto imm_node = builder.constant(ir::Type::i64, inst.imm());
-                auto new_pc_node = builder.arithmetic(
+                auto rs_value = emit_load_register(ir::Type::i64, inst.rs1());
+                auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+                auto new_pc_value = builder.arithmetic(
                     ir::Opcode::i_and,
-                    builder.arithmetic(ir::Opcode::add, rs_node, imm_node),
+                    builder.arithmetic(ir::Opcode::add, rs_value, imm_value),
                     builder.constant(ir::Type::i64, ~1)
                 );
                 if (inst.rd()) {
-                    last_side_effect = builder.store_register(last_side_effect, inst.rd(), end_pc_node);
+                    last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
                 }
-                last_side_effect = builder.store_register(last_side_effect, 64, new_pc_node);
+                last_memory = builder.store_register(last_memory, 64, new_pc_value);
                 break;
             }
             case Opcode::beq: emit_branch(inst, ir::Opcode::eq, pc); return;
@@ -267,17 +265,17 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
             case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
             default: {
-                last_side_effect = graph.manage(new ir::Node(ir::Type::none, ir::Opcode::emulate, {}, {last_side_effect}));
-                last_side_effect->attribute(util::read_as<uint64_t>(&inst));
+                last_memory = graph.manage(new ir::Node(ir::Opcode::emulate, {ir::Type::memory}, {last_memory}))->value(0);
+                last_memory.node()->attribute(util::read_as<uint64_t>(&inst));
                 break;
             }
         }
         pc += inst.length();
     }
 
-    auto jmp_node = builder.control(ir::Opcode::jmp, {last_side_effect});
-    auto end_node = builder.control(ir::Opcode::end, {jmp_node});
-    graph.root(end_node);
+    auto jmp_value = builder.control(ir::Opcode::jmp, {last_memory});
+    auto end_value = builder.control(ir::Opcode::end, {jmp_value});
+    graph.root(end_value.node());
 }
 
 ir::Graph compile(emu::State& state, const Basic_block& block) {
