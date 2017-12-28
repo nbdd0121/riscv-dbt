@@ -62,6 +62,68 @@ bool Local_value_numbering::Equal_to::operator ()(Value a, Value b) const noexce
     return true;
 }
 
+// Sign-extend value of type to i64
+uint64_t Local_value_numbering::sign_extend(Type type, uint64_t value) {
+    switch (type) {
+        case Type::i1: return value ? 1 : 0;
+        case Type::i8: return static_cast<int64_t>(static_cast<int8_t>(value));
+        case Type::i16: return static_cast<int64_t>(static_cast<int16_t>(value));
+        case Type::i32: return static_cast<int64_t>(static_cast<int32_t>(value));
+        case Type::i64: return value;
+        default: ASSERT(0);
+    }
+}
+
+// Zero-extend value of type to i64
+uint64_t Local_value_numbering::zero_extend(Type type, uint64_t value) {
+    switch (type) {
+        case Type::i1: return value ? 1 : 0;
+        case Type::i8: return static_cast<uint8_t>(value);
+        case Type::i16: return static_cast<uint16_t>(value);
+        case Type::i32: return static_cast<uint32_t>(value);
+        case Type::i64: return value;
+        default: ASSERT(0);
+    }
+}
+
+// Evaluate cast.
+uint64_t Local_value_numbering::cast(Type type, Type oldtype, bool sext, uint64_t value) {
+    // For signed upcast, it can be represented as sign-extend to 64-bit and downcast.
+    // For unsigned upcast, it can be represented as zero-extend to 64-bit and downcast.
+    // For downcast, sign-extending or zero-extending makes no difference.
+    // We choose to express all values using 64-bit number, sign-extended, as this representation allows comparision
+    // without knowing the type of the value.
+    if (sext) {
+        return sign_extend(type, value);
+    } else {
+        return sign_extend(type, zero_extend(oldtype, value));
+    }
+}
+
+// Evaluate binary operations.
+uint64_t Local_value_numbering::binary(Type type, Opcode opcode, uint64_t l, uint64_t r) {
+    switch (opcode) {
+        case Opcode::add: return sign_extend(type, l + r);
+        case Opcode::sub: return sign_extend(type, l - r);
+        // Bitwise operations will preserve the sign-extension.
+        case Opcode::i_xor: return l ^ r;
+        case Opcode::i_or: return l | r;
+        case Opcode::i_and: return l & r;
+        case Opcode::shl: return sign_extend(type, l << (r & (get_type_size(type) - 1)));
+        // To maintain correctness, convert to zero-extension, perform operation, then convert back.
+        case Opcode::shr: return sign_extend(type, zero_extend(type, l) >> (r & (get_type_size(type) - 1)));
+        case Opcode::sar: return static_cast<int64_t>(l) >> (r & (get_type_size(type) - 1));
+        case Opcode::eq: return l == r;
+        case Opcode::ne: return l != r;
+        // All comparisions will work with sign-extension (which is the reason sign-extension is chosen).
+        case Opcode::lt: return static_cast<int64_t>(l) < static_cast<int64_t>(r);
+        case Opcode::ge: return static_cast<int64_t>(l) >= static_cast<int64_t>(r);
+        case Opcode::ltu: return l < r;
+        case Opcode::geu: return l >= r;
+        default: ASSERT(0);
+    }
+}
+
 // Helper function that replaces current value with a constant value. It will keep type intact.
 void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
 
@@ -100,10 +162,7 @@ void Local_value_numbering::after(Node* node) {
 
         // If the operand is constant, then perform constant folding.
         if (x.is_const()) {
-            return replace_with_constant(
-                output,
-                Evaluator::cast(output.type(), x.type(), node->attribute(), x.const_value())
-            );
+            return replace_with_constant(output, cast(output.type(), x.type(), node->attribute(), x.const_value()));
         }
 
         // Two casts can be possibly folded.
@@ -144,10 +203,7 @@ void Local_value_numbering::after(Node* node) {
 
         // If both operands are constant, then perform constant folding.
         if (x.is_const() && y.is_const()) {
-            return replace_with_constant(
-                output,
-                Evaluator::binary(x.type(), node->opcode(), x.const_value(), y.const_value())
-            );
+            return replace_with_constant(output, binary(x.type(), node->opcode(), x.const_value(), y.const_value()));
         }
 
         // Canonicalization, for commutative opcodes move constant to the right.
@@ -247,9 +303,7 @@ void Local_value_numbering::after(Node* node) {
         // More folding for add
         if (opcode == Opcode::add && y.references().size() == 1) {
             if (x.opcode() == Opcode::add && x.node()->operand(1).is_const()) {
-                y.node()->attribute(
-                    Evaluator::sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value())
-                );
+                y.node()->attribute(sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value()));
                 x = x.node()->operand(0);
                 node->operand_set(0, x);
             }

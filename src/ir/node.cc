@@ -6,7 +6,7 @@
 namespace ir {
 
 Node::Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
-    _operands(std::move(operands)),  _type{std::move(type)}, _opcode{opcode} {
+    _operands(std::move(operands)),  _type{std::move(type)}, _opcode{opcode}, _visited{0} {
 
     link();
     _references.resize(_type.size());

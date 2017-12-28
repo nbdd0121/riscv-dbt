@@ -77,29 +77,6 @@ public:
     virtual bool before(Node* node) override;
 };
 
-class Evaluator: private Pass {
-public:
-    static uint64_t sign_extend(Type type, uint64_t value);
-    static uint64_t zero_extend(Type type, uint64_t value);
-    static uint64_t cast(Type type, Type oldtype, bool sext, uint64_t value);
-    static uint64_t binary(Type type, Opcode opcode, uint64_t l, uint64_t r);
-
-private:
-    // TODO: Make the evaluator more generic.
-    riscv::Context* _ctx;
-
-public:
-    Evaluator(riscv::Context* ctx): _ctx {ctx} {};
-
-protected:
-    // Evaluator, as a pass, only evaluate a block. A new run function is provided to evaluate the whole graph.
-    virtual bool before(Node* node) override { return node->opcode() == Opcode::block; }
-    virtual void after(Node* node) override;
-
-public:
-    void run(Graph& graph);
-};
-
 class Local_value_numbering: public Pass {
 private:
     struct Hash {
@@ -112,6 +89,11 @@ private:
 
 private:
     std::unordered_set<Value, Hash, Equal_to> _set;
+
+    static uint64_t sign_extend(Type type, uint64_t value);
+    static uint64_t zero_extend(Type type, uint64_t value);
+    static uint64_t cast(Type type, Type oldtype, bool sext, uint64_t value);
+    static uint64_t binary(Type type, Opcode opcode, uint64_t l, uint64_t r);
 
     void replace_with_constant(Value value, uint64_t const_value);
     void lvn(Value value);

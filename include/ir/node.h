@@ -198,12 +198,6 @@ private:
         void *pointer;
     } _attribute;
 
-    // Scratchpad for passes to store data temporarily.
-    union {
-        uint64_t value;
-        void *pointer;
-    } _scratchpad;
-
     // Opcode of the node.
     Opcode _opcode;
 
@@ -227,11 +221,6 @@ private:
 
 public:
     // Field accessors and mutators
-    uint64_t scratchpad() const { return _scratchpad.value; }
-    void scratchpad(uint64_t value) { _scratchpad.value = value; }
-    void* scratchpad_pointer() const { return _scratchpad.pointer; }
-    void scratchpad_pointer(void* pointer) { _scratchpad.pointer = pointer; }
-
     uint64_t attribute() const { return _attribute.value; }
     void attribute(uint64_t value) { _attribute.value = value; }
     void* attribute_pointer() const { return _attribute.pointer; }

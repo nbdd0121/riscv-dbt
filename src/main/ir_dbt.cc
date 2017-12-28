@@ -115,8 +115,8 @@ static void generate_eh_frame(Ir_block& block) {
 }
 
 Ir_dbt::Ir_dbt(emu::State& state) noexcept: state_{state} {
-    icache_tag_ = std::unique_ptr<emu::reg_t[]> { new emu::reg_t[4096] };
-    icache_ = std::unique_ptr<std::byte*[]> { new std::byte*[4096] };
+    icache_tag_ = std::make_unique<emu::reg_t[]>(4096);
+    icache_ = std::make_unique<std::byte*[]>(4096);
     for (size_t i = 0; i < 4096; i++) {
         icache_tag_[i] = 0;
     }
@@ -136,8 +136,6 @@ void Ir_dbt::step(riscv::Context& context) {
     auto func = reinterpret_cast<void(*)(riscv::Context&)>(icache_[tag]);
     ASSERT(func);
     func(context);
-
-    // ir::pass::Evaluator{&context}.run(graph_cache_[pc]);
 }
 
 void Ir_dbt::compile(emu::reg_t pc) {

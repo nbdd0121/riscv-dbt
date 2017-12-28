@@ -4,7 +4,7 @@ CXX = g++-7
 LD_FLAGS = -g
 CXX_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
 
-LD_RELEASE_FLAGS = -g -flto
+LD_RELEASE_FLAGS = -g -flto -O2
 CXX_RELEASE_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DASSERT_STRATEGY=ASSERT_STRATEGY_ASSUME -flto -fno-stack-protector
 
 OBJS = \
@@ -13,7 +13,6 @@ OBJS = \
 	emu/syscall.o \
 	ir/block_marker.o \
 	ir/dot_printer.o \
-	ir/evaluator.o \
 	ir/node.o \
 	ir/pass.o \
 	ir/local_value_numbering.o \
