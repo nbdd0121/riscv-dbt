@@ -22,6 +22,7 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(store_register)
         CASE(load_memory)
         CASE(store_memory)
+        CASE(fence)
         CASE(emulate)
         CASE(neg)
         case Opcode::i_not: return "not";
@@ -48,6 +49,8 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
 const char* Dot_printer::type_name(Type type) {
     switch (type) {
 #define CASE(name) case Type::name: return #name;
+        CASE(control)
+        CASE(memory)
         CASE(none)
         CASE(i1)
         CASE(i8)
@@ -60,7 +63,7 @@ const char* Dot_printer::type_name(Type type) {
 }
 
 void Dot_printer::start() {
-    std::clog << "digraph G {\n\trankdir = BT;\n\tnode [shape=box];\n";
+    std::clog << "digraph G {\n\trankdir = BT;\n\tnode [shape=record];\n";
 }
 
 void Dot_printer::finish() {
@@ -70,23 +73,48 @@ void Dot_printer::finish() {
 void Dot_printer::after(Node* node) {
 
     // Draw the node with type, opcode
-    util::log("\t\"{:x}\" [label=\"", reinterpret_cast<uintptr_t>(node));
-    if (node->type() != Type::none) {
-        std::clog << type_name(node->type()) << ' ';
+    util::log("\t\"{:x}\" [label=\"{{", reinterpret_cast<uintptr_t>(node));
+
+    Opcode opcode = node->opcode();
+
+    // First compute whether input label is needed.
+    bool need_label;
+    if (node->operand_count() <= 1) {
+        // No ambiguities in this case.
+        need_label = false;
+
+    } else if (opcode == Opcode::block || opcode == Opcode::store_memory) {
+        // Block is ordered, and store_memory's address/value operands need distinction.
+        need_label = true;
+
+    } else {
+        need_label = is_pure_opcode(opcode) && !is_commutative_opcode(opcode);
     }
+
+    if (need_label) {
+        size_t operand_count = node->operand_count();
+        if (operand_count != 0) {
+            std::clog << '{';
+            for (size_t i = 0; i < operand_count; i++) {
+                if (i != 0) std::clog << '|';
+                util::log("<i{}>", i);
+            }
+            std::clog << "}|";
+        }
+    }
+
+    // If node only produces one value, we will inline the type with the instruction body.
+    if (node->value_count() == 1) {
+        Type type = node->value(0).type();
+        if (type != Type::control && type != Type::memory) {
+            std::clog << type_name(type) << ' ';
+        }
+    }
+
+    // Print opcode and opcode relevant information.
     std::clog << opcode_name(node->opcode());
 
-    bool control_dependency = false;
-    bool dependency_need_label = node->opcode() == Opcode::block && node->dependency_count() > 1;
-    bool operand_need_label = node->operand_count() > 1 && !is_commutative_opcode(node->opcode());
-
     switch (node->opcode()) {
-        case Opcode::block:
-        case Opcode::end:
-        case Opcode::if_true:
-        case Opcode::if_false:
-            control_dependency = true;
-            break;
         case Opcode::constant:
             std::clog << ' ' << static_cast<int64_t>(node->attribute());
             break;
@@ -99,31 +127,38 @@ void Dot_printer::after(Node* node) {
             break;
         default: break;
     }
-    std::clog << "\"];\n";
 
-    // Draw dependencies as edges. Data flow dependencies are colored black, control flow dependencies are colored red,
-    // and side-effect dependnecies are colored blue.
-    auto dependencies = node->dependencies();
-    for (size_t i = 0; i < dependencies.size(); i++) {
-        auto dependency = dependencies[i];
-
-        util::log(
-            dependency_need_label
-                ? "\t\"{:x}\" -> \"{:x}\" [label={},color={}];\n"
-                : "\t\"{:x}\" -> \"{:x}\" [color={3}];\n",
-            reinterpret_cast<uintptr_t>(node), reinterpret_cast<uintptr_t>(dependency),
-            i, control_dependency ? "red" : "blue"
-        );
+    // If node produces multiple value, print out fields.
+    if (node->value_count() != 1) {
+        std::clog << "|{";
+        for (size_t i = 0; i < node->value_count(); i++) {
+            if (i != 0) std::clog << '|';
+            Value value = node->value(i);
+            util::log("<o{}>{}", i, type_name(value.type()));
+        }
+        std::clog << '}';
     }
+
+    std::clog << "}\"]\n";
 
     auto operands = node->operands();
     for (size_t i = 0; i < operands.size(); i++) {
         auto operand = operands[i];
 
+        const char* color;
+        switch (operand.type()) {
+            case Type::control: color = "red"; break;
+            case Type::memory: color = "blue"; break;
+            default: color = nullptr; break;
+        }
+
+        util::log(need_label ? "\t\"{:x}\":i{} -> " : "\t\"{:x}\" -> ", reinterpret_cast<uintptr_t>(node), i);
         util::log(
-            operand_need_label ? "\t\"{:x}\" -> \"{:x}\" [label={}];\n" : "\t\"{:x}\" -> \"{:x}\";\n",
-            reinterpret_cast<uintptr_t>(node), reinterpret_cast<uintptr_t>(operand), i
+            operand.node()->value_count() == 1 ? "\"{:x}\"" : "\"{:x}\":o{}",
+            reinterpret_cast<uintptr_t>(operand.node()), operand.index()
         );
+
+        util::log(color ? " [color={}];\n" : ";\n", color);
     }
 }
 
