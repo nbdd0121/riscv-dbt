@@ -305,4 +305,16 @@ uint64_t Value::const_value() const { return _node->attribute(); }
 
 } // ir
 
+namespace std {
+
+template<typename Key> struct hash;
+
+template<> struct hash<::ir::Value> {
+    size_t operator()(ir::Value val) const {
+        return reinterpret_cast<uintptr_t>(val.node()) ^ val.index();
+    }
+};
+
+} // std
+
 #endif
