@@ -31,7 +31,7 @@ uint64_t Evaluator::zero_extend(Type type, uint64_t value) {
     }
 }
 
-// Evaluate cast node.
+// Evaluate cast.
 uint64_t Evaluator::cast(Type type, Type oldtype, bool sext, uint64_t value) {
     // For signed upcast, it can be represented as sign-extend to 64-bit and downcast.
     // For unsigned upcast, it can be represented as zero-extend to 64-bit and downcast.
@@ -70,17 +70,24 @@ uint64_t Evaluator::binary(Type type, Opcode opcode, uint64_t l, uint64_t r) {
 }
 
 void Evaluator::after(Node* node) {
+    // TODO: When a node can actually produce multiple data values, use of scratchpad will be inpractical.
     uint64_t result = 0;
     auto opcode = node->opcode();
     switch (opcode) {
         case Opcode::i_if:
         case Opcode::jmp:
+        case Opcode::fence:
             break;
         case Opcode::constant:
             result = node->attribute();
             break;
         case Opcode::cast:
-            result = cast(node->type(), node->operand(0)->type(), node->attribute(), node->operand(0)->scratchpad());
+            result = cast(
+                node->value(0).type(),
+                node->operand(0).type(),
+                node->attribute(),
+                node->operand(0).node()->scratchpad()
+            );
             break;
         case Opcode::load_register:
             // Need to use util::read_as to be standard-compliant (otherwise we may access array out of bound).
@@ -89,12 +96,12 @@ void Evaluator::after(Node* node) {
         case Opcode::store_register:
             util::write_as<uint64_t>(
                 reinterpret_cast<uint64_t*>(_ctx->registers) + node->attribute(),
-                node->operand(0)->scratchpad()
+                node->operand(1).node()->scratchpad()
             );
             break;
         case Opcode::load_memory: {
-            uint64_t address = node->operand(0)->scratchpad();
-            switch (node->type()) {
+            uint64_t address = node->operand(1).node()->scratchpad();
+            switch (node->value(1).type()) {
                 case Type::i8: result = sign_extend(Type::i8, _ctx->mmu->load_memory<uint8_t>(address)); break;
                 case Type::i16: result = sign_extend(Type::i16, _ctx->mmu->load_memory<uint16_t>(address)); break;
                 case Type::i32: result = sign_extend(Type::i32, _ctx->mmu->load_memory<uint32_t>(address)); break;
@@ -104,9 +111,9 @@ void Evaluator::after(Node* node) {
             break;
         }
         case Opcode::store_memory: {
-            uint64_t address = node->operand(0)->scratchpad();
-            uint64_t value = node->operand(1)->scratchpad();
-            switch (node->operand(1)->type()) {
+            uint64_t address = node->operand(1).node()->scratchpad();
+            uint64_t value = node->operand(2).node()->scratchpad();
+            switch (node->operand(2).type()) {
                 case Type::i8: _ctx->mmu->store_memory<uint8_t>(address, value); break;
                 case Type::i16: _ctx->mmu->store_memory<uint16_t>(address, value); break;
                 case Type::i32: _ctx->mmu->store_memory<uint32_t>(address, value); break;
@@ -122,19 +129,19 @@ void Evaluator::after(Node* node) {
             break;
         }
         case Opcode::neg:
-            result = sign_extend(node->type(), -node->operand(0)->scratchpad());
+            result = sign_extend(node->value(0).type(), -node->operand(0).node()->scratchpad());
             break;
         case Opcode::i_not:
-            result = ~node->operand(0)->scratchpad();
+            result = ~node->operand(0).node()->scratchpad();
             break;
         case Opcode::mux:
-            result = node->operand(0)->scratchpad() ? node->operand(1)->scratchpad() : node->operand(2)->scratchpad();
+            result = node->operand(0).node()->scratchpad() ? node->operand(1).node()->scratchpad() : node->operand(2).node()->scratchpad();
             break;
         default: {
             ASSERT(is_binary_opcode(opcode));
-            uint64_t l = node->operand(0)->scratchpad();
-            uint64_t r = node->operand(1)->scratchpad();
-            result = binary(node->type(), opcode, l, r);
+            uint64_t l = node->operand(0).node()->scratchpad();
+            uint64_t r = node->operand(1).node()->scratchpad();
+            result = binary(node->value(0).type(), opcode, l, r);
             break;
         }
     }
@@ -143,8 +150,8 @@ void Evaluator::after(Node* node) {
 
 void Evaluator::run(Graph& graph) {
     auto start = graph.start();
-    ASSERT(start->dependants().size() == 1);
-    auto block = *start->dependants().begin();
+    ASSERT(start->value(0).references().size() == 1);
+    auto block = *start->value(0).references().begin();
 
     // While the control does not reach the end node.
     while (block != graph.root()) {
@@ -159,24 +166,12 @@ void Evaluator::run(Graph& graph) {
         if (end->opcode() == Opcode::i_if) {
 
             // Get the result of comparision.
-            bool result = end->operand(0)->scratchpad();
-
-            for (auto ref: end->dependants()) {
-                bool expected;
-                if (ref->opcode() == Opcode::if_true) expected = true;
-                else if (ref->opcode() == Opcode::if_false) expected = false;
-                else ASSERT(0);
-
-                if (result == expected) {
-                    end = ref;
-                    break;
-                }
-            }
+            bool result = end->operand(0).node()->scratchpad();
+            block = *end->value(result ? 0 : 1).references().begin();
         } else {
             ASSERT(end->opcode() == Opcode::jmp);
+            block = *end->value(0).references().begin();
         }
-
-        block = *end->dependants().begin();
     }
 }
 
