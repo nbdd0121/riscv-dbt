@@ -13,7 +13,7 @@ namespace ir::pass {
 
 class Pass {
 public:
-    static void replace(Node* oldnode, Node* newnode);
+    static void replace(Value oldvalue, Value newvalue);
 
 protected:
     Graph* _graph;

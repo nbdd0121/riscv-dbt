@@ -21,6 +21,8 @@ enum class Type: uint8_t {
     i16 = 16,
     i32 = 32,
     i64 = 64,
+    memory = 0xFE,
+    control = 0xFF,
 };
 
 [[maybe_unused]]
@@ -40,10 +42,10 @@ enum class Opcode: uint8_t {
     // attribute.pointer is used to reference the last node in the block, i.e. jmp/if.
     block,
 
-    // Input: Memory, Value. Output: (Control, Control).
+    // Input: Memory, Value. Output: Control, Control.
     i_if,
 
-    // Input: (Control, Control). Output: Control.
+    // Input: Control, Control. Output: Control.
     if_true,
     if_false,
 
@@ -67,6 +69,9 @@ enum class Opcode: uint8_t {
 
     // Input: Memory, Value, Value. Output: Memory.
     store_memory,
+
+    // Input: Memory[], Output: Memory
+    fence,
 
     /** Pure opcodes **/
 
@@ -140,27 +145,47 @@ static bool is_commutative_opcode(Opcode opcode) {
     }
 }
 
+class Node;
+class Value;
 class Graph;
+
+// Represents a value defined by a node. Note that the node may be null.
+class Value {
+private:
+    Node* _node;
+    size_t _index;
+public:
+    Value(): _node{nullptr}, _index{0} {}
+    Value(Node* node, size_t index): _node{node}, _index{index} {}
+
+    Node* node() const { return _node; }
+    size_t index() const { return _index; }
+
+    inline Type type() const;
+    inline const util::Array_multiset<Node*>& references() const;
+
+    explicit operator bool() { return _node != nullptr; }
+};
+
+[[maybe_unused]]
+static bool operator ==(Value a, Value b) {
+    return a.node() == b.node() && a.index() == b.index();
+}
+
+[[maybe_unused]]
+static bool operator !=(Value a, Value b) { return !(a == b); }
 
 class Node {
 private:
 
-    // We divide dependencies into two types. Data flow dependencies and control flow dependencies. The second one also
-    // indicates partial ordering of side effects besides control flow. Different names are given for these two types
-    // of dependencies. The former one is named operands/references, and the latter one is named
-    // dependencies/dependants.
-
-    // Control & memory dependency that this node references.
-    std::vector<Node*> _dependencies;
-
     // Values that this node references.
-    std::vector<Node*> _operands;
-
-    // Nodes that depends on this node.
-    util::Array_multiset<Node*> _dependants;
+    std::vector<Value> _operands;
 
     // Nodes that references the value of this node.
-    util::Array_multiset<Node*> _references;
+    std::vector<util::Array_multiset<Node*>> _references;
+
+    // The output type of this node.
+    std::vector<Type> _type;
 
     // Additional attributes for some nodes.
     union {
@@ -174,9 +199,6 @@ private:
         void *pointer;
     } _scratchpad;
 
-    // The output type of this node.
-    Type _type;
-
     // Opcode of the node.
     Opcode _opcode;
 
@@ -185,12 +207,7 @@ private:
     uint8_t _visited;
 
 public:
-    Node(
-        Type type, Opcode opcode,
-        std::vector<Node*>&& dependencies,
-        std::vector<Node*>&& operands
-    );
-
+    Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands);
     ~Node();
 
     // Disable copy construction and assignment. Node should live on heap.
@@ -200,12 +217,8 @@ public:
     void operator =(Node&& node) = delete;
 
 private:
-    void dependency_link();
-    void dependency_unlink();
-    void operand_link();
-    void operand_unlink();
-    void link() { dependency_link(); operand_link(); }
-    void unlink() { dependency_unlink(); operand_unlink(); }
+    void link();
+    void unlink();
 
 public:
     // Field accessors and mutators
@@ -219,39 +232,29 @@ public:
     void* attribute_pointer() const { return _attribute.pointer; }
     void attribute_pointer(void* pointer) { _attribute.pointer = pointer; }
 
-    Type type() const { return _type; }
-    void type(Type type) { _type = type; }
+    // A node can produce one or more values. The following functions allow access to these values.
+    size_t value_count() const { return _type.size(); }
+    Value value(size_t index) { return {this, index}; }
+
     Opcode opcode() const { return _opcode; }
     void opcode(Opcode opcode) { _opcode = opcode; }
 
-    // Dependency acccessors and mutators
-    const std::vector<Node*>& dependencies() const { return _dependencies; }
-    void dependencies(std::vector<Node*>&& dependencies);
-    size_t dependency_count() const { return _dependencies.size(); }
-
-    void dependency_update(Node* oldnode, Node* newnode);
-    void dependency_add(Node* node);
-
     // Operand accessors and mutators
-    const std::vector<Node*>& operands() const { return _operands; }
-    void operands(std::vector<Node*>&& operands);
+    const std::vector<Value>& operands() const { return _operands; }
+    void operands(std::vector<Value>&& operands);
     size_t operand_count() const { return _operands.size(); }
 
-    Node* operand(size_t index) const {
+    Value operand(size_t index) const {
         ASSERT(index < _operands.size());
         return _operands[index];
     }
 
-    void operand_set(size_t index, Node* node);
+    void operand_set(size_t index, Value value);
+    void operand_add(Value value);
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
-    void operand_update(Node* oldnode, Node* newnode);
+    void operand_update(Value oldvalue, Value newvalue);
 
-    // Dependants accessors
-    const util::Array_multiset<Node*>& dependants() const { return _dependants; }
-
-    // Reference accessors
-    const util::Array_multiset<Node*>& references() const { return _references; }
-
+    friend Value;
     friend Graph;
     friend pass::Pass;
 };
@@ -287,6 +290,9 @@ public:
 
     friend pass::Pass;
 };
+
+Type Value::type() const { return _node->_type[_index]; }
+const util::Array_multiset<Node*>& Value::references() const { return _node->_references[_index]; }
 
 } // ir
 

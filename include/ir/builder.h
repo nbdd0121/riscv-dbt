@@ -1,6 +1,8 @@
 #ifndef IR_BUILDER_H
 #define IR_BUILDER_H
 
+#include <tuple>
+
 #include "ir/node.h"
 
 namespace ir {
@@ -11,64 +13,65 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
-    Node* create(Type type, Opcode opcode, std::vector<Node*>&& dep, std::vector<Node*>&& opr) {
-        return _graph.manage(new Node(type, opcode, std::move(dep), std::move(opr)));
+    Node* create(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& opr) {
+        return _graph.manage(new Node(opcode, std::move(type), std::move(opr)));
     }
 
-    Node* control(Opcode opcode, std::vector<Node*>&& dep) {
-        return create(Type::none, opcode, std::move(dep), {});
+    Value control(Opcode opcode, std::vector<Value>&& opr) {
+        return create(opcode, {Type::control}, std::move(opr))->value(0);
     }
 
-    Node* constant(Type type, uint64_t value) {
-        auto inst = create(type, Opcode::constant, {}, {});
+    Value constant(Type type, uint64_t value) {
+        auto inst = create(Opcode::constant, {type}, {});
         inst->attribute(value);
-        return inst;
+        return inst->value(0);
     }
 
-    Node* cast(Type type, bool sext, Node* operand) {
-        auto inst = create(type, Opcode::cast, {}, {operand});
+    Value cast(Type type, bool sext, Value operand) {
+        auto inst = create(Opcode::cast, {type}, {operand});
         inst->attribute(sext);
-        return inst;
+        return inst->value(0);
     }
 
-    Node* load_register(Node* dep, int regnum) {
-        auto inst = create(Type::i64, Opcode::load_register, {dep}, {});
+    std::tuple<Value, Value> load_register(Value dep, int regnum) {
+        auto inst = create(Opcode::load_register, {Type::memory, Type::i64}, {dep});
         inst->attribute(regnum);
-        return inst;
+        return {inst->value(0), inst->value(1)};
     }
 
-    Node* store_register(Node* dep, int regnum, Node* operand) {
-        auto inst = create(Type::none, Opcode::store_register, {dep}, {operand});
+    Value store_register(Value dep, int regnum, Value operand) {
+        auto inst = create(Opcode::store_register, {Type::memory}, {dep, operand});
         inst->attribute(regnum);
-        return inst;
+        return inst->value(0);
     }
 
-    Node* load_memory(Node* dep, Type type, Node* address) {
-        return create(type, Opcode::load_memory, {dep}, {address});
+    std::tuple<Value, Value> load_memory(Value dep, Type type, Value address) {
+        auto inst = create(Opcode::load_memory, {Type::memory, type}, {dep, address});
+        return {inst->value(0), inst->value(1)};
     }
 
-    Node* store_memory(Node* dep, Node* address, Node* value) {
-        return create(Type::none, Opcode::store_memory, {dep}, {address, value});
+    Value store_memory(Value dep, Value address, Value value) {
+        return create(Opcode::store_memory, {Type::memory}, {dep, address, value})->value(0);
     }
 
-    Node* arithmetic(Opcode opcode, Node* left, Node* right) {
-        ASSERT(left->type() == right->type());
-        return create(left->type(), opcode, {}, {left, right});
+    Value arithmetic(Opcode opcode, Value left, Value right) {
+        ASSERT(left.type() == right.type());
+        return create(opcode, {left.type()}, {left, right})->value(0);
     }
 
-    Node* shift(Opcode opcode, Node* left, Node* right) {
-        ASSERT(right->type() == Type::i8);
-        return create(left->type(), opcode, {}, {left, right});
+    Value shift(Opcode opcode, Value left, Value right) {
+        ASSERT(right.type() == Type::i8);
+        return create(opcode, {left.type()}, {left, right})->value(0);
     }
 
-    Node* compare(Opcode opcode, Node* left, Node* right) {
-        ASSERT(left->type() == right->type());
-        return create(Type::i1, opcode, {}, {left, right});
+    Value compare(Opcode opcode, Value left, Value right) {
+        ASSERT(left.type() == right.type());
+        return create(opcode, {Type::i1}, {left, right})->value(0);
     }
 
-    Node* mux(Node* cond, Node* left, Node* right) {
-        ASSERT(cond->type() == Type::i1 && left->type() == right->type());
-        return create(left->type(), Opcode::mux, {}, {cond, left, right});
+    Value mux(Value cond, Value left, Value right) {
+        ASSERT(cond.type() == Type::i1 && left.type() == right.type());
+        return create(Opcode::mux, {left.type()}, {cond, left, right})->value(0);
     }
 };
 

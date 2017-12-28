@@ -3,13 +3,9 @@
 
 namespace ir::pass {
 
-void Pass::replace(Node* oldnode, Node* newnode) {
-    while (!oldnode->dependants().empty()) {
-        (*oldnode->dependants().rbegin())->dependency_update(oldnode, newnode);
-    }
-
-    while (!oldnode->references().empty()) {
-        (*oldnode->references().rbegin())->operand_update(oldnode, newnode);
+void Pass::replace(Value oldvalue, Value newvalue) {
+    while (!oldvalue.references().empty()) {
+        (*oldvalue.references().rbegin())->operand_update(oldvalue, newvalue);
     }
 }
 
@@ -23,8 +19,7 @@ void Pass::run_recurse(Node* node) {
     node->_visited = 2;
 
     // Visit all dependencies
-    for (auto dependency: node->dependencies()) run_recurse(dependency);
-    for (auto operand: node->operands()) run_recurse(operand);
+    for (auto operand: node->operands()) run_recurse(operand.node());
     after(node);
     node->_visited = 1;
 }

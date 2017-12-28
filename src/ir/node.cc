@@ -5,91 +5,58 @@
 
 namespace ir {
 
-Node::Node(Type type, Opcode opcode, std::vector<Node*>&& dependencies, std::vector<Node*>&& operands):
-    _dependencies(std::move(dependencies)), _operands(std::move(operands)), _type {type}, _opcode{opcode} {
+Node::Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+    _operands(std::move(operands)),  _type{std::move(type)}, _opcode{opcode} {
 
     link();
+    _references.resize(_type.size());
 }
 
 Node::~Node() {
-    ASSERT(_references.size() == 0);
+    for (auto ref: _references) ASSERT(ref.size() == 0);
     unlink();
 }
 
-void Node::dependency_link() {
-    for (auto dependency: _dependencies) {
-        dependency->_dependants.insert(this);
-    }
-}
-
-void Node::dependency_unlink() {
-    for (auto dependency: _dependencies) {
-        dependency->_dependants.remove(this);
-    }
-}
-
-void Node::operand_link() {
+void Node::link() {
     for (auto operand: _operands) {
-        operand->_references.insert(this);
+        operand.node()->_references[operand.index()].insert(this);
     }
 }
 
-void Node::operand_unlink() {
+void Node::unlink() {
     for (auto operand: _operands) {
-        operand->_references.remove(this);
+        operand.node()->_references[operand.index()].remove(this);
     }
 }
 
-void Node::dependencies(std::vector<Node*>&& dependencies) {
-    dependency_unlink();
-    _dependencies = std::move(dependencies);
-    dependency_link();
-}
-
-void Node::dependency_update(Node* oldinst, Node* newinst) {
-    ASSERT(oldinst && newinst);
-
-    auto ptr = std::find(_dependencies.begin(), _dependencies.end(), oldinst);
-    ASSERT(ptr != _dependencies.end());
-    *ptr = newinst;
-    newinst->_dependants.insert(this);
-    oldinst->_dependants.remove(this);
-}
-
-void Node::dependency_add(Node* node) {
-    ASSERT(node);
-    _dependencies.push_back(node);
-    node->_dependants.insert(this);
-}
-
-void Node::operands(std::vector<Node*>&& operands) {
-    operand_unlink();
+void Node::operands(std::vector<Value>&& operands) {
+    unlink();
     _operands = std::move(operands);
-    operand_link();
+    link();
 }
 
-void Node::operand_set(size_t index, Node* node) {
+void Node::operand_set(size_t index, Value value) {
     ASSERT(index < _operands.size());
-    ASSERT(node);
 
     auto& ptr = _operands[index];
-    node->_references.insert(this);
-    ptr->_references.remove(this);
-    ptr = node;
+    value.node()->_references[value.index()].insert(this);
+    ptr.node()->_references[ptr.index()].remove(this);
+    ptr = value;
 }
 
-void Node::operand_update(Node* oldinst, Node* newinst) {
-    ASSERT(oldinst && newinst);
+void Node::operand_add(Value value) {
+    _operands.push_back(value);
+    value.node()->_references[value.index()].insert(this);
+}
 
-    auto ptr = std::find(_operands.begin(), _operands.end(), oldinst);
+void Node::operand_update(Value oldvalue, Value newvalue) {
+    auto ptr = std::find(_operands.begin(), _operands.end(), oldvalue);
     ASSERT(ptr != _operands.end());
-    *ptr = newinst;
-    newinst->_references.insert(this);
-    oldinst->_references.remove(this);
+    operand_set(ptr - _operands.begin(), newvalue);
 }
 
 Graph::Graph() {
-    _start = manage(new Node(Type::none, Opcode::start, {}, {}));
+    _start = manage(new Node(Opcode::start, {Type::control}, {}));
 }
 
 Graph& Graph::operator=(Graph&& graph) {
@@ -101,9 +68,7 @@ Graph& Graph::operator=(Graph&& graph) {
 
 Graph::~Graph() {
     for (auto node: _heap) {
-        node->_dependencies.clear();
         node->_operands.clear();
-        node->_dependants.clear();
         node->_references.clear();
         delete node;
     }
@@ -119,7 +84,6 @@ void Graph::garbage_collect() {
     for (size_t i = 0; i < size; i++) {
         if (!_heap[i]->_visited) {
             _heap[i]->unlink();
-            _heap[i]->_dependencies.clear();
             _heap[i]->_operands.clear();
         }
     }
