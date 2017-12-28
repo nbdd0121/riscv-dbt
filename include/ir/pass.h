@@ -55,11 +55,14 @@ private:
     // Do not use std::vector<bool> as we don't need its space optimization.
     std::vector<char> has_store_after_exception;
 
-    Node* last_exception = nullptr;
-    Node* last_effect = nullptr;
+    Value last_exception;
+    Value last_effect;
 public:
     Register_access_elimination(int regcount):
         last_load(regcount), last_store(regcount), has_store_after_exception(regcount) {}
+
+private:
+    Value merge_memory(std::vector<Value> values);
 
 protected:
     virtual void after(Node* node) override;
@@ -100,16 +103,18 @@ public:
 class Local_value_numbering: public Pass {
 private:
     struct Hash {
-        size_t operator ()(Node* node) const noexcept;
+        size_t operator ()(Value value) const noexcept;
     };
+
     struct Equal_to {
-        bool operator ()(Node* a, Node* b) const noexcept;
+        bool operator ()(Value a, Value b) const noexcept;
     };
-public:
-    static void replace_with_constant(Node* node, uint64_t value);
 
 private:
-    std::unordered_set<Node*, Hash, Equal_to> _set;
+    std::unordered_set<Value, Hash, Equal_to> _set;
+
+    void replace_with_constant(Value value, uint64_t const_value);
+    void lvn(Value value);
 
 protected:
     virtual void after(Node* node) override;

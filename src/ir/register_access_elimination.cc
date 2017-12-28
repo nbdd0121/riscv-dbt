@@ -5,6 +5,12 @@
 
 namespace ir::pass {
 
+Value Register_access_elimination::merge_memory(std::vector<Value> values) {
+    ASSERT(!values.empty());
+    if (values.size() == 1) return values[0];
+    return _graph->manage(new Node(Opcode::fence, {Type::memory}, std::move(values)))->value(0);
+}
+
 void Register_access_elimination::after(Node* node) {
 
     // load_register needs to happen after previous stores.
@@ -27,8 +33,8 @@ void Register_access_elimination::after(Node* node) {
 
     switch (node->opcode()) {
         case Opcode::block: {
-            ASSERT(last_effect == nullptr);
-            last_effect = node;
+            ASSERT(!last_effect);
+            last_effect = node->value(0);
             break;
         }
         case Opcode::load_register: {
@@ -37,21 +43,21 @@ void Register_access_elimination::after(Node* node) {
             // As mentioned above, replace register load with previous load. With all optimizations we applied, this
             // replacement is necessary to make other transformations sound.
             if (last_load[regnum]) {
-                replace(node, last_load[regnum]);
+                replace(node->value(1), last_load[regnum]->value(1));
                 break;
             }
 
             // Otherwise this is the first load after side-effect or last store. Calculate the dependency here.
-            auto dep = last_store[regnum];
+            auto store = last_store[regnum];
 
             // Eliminate load immediately after store
-            if (dep && dep->opcode() == Opcode::store_register) {
-                replace(node, dep->operand(0));
+            if (store && store->opcode() == Opcode::store_register) {
+                replace(node->value(1), store->operand(1));
                 break;
             }
 
-            if (!dep) dep = last_effect;
-            node->dependencies({dep});
+            Value dep = store ? store->value(0) : last_effect;
+            node->operand_set(0, dep);
 
             last_load[regnum] = node;
             break;
@@ -59,12 +65,12 @@ void Register_access_elimination::after(Node* node) {
         case Opcode::store_register: {
             int regnum = node->attribute();
 
-            std::vector<Node*> dependencies;
+            std::vector<Value> dependencies;
 
             // If the load is after previous store, and the store is after previous exception, the depending solely on
             // last_load is sufficient. Otherwise we will in addition need to depend on last_store or last_exception.
 
-            if (last_load[regnum]) dependencies.push_back(last_load[regnum]);
+            if (last_load[regnum]) dependencies.push_back(last_load[regnum]->value(0));
 
             if (has_store_after_exception[regnum]) {
                 if (dependencies.empty()) {
@@ -73,7 +79,7 @@ void Register_access_elimination::after(Node* node) {
                     // the store. We will only depend on last store in this case. Note that this store is not a
                     // dependency of other nodes, so we can also eliminate the store by depending directly on
                     // its dependencies.
-                    dependencies = last_store[regnum]->dependencies();
+                    dependencies.push_back(last_store[regnum]->operand(0));
                 }
 
             } else {
@@ -85,7 +91,7 @@ void Register_access_elimination::after(Node* node) {
                 dependencies.push_back(last_effect);
             }
 
-            node->dependencies(std::move(dependencies));
+            node->operand_set(0, merge_memory(dependencies));
 
             last_load[regnum] = nullptr;
             last_store[regnum] = node;
@@ -94,11 +100,11 @@ void Register_access_elimination::after(Node* node) {
         }
         case Opcode::load_memory:
         case Opcode::store_memory:  {
-            std::vector<Node*> dependencies;
+            std::vector<Value> dependencies;
 
             // Nodes w/ exceptions depend on all previous stores.
             for (size_t regnum = 0; regnum < last_load.size(); regnum++) {
-                if (has_store_after_exception[regnum]) dependencies.push_back(last_store[regnum]);
+                if (has_store_after_exception[regnum]) dependencies.push_back(last_store[regnum]->value(0));
                 has_store_after_exception[regnum] = 0;
             }
 
@@ -112,23 +118,23 @@ void Register_access_elimination::after(Node* node) {
                 }
             }
 
-            node->dependencies(std::move(dependencies));
+            node->operand_set(0, merge_memory(dependencies));
 
-            last_exception = node;
+            last_exception = node->value(0);
             break;
         }
         case Opcode::emulate:
         case Opcode::i_if:
         case Opcode::jmp: {
-            std::vector<Node*> dependencies;
+            std::vector<Value> dependencies;
 
             bool need_last_exception = true;
             for (size_t regnum = 0; regnum < last_load.size(); regnum++) {
 
                 // The following logic is similar to store_register.
-                if (last_load[regnum]) dependencies.push_back(last_load[regnum]);
+                if (last_load[regnum]) dependencies.push_back(last_load[regnum]->value(0));
                 if (has_store_after_exception[regnum]) {
-                    if (!last_load[regnum]) dependencies.push_back(last_store[regnum]);
+                    if (!last_load[regnum]) dependencies.push_back(last_store[regnum]->value(0));
                     need_last_exception = false;
                 }
 
@@ -143,15 +149,15 @@ void Register_access_elimination::after(Node* node) {
                 dependencies.push_back(last_effect);
             }
 
-            node->dependencies(std::move(dependencies));
+            node->operand_set(0, merge_memory(dependencies));
 
-            last_exception = nullptr;
+            last_exception = {};
 
             if (node->opcode() == Opcode::emulate) {
-                last_effect = node;
+                last_effect = node->value(0);
             } else {
                 // if and jmp node will turn memory dependency into control, so last_effect needs to be cleared.
-                last_effect = nullptr;
+                last_effect = {};
             }
             break;
         }

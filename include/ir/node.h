@@ -165,6 +165,11 @@ public:
     inline const util::Array_multiset<Node*>& references() const;
 
     explicit operator bool() { return _node != nullptr; }
+
+    // Some frequently used utility function.
+    inline Opcode opcode() const;
+    inline bool is_const() const;
+    inline uint64_t const_value() const;
 };
 
 [[maybe_unused]]
@@ -293,6 +298,10 @@ public:
 
 Type Value::type() const { return _node->_type[_index]; }
 const util::Array_multiset<Node*>& Value::references() const { return _node->_references[_index]; }
+
+Opcode Value::opcode() const { return _node->_opcode; }
+bool Value::is_const() const { return _node->_opcode == Opcode::constant; }
+uint64_t Value::const_value() const { return _node->attribute(); }
 
 } // ir
 
