@@ -21,6 +21,10 @@ public:
         return create(opcode, {Type::control}, std::move(opr))->value(0);
     }
 
+    Value block(std::vector<Value>&& operands) {
+        return _graph.manage(new Block(std::move(operands)))->value(0);
+    }
+
     Value constant(Type type, uint64_t value) {
         return _graph.manage(new Constant(type, value))->value(0);
     }

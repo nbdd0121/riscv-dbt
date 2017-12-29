@@ -39,7 +39,6 @@ enum class Opcode: uint8_t {
     end,
 
     // Input: Control[]. Output: Memory.
-    // attribute.pointer is used to reference the last node in the block, i.e. jmp/if.
     block,
 
     // Input: Memory, Value. Output: Control, Control.
@@ -195,7 +194,6 @@ private:
     // Additional attributes for some nodes.
     union {
         uint64_t value;
-        void *pointer;
     } _attribute;
 
     // Opcode of the node.
@@ -223,8 +221,6 @@ public:
     // Field accessors and mutators
     uint64_t attribute() const { return _attribute.value; }
     void attribute(uint64_t value) { _attribute.value = value; }
-    void* attribute_pointer() const { return _attribute.pointer; }
-    void attribute_pointer(void* pointer) { _attribute.pointer = pointer; }
 
     // A node can produce one or more values. The following functions allow access to these values.
     size_t value_count() const { return _type.size(); }
@@ -280,9 +276,21 @@ private:
     uint16_t _regnum;
 
 public:
-    Register_access(uint16_t regnum, Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands): Node(opcode, std::move(type), std::move(operands)), _regnum{regnum} {}
+    Register_access(uint16_t regnum, Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+        Node(opcode, std::move(type), std::move(operands)), _regnum{regnum} {}
 
     uint16_t regnum() const { return _regnum; }
+};
+
+class Block: public Node {
+private:
+    Node* _end;
+
+public:
+    Block(std::vector<Value>&& operands): Node(Opcode::block, {Type::memory}, std::move(operands)) {}
+
+    Node* end() const { return _end; }
+    void end(Node* end) { _end = end; }
 };
 
 class Graph {

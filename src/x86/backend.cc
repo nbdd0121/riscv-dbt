@@ -829,8 +829,7 @@ void Backend::run(ir::Graph& graph) {
 
         ASSERT(block->opcode() == ir::Opcode::block);
 
-        // Use attribute.pointer to find the last node of the block.
-        auto end = static_cast<ir::Node*>(block->attribute_pointer());
+        auto end = static_cast<ir::Block*>(block)->end();
 
         if (end->opcode() == ir::Opcode::i_if) {
             to_process.push_back(*end->value(0).references().begin());
@@ -849,7 +848,7 @@ void Backend::run(ir::Graph& graph) {
 
     // In the simple case, we don't have to do relocations.
     if (blocks.size() == 1) {
-        run_on(graph, static_cast<ir::Node*>(blocks[0]->attribute_pointer()));
+        run_on(graph, static_cast<ir::Block*>(blocks[0])->end());
         emit(pop(Register::rbp));
         emit(ret());
         return;
@@ -865,7 +864,7 @@ void Backend::run(ir::Graph& graph) {
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
         auto next_block = blocks[i + 1];
-        auto end = static_cast<ir::Node*>(block->attribute_pointer());
+        auto end = static_cast<ir::Block*>(block)->end();
 
         // Store the label for relocation purpose.
         label_def[block] = _encoder.buffer().size();

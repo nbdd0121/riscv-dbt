@@ -6,7 +6,7 @@ bool Block_marker::before(Node* node) {
     switch (node->opcode()) {
         case Opcode::block:
             ASSERT(block_end);
-            node->attribute_pointer(block_end);
+            static_cast<Block*>(node)->end(block_end);
             block_end = nullptr;
             break;
         case Opcode::i_if:

@@ -144,7 +144,7 @@ void Frontend::emit_branch(Instruction inst, ir::Opcode opcode, emu::reg_t pc) {
         auto if_node = builder.create(ir::Opcode::i_if, {ir::Type::control, ir::Type::control}, {last_memory, cmp_value});
 
         // Building the true branch.
-        auto true_block_value = builder.create(ir::Opcode::block, {ir::Type::memory}, {if_node->value(0)})->value(0);
+        auto true_block_value = builder.block({if_node->value(0)});
         auto store_pc_value = builder.store_register(true_block_value, 64, new_pc_value);
         auto true_jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
 
@@ -165,7 +165,7 @@ void Frontend::compile(const Basic_block& block) {
     this->block = &block;
 
     auto start_value = graph.start()->value(0);
-    auto block_value = builder.create(ir::Opcode::block, {ir::Type::memory}, {start_value})->value(0);
+    auto block_value = builder.block({start_value});
     last_memory = block_value;
 
     // Update pc
