@@ -1,4 +1,5 @@
 #include "util/assert.h"
+#include "util/int_size.h"
 #include "util/memory.h"
 #include "x86/encoder.h"
 #include "x86/opcode.h"
@@ -6,35 +7,6 @@
 using namespace x86;
 
 namespace {
-
-// Need a separate copy for memory displacements.
-bool is_int8(uint32_t imm) {
-    return static_cast<uint32_t>(static_cast<int32_t>(static_cast<int8_t>(imm))) == imm;
-}
-
-bool is_int8(uint64_t imm) {
-    return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int8_t>(imm))) == imm;
-}
-
-bool is_int16(uint64_t imm) {
-    return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int16_t>(imm))) == imm;
-}
-
-bool is_int32(uint64_t imm) {
-    return static_cast<uint64_t>(static_cast<int64_t>(static_cast<int32_t>(imm))) == imm;
-}
-
-bool is_uint8(uint64_t imm) {
-    return (imm & 0xFF) == imm;
-}
-
-bool is_uint16(uint64_t imm) {
-    return (imm & 0xFFFF) == imm;
-}
-
-bool is_uint32(uint64_t imm) {
-    return (imm & 0xFFFFFFFF) == imm;
-}
 
 int get_size(const Operand& operand) {
     if (operand.is_register()) {
@@ -57,13 +29,13 @@ int get_size(const Operand& operand) {
 // If operation size is 8, 16 or 32-bit, then imm must be int8/int16/int32 or uint8/uint16/uint32.
 void check_immediate_size(int size, uint64_t imm) {
     if (size == 1) {
-        ASSERT(is_int8(imm) || is_uint8(imm));
+        ASSERT(util::is_int8(imm) || util::is_uint8(imm));
     } else if (size == 2) {
-        ASSERT(is_int16(imm) || is_uint16(imm));
+        ASSERT(util::is_int16(imm) || util::is_uint16(imm));
     } else if (size == 4) {
-        ASSERT(is_int32(imm) || is_uint32(imm));
+        ASSERT(util::is_int32(imm) || util::is_uint32(imm));
     } else if (size == 8) {
-        ASSERT(is_int32(imm));
+        ASSERT(util::is_int32(imm));
     } else {
         ASSERT(0);
     }
@@ -237,7 +209,7 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
                 }
 
                 // [RSP/R12 + disp8]
-                if (is_int8(it.displacement)) {
+                if (util::is_int8(it.displacement)) {
                     emit_byte(0x40 | (reg_num << 3) | 0b100);
                     emit_byte(0x24);
                     emit_byte(static_cast<uint8_t>(it.displacement));
@@ -258,7 +230,7 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
             }
 
             // [base + disp8]
-            if (is_int8(it.displacement)) {
+            if (util::is_int8(it.displacement)) {
                 emit_byte(0x40 | (reg_num << 3) | base_reg);
                 emit_byte(static_cast<uint8_t>(it.displacement));
                 return;
@@ -278,7 +250,7 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
         }
 
         // [base + index * scale + disp8]
-        if (is_int8(it.displacement)) {
+        if (util::is_int8(it.displacement)) {
             emit_byte(0x40 | (reg_num << 3) | 0b100);
             emit_byte((shift << 6) | (index_reg << 3) | base_reg);
             emit_byte(static_cast<uint8_t>(it.displacement));
@@ -382,7 +354,7 @@ void Encoder::emit_alu(const Instruction& inst, int id) {
         check_immediate_size(op_size, imm);
 
         // Short encoding available for 8-bit immediate.
-        if (op_size != 1 && is_int8(imm)) {
+        if (op_size != 1 && util::is_int8(imm)) {
             emit_r_rm(op_size, dst, static_cast<Register>(id), 0x83);
             emit_byte(imm);
             return;
@@ -439,7 +411,7 @@ void Encoder::emit_shift(const Instruction& inst, int id) {
     // Otherwise src must be uint8.
     ASSERT(src.is_immediate());
     uint64_t imm = src.as_immediate();
-    ASSERT(is_uint8(imm));
+    ASSERT(util::is_uint8(imm));
 
     if (imm == 1) {
         emit_r_rm(op_size, dst, static_cast<Register>(id), op_size == 1 ? 0xD0 : 0xD1);
@@ -464,7 +436,7 @@ void Encoder::emit_call(const Instruction& inst) {
     }
 
     uint64_t imm = dst.as_immediate();
-    ASSERT(is_int32(imm));
+    ASSERT(util::is_int32(imm));
     emit_byte(0xE8);
     emit_dword(imm);
 }
@@ -491,13 +463,13 @@ void Encoder::emit_jcc(const Instruction& inst) {
     ASSERT(inst.operands[1].is_empty() && dst.is_immediate());
 
     uint64_t imm = dst.as_immediate();
-    if (is_int8(imm)) {
+    if (util::is_int8(imm)) {
         emit_byte(0x70 + static_cast<uint8_t>(inst.cond));
         emit_byte(imm);
         return;
     }
 
-    ASSERT(is_int32(imm));
+    ASSERT(util::is_int32(imm));
     emit_byte(0x0F);
     emit_byte(0x80 + static_cast<uint8_t>(inst.cond));
     emit_dword(imm);
@@ -518,13 +490,13 @@ void Encoder::emit_jmp(const Instruction& inst) {
     }
 
     uint64_t imm = dst.as_immediate();
-    if (is_int8(imm)) {
+    if (util::is_int8(imm)) {
         emit_byte(0xEB);
         emit_byte(imm);
         return;
     }
 
-    ASSERT(is_int32(imm));
+    ASSERT(util::is_int32(imm));
     emit_byte(0xE9);
     emit_dword(imm);
 }
@@ -552,11 +524,11 @@ void Encoder::emit_mov(const Instruction& inst) {
         if (dst.is_register()) {
 
             // Special optimization for mov: mov rax, uint32 can be optimized to mov eax, uint32.
-            if (op_size == 8 && is_uint32(imm)) op_size = 4;
+            if (op_size == 8 && util::is_uint32(imm)) op_size = 4;
 
             // If the above optimization is not possible, but imm is int32, then it is shorter to encode it using
             // mod r/m.
-            if (op_size != 8 || !is_int32(imm)) {
+            if (op_size != 8 || !util::is_int32(imm)) {
                 emit_plusr(op_size, dst.as_register(), op_size == 1 ? 0xB0 : 0xB8);
                 emit_immediate(op_size, imm);
                 return;
@@ -669,11 +641,11 @@ void Encoder::emit_push(const Instruction& inst) {
     // push imm. Note that we does not support push word xxx.
     if (inst.operands[0].is_immediate()) {
         uint64_t imm = inst.operands[0].as_immediate();
-        if (is_int8(imm)) {
+        if (util::is_int8(imm)) {
             emit_byte(0x6A);
             emit_byte(imm);
         } else {
-            ASSERT(is_int32(imm));
+            ASSERT(util::is_int32(imm));
             emit_byte(0x68);
             emit_dword(imm);
         }
@@ -704,7 +676,7 @@ void Encoder::emit_ret(const Instruction& inst) {
     if (!inst.operands[0].is_empty()) {
         ASSERT(inst.operands[0].is_immediate() && inst.operands[1].is_empty());
         imm = inst.operands[1].as_immediate();
-        ASSERT(is_uint16(imm));
+        ASSERT(util::is_uint16(imm));
     }
 
     if (imm == 0) {

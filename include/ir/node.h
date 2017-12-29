@@ -25,8 +25,7 @@ enum class Type: uint8_t {
     control = 0xFF,
 };
 
-[[maybe_unused]]
-static size_t get_type_size(Type type) {
+static inline size_t get_type_size(Type type) {
     return static_cast<uint8_t>(type);
 }
 
@@ -120,19 +119,16 @@ enum class Opcode: uint8_t {
     mux,
 };
 
-[[maybe_unused]]
-static bool is_pure_opcode(Opcode opcode) {
+static inline bool is_pure_opcode(Opcode opcode) {
     return static_cast<uint8_t>(opcode) >= static_cast<uint8_t>(Opcode::constant);
 }
 
-[[maybe_unused]]
-static bool is_binary_opcode(Opcode opcode) {
+static inline bool is_binary_opcode(Opcode opcode) {
     uint8_t value = static_cast<uint8_t>(opcode);
     return value >= static_cast<uint8_t>(Opcode::add) && value <= static_cast<uint8_t>(Opcode::geu);
 }
 
-[[maybe_unused]]
-static bool is_commutative_opcode(Opcode opcode) {
+static inline bool is_commutative_opcode(Opcode opcode) {
     switch(opcode) {
         case Opcode::add:
         case Opcode::i_xor:
@@ -173,13 +169,11 @@ public:
     inline uint64_t const_value() const;
 };
 
-[[maybe_unused]]
-static bool operator ==(Value a, Value b) {
+static inline bool operator ==(Value a, Value b) {
     return a.node() == b.node() && a.index() == b.index();
 }
 
-[[maybe_unused]]
-static bool operator !=(Value a, Value b) { return !(a == b); }
+static inline bool operator !=(Value a, Value b) { return !(a == b); }
 
 class Node {
 private:

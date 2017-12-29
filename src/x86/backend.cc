@@ -2,6 +2,7 @@
 #include "emu/state.h"
 #include "util/format.h"
 #include "util/functional.h"
+#include "util/int_size.h"
 #include "util/memory.h"
 #include "x86/backend.h"
 #include "x86/builder.h"
@@ -13,10 +14,6 @@ using namespace x86::builder;
 static constexpr int volatile_register[] = {0, 1, 2, 6, 7, 8, 9, 10, 11};
 
 static uint64_t spill_area[128];
-
-static bool is_int32(uint64_t value) {
-    return static_cast<uint64_t>(static_cast<int32_t>(value)) == value;
-}
 
 static int register_id(x86::Register reg) {
     ASSERT(reg != x86::Register::none);
@@ -246,7 +243,7 @@ void Backend::decrease_reference(ir::Value value) {
 
 Operand Backend::get_location(ir::Value value) {
     if (value.is_const()) {
-        ASSERT(is_int32(value.const_value()));
+        ASSERT(util::is_int32(value.const_value()));
         return value.const_value();
     }
     auto ptr = location.find(value);
@@ -256,7 +253,7 @@ Operand Backend::get_location(ir::Value value) {
 
 Operand Backend::get_location_ex(ir::Value value, bool allow_mem, bool allow_imm) {
     if (value.is_const()) {
-        if (allow_imm && is_int32(value.const_value())) {
+        if (allow_imm && util::is_int32(value.const_value())) {
             return value.const_value();
         }
         Register reg = alloc_register(value.type());
@@ -565,7 +562,8 @@ void Backend::after(ir::Node* node) {
                 bind_register(output, reg);
 
                 if (output.type() != ir::Type::i8) {
-                    emit(mov(modify_size(ir::Type::i32, reg), 0));
+                    Operand reg32 = modify_size(ir::Type::i32, reg);
+                    emit(i_xor(reg32, reg32));
                 }
                 emit(setcc(cc, modify_size(ir::Type::i8, reg)));
                 break;
