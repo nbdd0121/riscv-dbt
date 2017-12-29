@@ -5,8 +5,8 @@
 
 #include "ir/node.h"
 
-namespace riscv {
-    struct Context;
+namespace emu {
+    struct State;
 };
 
 namespace ir::pass {
@@ -97,6 +97,17 @@ private:
 
     void replace_with_constant(Value value, uint64_t const_value);
     void lvn(Value value);
+
+protected:
+    virtual void after(Node* node) override;
+};
+
+class Lowering: public Pass {
+private:
+    emu::State& _state;
+
+public:
+    Lowering(emu::State& state): _state{state} {}
 
 protected:
     virtual void after(Node* node) override;

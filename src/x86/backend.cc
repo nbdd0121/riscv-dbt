@@ -484,195 +484,64 @@ void Backend::after(ir::Node* node) {
             auto output = node->value(1);
             auto address = node->operand(1);
 
-            if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
-                Register reg = alloc_register(output.type());
-                Register reg64 = modify_size(ir::Type::i64, reg).as_register();
-                bind_register(output, reg);
-                Operand mem_operand;
+            Register loc = get_register_location(address);
+            decrease_reference(address);
 
-                if (address.is_const()) {
-                    if (reg == Register::rax) {
-                        mem_operand = reinterpret_cast<uintptr_t>(flat_mmu->memory_) + address.const_value();
-                    } else {
-                        emit(mov(reg64, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + address.const_value()));
-                        Memory mem = qword(reg64 + 0);
-                        mem.size = get_type_size(output.type()) / 8;
-                        mem_operand = mem;
-                    }
-                } else {
-                    emit(mov(reg64, reinterpret_cast<uintptr_t>(flat_mmu->memory_)));
-                    auto address_op = get_location(address);
-                    Memory mem;
-                    if (address_op.is_register()) {
-                        mem = qword(reg64 + address_op.as_register() * 1);
-                    } else {
-                        emit(add(reg64, get_location(address)));
-                        mem = qword(reg64 + 0);
-                    }
-                    mem.size = get_type_size(output.type()) / 8;
-                    mem_operand = mem;
-                    decrease_reference(address);
-                }
+            Register reg = alloc_register(output.type());
+            bind_register(output, reg);
 
-                if (mem_operand.is_immediate()) {
-                    emit(movabs(reg, mem_operand));
-                } else {
-                    emit(mov(reg, mem_operand));
-                }
-                break;
-            }
+            Memory mem = qword(loc + 0);
+            mem.size = get_type_size(output.type()) / 8;
 
-            // Setup arguments.
-            if (address.is_const()) {
-                if (register_content[6]) spill_register(Register::rsi);
-                emit(mov(Register::rsi, address.const_value()));
-            } else {
-                ensure_register(address, Register::rsi);
-                decrease_reference(address);
-            }
-
-            // Store everything.
-            spill_all_registers();
-
-            // Setup other arguments and call.
-            emit(mov(Register::rdi, reinterpret_cast<uintptr_t>(_state.mmu.get())));
-
-            uintptr_t func;
-            switch (output.type()) {
-                case ir::Type::i8: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint8_t>)
-                ); break;
-                case ir::Type::i16: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint16_t>)
-                ); break;
-                case ir::Type::i32: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint32_t>)
-                ); break;
-                case ir::Type::i64: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint64_t>)
-                ); break;
-                default: ASSERT(0);
-            }
-
-            emit(mov(Register::rax, func));
-            emit(call(Register::rax));
-
-            bind_register(output, register_of_id(output.type(), 0));
+            emit(mov(reg, mem));
             break;
         }
         case ir::Opcode::store_memory: {
             auto address = node->operand(1);
             auto value = node->operand(2);
 
-            if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
-                Register loc_value = Register::none;
-                if (!value.is_const()) {
-                    loc_value = get_register_location(value);
-                    pin_register(loc_value);
-                } else if (!is_int32(value.const_value())) {
-                    loc_value = alloc_register(value.type());
-                    emit(mov(loc_value, value.const_value()));
-                    pin_register(loc_value);
-                }
+            Operand loc_value = get_location_ex(value, false, true);
+            if (loc_value.is_register()) pin_register(loc_value.as_register());
 
-                Register loc = alloc_register(ir::Type::i64);
-                Operand mem_operand;
+            Register loc = get_register_location(address);
+            decrease_reference(address);
 
-                if (address.is_const()) {
-                    // if (loc_value == 0) {
-                    //     mem_operand = reinterpret_cast<uintptr_t>(flat_mmu->memory_) + address.const_value();
-                    // } else {
-                        emit(mov(loc, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + address.const_value()));
-                        Memory mem = qword(loc + 0);
-                        mem.size = get_type_size(value.type()) / 8;
-                        mem_operand = mem;
-                    // }
-                } else {
-                    emit(mov(loc, reinterpret_cast<uintptr_t>(flat_mmu->memory_)));
-                    auto address_op = get_location(address);
-                    Memory mem;
-                    if (address_op.is_register()) {
-                        mem = qword(loc + address_op.as_register() * 1);
-                    } else {
-                        emit(add(loc, get_location(address)));
-                        mem = qword(loc + 0);
-                    }
-                    mem.size = get_type_size(value.type()) / 8;
-                    mem_operand = mem;
-                    decrease_reference(address);
-                }
+            Memory mem = qword(loc + 0);
+            mem.size = get_type_size(value.type()) / 8;
 
-                if (mem_operand.is_immediate()) {
-                    emit(movabs(mem_operand, loc_value));
-                } else {
-                    if (loc_value == Register::none) {
-                        emit(mov(mem_operand, value.const_value()));
-                    } else {
-                        emit(mov(mem_operand, loc_value));
-                    }
-                }
-
-                if (loc_value != Register::none) {
-                    unpin_register(loc_value);
-                    decrease_reference(value);
-                }
-
-                break;
-            }
-
-            // Setup arguments.
-            if (address.is_const()) {
-                if (register_content[6]) spill_register(Register::rsi);
-                emit(mov(Register::rsi, address.const_value()));
-            } else {
-                ensure_register(address, Register::rsi);
-                decrease_reference(address);
-            }
-
-            if (value.is_const()) {
-                if (register_content[2]) spill_register(Register::rdx);
-                emit(mov(Register::rdx, value.const_value()));
-            } else {
-                ensure_register(value, register_of_id(value.type(), 2));
-                decrease_reference(value);
-            }
-
-            // Store everything. Decrease reference before that to eliminate some redundant saves.
-            spill_all_registers();
-
-            // Setup other arguments and call.
-            emit(mov(Register::rdi, reinterpret_cast<uintptr_t>(_state.mmu.get())));
-
-            uintptr_t func;
-            switch (value.type()) {
-                case ir::Type::i8: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint8_t>)
-                ); break;
-                case ir::Type::i16: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint16_t>)
-                ); break;
-                case ir::Type::i32: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint32_t>)
-                ); break;
-                case ir::Type::i64: func = reinterpret_cast<uintptr_t>(
-                    AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint64_t>)
-                ); break;
-                default: ASSERT(0);
-            }
-
-            emit(mov(Register::rax, func));
-            emit(call(Register::rax));
+            emit(mov(mem, loc_value));
+            if (loc_value.is_register()) unpin_register(loc_value.as_register());
             break;
         }
         case ir::Opcode::call: {
             auto call_node = static_cast<ir::Call*>(node);
+
+            static constexpr Register reglist[] = {Register::rdi, Register::rsi, Register::rdx};
+
+            // Setup arguments
+            size_t op_index = call_node->need_context() ? 1 : 0;
+            for (size_t i = 1; i < node->operand_count(); i++) {
+                ASSERT(op_index < 3);
+
+                auto operand = node->operand(i);
+                Register reg = reglist[op_index++];
+                int reg_id = register_id(reg);
+
+                if (operand.is_const()) {
+                    if (register_content[reg_id]) spill_register(reg);
+                    emit(mov(reg, operand.const_value()));
+                } else {
+                    ensure_register(operand, register_of_id(operand.type(), reg_id));
+                    decrease_reference(operand);
+                }
+            }
+
             spill_all_registers();
 
-            // TODO: Lift this limitation.
-            ASSERT(node->operand_count() == 2 && node->operand(1).is_const() && call_node->need_context());
+            if (call_node->need_context()) {
+                emit(mov(Register::rdi, Register::rbp));
+            }
 
-            emit(mov(Register::rsi, node->operand(1).const_value()));
-            emit(mov(Register::rdi, Register::rbp));
             emit(mov(Register::rax, call_node->target()));
             emit(call(Register::rax));
 

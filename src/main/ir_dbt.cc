@@ -152,6 +152,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         graph = riscv::compile(state_, basic_block);
         ir::pass::Register_access_elimination{66}.run(graph);
+        ir::pass::Lowering{state_}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
         if (state_.disassemble) {
