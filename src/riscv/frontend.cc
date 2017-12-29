@@ -20,8 +20,8 @@ struct Frontend {
 
     Frontend(emu::State& state): state{state} {}
 
-    ir::Value emit_load_register(ir::Type type, int reg);
-    void emit_store_register(int reg, ir::Value value, bool sext = false);
+    ir::Value emit_load_register(ir::Type type, uint16_t reg);
+    void emit_store_register(uint16_t reg, ir::Value value, bool sext = false);
 
     void emit_load(Instruction inst, ir::Type type, bool sext);
     void emit_store(Instruction inst, ir::Type type);
@@ -36,7 +36,7 @@ struct Frontend {
     void compile(const Basic_block& block);
 };
 
-ir::Value Frontend::emit_load_register(ir::Type type, int reg) {
+ir::Value Frontend::emit_load_register(ir::Type type, uint16_t reg) {
     ir::Value ret;
     if (reg == 0) {
         ret = builder.constant(type, 0);
@@ -47,7 +47,7 @@ ir::Value Frontend::emit_load_register(ir::Type type, int reg) {
     return ret;
 }
 
-void Frontend::emit_store_register(int reg, ir::Value value, bool sext) {
+void Frontend::emit_store_register(uint16_t reg, ir::Value value, bool sext) {
     ASSERT(reg != 0);
     if (value.type() != ir::Type::i64) value = builder.cast(ir::Type::i64, sext, value);
     last_memory = builder.store_register(last_memory, reg, value);

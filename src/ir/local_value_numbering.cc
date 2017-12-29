@@ -19,8 +19,10 @@ size_t Local_value_numbering::Hash::operator ()(Value value) const noexcept {
 
     switch (node->opcode()) {
         case Opcode::constant:
+            hash ^= static_cast<Constant*>(node)->const_value();
+            break;
         case Opcode::cast:
-            hash ^= node->attribute();
+            hash ^= static_cast<Cast*>(node)->sign_extend();
             break;
         default: break;
     }
@@ -53,8 +55,11 @@ bool Local_value_numbering::Equal_to::operator ()(Value a, Value b) const noexce
 
     switch (anode->opcode()) {
         case Opcode::constant:
+            if (static_cast<Constant*>(anode)->const_value() != static_cast<Constant*>(bnode)->const_value())
+                return false;
+            break;
         case Opcode::cast:
-            if (anode->attribute() != bnode->attribute()) return false;
+            if (static_cast<Cast*>(anode)->sign_extend() != static_cast<Cast*>(bnode)->sign_extend()) return false;
             break;
         default: break;
     }
@@ -128,9 +133,7 @@ uint64_t Local_value_numbering::binary(Type type, Opcode opcode, uint64_t l, uin
 void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
 
     // Create a new constant node.
-    Node *const_node = _graph->manage(new Node(Opcode::constant, {value.type()}, {}));
-    const_node->attribute(const_value);
-    Value new_value = const_node->value(0);
+    Value new_value = _graph->manage(new Constant(value.type(), const_value))->value(0);
 
     auto pair = _set.insert(new_value);
     replace(value, pair.second ? new_value : *pair.first);
@@ -159,15 +162,18 @@ void Local_value_numbering::after(Node* node) {
         // Folding cast node.
         auto output = node->value(0);
         auto x = node->operand(0);
+        bool sext = static_cast<Cast*>(node)->sign_extend();
 
         // If the operand is constant, then perform constant folding.
         if (x.is_const()) {
-            return replace_with_constant(output, cast(output.type(), x.type(), node->attribute(), x.const_value()));
+            return replace_with_constant(output, cast(output.type(), x.type(), sext, x.const_value()));
         }
 
         // Two casts can be possibly folded.
         if (x.opcode() == Opcode::cast) {
             auto y = x.node()->operand(0);
+            bool x_sext = static_cast<Cast*>(x.node())->sign_extend();
+
             size_t ysize = get_type_size(y.type());
             size_t size = get_type_size(output.type());
 
@@ -181,12 +187,12 @@ void Local_value_numbering::after(Node* node) {
             if (ysize > xsize && xsize < size) return lvn(output);
 
             // An up-cast followed by an up-cast cannot be folded if sext does not match.
-            if (ysize < xsize && xsize < size && x.node()->attribute() != node->attribute()) return lvn(output);
+            if (ysize < xsize && xsize < size && x_sext != sext) return lvn(output);
 
             // This can either be up-cast followed by up-cast, up-cast followed by down-cast.
             // As the result is an up-cast, we need to select the correct sext.
             if (ysize < size) {
-                node->attribute(x.node()->attribute());
+                static_cast<Cast*>(node)->sign_extend(x_sext);
             }
 
             node->operand_set(0, y);
@@ -303,7 +309,9 @@ void Local_value_numbering::after(Node* node) {
         // More folding for add
         if (opcode == Opcode::add && y.references().size() == 1) {
             if (x.opcode() == Opcode::add && x.node()->operand(1).is_const()) {
-                y.node()->attribute(sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value()));
+                static_cast<Constant*>(y.node())->const_value(
+                    sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value())
+                );
                 x = x.node()->operand(0);
                 node->operand_set(0, x);
             }

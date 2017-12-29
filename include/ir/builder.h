@@ -22,26 +22,20 @@ public:
     }
 
     Value constant(Type type, uint64_t value) {
-        auto inst = create(Opcode::constant, {type}, {});
-        inst->attribute(value);
-        return inst->value(0);
+        return _graph.manage(new Constant(type, value))->value(0);
     }
 
     Value cast(Type type, bool sext, Value operand) {
-        auto inst = create(Opcode::cast, {type}, {operand});
-        inst->attribute(sext);
-        return inst->value(0);
+        return _graph.manage(new Cast(type, sext, operand))->value(0);
     }
 
-    std::tuple<Value, Value> load_register(Value dep, int regnum) {
-        auto inst = create(Opcode::load_register, {Type::memory, Type::i64}, {dep});
-        inst->attribute(regnum);
+    std::tuple<Value, Value> load_register(Value dep, uint16_t regnum) {
+        auto inst = _graph.manage(new Register_access(regnum, Opcode::load_register, {Type::memory, Type::i64}, {dep}));
         return {inst->value(0), inst->value(1)};
     }
 
-    Value store_register(Value dep, int regnum, Value operand) {
-        auto inst = create(Opcode::store_register, {Type::memory}, {dep, operand});
-        inst->attribute(regnum);
+    Value store_register(Value dep, uint16_t regnum, Value operand) {
+        auto inst = _graph.manage(new Register_access(regnum, Opcode::store_register, {Type::memory}, {dep, operand}));
         return inst->value(0);
     }
 

@@ -207,7 +207,7 @@ private:
 
 public:
     Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands);
-    ~Node();
+    virtual ~Node();
 
     // Disable copy construction and assignment. Node should live on heap.
     Node(const Node& node) = delete;
@@ -253,6 +253,38 @@ public:
     friend pass::Pass;
 };
 
+class Constant: public Node {
+private:
+    uint64_t _const_value;
+
+public:
+    Constant(Type type, uint64_t value): Node(Opcode::constant, {type}, {}), _const_value{value} {}
+
+    uint64_t const_value() const { return _const_value; }
+    void const_value(uint64_t value) { _const_value = value; }
+};
+
+class Cast: public Node {
+private:
+    bool _sext;
+
+public:
+    Cast(Type type, bool sext, Value value): Node(Opcode::cast, {type}, {value}), _sext{sext} {}
+
+    bool sign_extend() const { return _sext; }
+    void sign_extend(bool sext) { _sext = sext; }
+};
+
+class Register_access: public Node {
+private:
+    uint16_t _regnum;
+
+public:
+    Register_access(uint16_t regnum, Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands): Node(opcode, std::move(type), std::move(operands)), _regnum{regnum} {}
+
+    uint16_t regnum() const { return _regnum; }
+};
+
 class Graph {
 private:
     std::vector<Node*> _heap;
@@ -290,7 +322,7 @@ const util::Array_multiset<Node*>& Value::references() const { return _node->_re
 
 Opcode Value::opcode() const { return _node->_opcode; }
 bool Value::is_const() const { return _node->_opcode == Opcode::constant; }
-uint64_t Value::const_value() const { return _node->attribute(); }
+uint64_t Value::const_value() const { return static_cast<Constant*>(_node)->const_value(); }
 
 } // ir
 

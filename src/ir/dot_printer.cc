@@ -116,14 +116,14 @@ void Dot_printer::after(Node* node) {
 
     switch (node->opcode()) {
         case Opcode::constant:
-            std::clog << ' ' << static_cast<int64_t>(node->attribute());
+            std::clog << ' ' << static_cast<int64_t>(static_cast<Constant*>(node)->const_value());
             break;
         case Opcode::cast:
-            if (node->attribute()) std::clog << " sext";
+            if (static_cast<Cast*>(node)->sign_extend()) std::clog << " sext";
             break;
         case Opcode::load_register:
         case Opcode::store_register:
-            std::clog << " r" << node->attribute();
+            std::clog << " r" << static_cast<Register_access*>(node)->regnum();
             break;
         default: break;
     }

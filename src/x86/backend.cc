@@ -460,23 +460,25 @@ void Backend::after(ir::Node* node) {
             break;
         case ir::Opcode::load_register: {
             auto output = node->value(1);
+            uint16_t regnum = static_cast<ir::Register_access*>(node)->regnum();
 
             // Allocate and bind register.
             Register reg = alloc_register(output.type());
             bind_register(output, reg);
 
             // Move the emulated register to 64-bit version of allocated machine register.
-            emit(mov(reg, qword(Register::rbp + node->attribute() * 8)));
+            emit(mov(reg, qword(Register::rbp + regnum * 8)));
             break;
         }
         case ir::Opcode::store_register: {
             auto op = node->operand(1);
+            uint16_t regnum = static_cast<ir::Register_access*>(node)->regnum();
 
             Operand loc = get_location_ex(op, false, true);
             decrease_reference(op);
 
             // Move the allocated machine register back to the emulated register.
-            emit(mov(qword(Register::rbp + node->attribute() * 8), loc));
+            emit(mov(qword(Register::rbp + regnum * 8), loc));
             break;
         }
         case ir::Opcode::load_memory: {
@@ -715,7 +717,7 @@ void Backend::after(ir::Node* node) {
             } else {
 
                 // Up-cast needs actual work.
-                if (node->attribute()) {
+                if (static_cast<ir::Cast*>(node)->sign_extend()) {
                     if (loc0.is_register()) {
                         Register loc0reg = loc0.as_register();
                         if (loc0reg == Register::eax && reg == Register::rax) {

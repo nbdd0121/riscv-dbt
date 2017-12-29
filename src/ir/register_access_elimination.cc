@@ -38,7 +38,7 @@ void Register_access_elimination::after(Node* node) {
             break;
         }
         case Opcode::load_register: {
-            int regnum = node->attribute();
+            uint16_t regnum = static_cast<Register_access*>(node)->regnum();
 
             // As mentioned above, replace register load with previous load. With all optimizations we applied, this
             // replacement is necessary to make other transformations sound.
@@ -63,7 +63,7 @@ void Register_access_elimination::after(Node* node) {
             break;
         }
         case Opcode::store_register: {
-            int regnum = node->attribute();
+            uint16_t regnum = static_cast<Register_access*>(node)->regnum();
 
             std::vector<Value> dependencies;
 
