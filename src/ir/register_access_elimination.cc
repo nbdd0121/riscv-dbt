@@ -123,7 +123,7 @@ void Register_access_elimination::after(Node* node) {
             last_exception = node->value(0);
             break;
         }
-        case Opcode::emulate:
+        case Opcode::call:
         case Opcode::i_if:
         case Opcode::jmp: {
             std::vector<Value> dependencies;
@@ -153,7 +153,7 @@ void Register_access_elimination::after(Node* node) {
 
             last_exception = {};
 
-            if (node->opcode() == Opcode::emulate) {
+            if (node->opcode() == Opcode::call) {
                 last_effect = node->value(0);
             } else {
                 // if and jmp node will turn memory dependency into control, so last_effect needs to be cleared.

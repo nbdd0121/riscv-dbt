@@ -52,8 +52,6 @@ enum class Opcode: uint8_t {
     jmp,
 
     /** Opcodes with side-effects **/
-    // Input: Memory. Output: Memory.
-    emulate,
 
     /* Machine register load/store */
     // Input: Memory. Output: Memory, Value.
@@ -71,6 +69,10 @@ enum class Opcode: uint8_t {
 
     // Input: Memory[], Output: Memory
     fence,
+
+    // Call a helper function.
+    // Input: Memory, Value[]. Output: Memory, Value(opt)
+    call,
 
     /** Pure opcodes **/
 
@@ -191,11 +193,6 @@ private:
     // The output type of this node.
     std::vector<Type> _type;
 
-    // Additional attributes for some nodes.
-    union {
-        uint64_t value;
-    } _attribute;
-
     // Opcode of the node.
     Opcode _opcode;
 
@@ -219,9 +216,6 @@ private:
 
 public:
     // Field accessors and mutators
-    uint64_t attribute() const { return _attribute.value; }
-    void attribute(uint64_t value) { _attribute.value = value; }
-
     // A node can produce one or more values. The following functions allow access to these values.
     size_t value_count() const { return _type.size(); }
     Value value(size_t index) { return {this, index}; }
@@ -291,6 +285,21 @@ public:
 
     Node* end() const { return _end; }
     void end(Node* end) { _end = end; }
+};
+
+class Call: public Node {
+private:
+    // The helper function to call.
+    uintptr_t _target;
+    // Whether the evaluation context is needed to call such a function.
+    bool _need_context;
+
+public:
+    Call(uintptr_t target, bool need_context, std::vector<Type>&& types, std::vector<Value>&& operands):
+        Node(Opcode::call, std::move(types), std::move(operands)), _target{target}, _need_context{need_context} {}
+
+    uintptr_t target() const { return _target; }
+    bool need_context() const { return _need_context; }
 };
 
 class Graph {

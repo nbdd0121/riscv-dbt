@@ -23,7 +23,7 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(load_memory)
         CASE(store_memory)
         CASE(fence)
-        CASE(emulate)
+        CASE(call)
         CASE(neg)
         case Opcode::i_not: return "not";
         CASE(add)
@@ -82,6 +82,10 @@ void Dot_printer::after(Node* node) {
     if (node->operand_count() <= 1) {
         // No ambiguities in this case.
         need_label = false;
+
+    } else if (opcode == Opcode::call) {
+        // If call has more than 1 arguments, we needs to distinguish between them.
+        need_label = node->operand_count() > 2;
 
     } else if (opcode == Opcode::block || opcode == Opcode::store_memory) {
         // Block is ordered, and store_memory's address/value operands need distinction.

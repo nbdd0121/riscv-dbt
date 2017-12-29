@@ -1,6 +1,5 @@
 #include "emu/mmu.h"
 #include "emu/state.h"
-#include "riscv/context.h"
 #include "util/format.h"
 #include "util/functional.h"
 #include "util/memory.h"
@@ -665,12 +664,23 @@ void Backend::after(ir::Node* node) {
             emit(call(Register::rax));
             break;
         }
-        case ir::Opcode::emulate: {
+        case ir::Opcode::call: {
+            auto call_node = static_cast<ir::Call*>(node);
             spill_all_registers();
-            emit(mov(Register::rsi, node->attribute()));
+
+            // TODO: Lift this limitation.
+            ASSERT(node->operand_count() == 2 && node->operand(1).is_const() && call_node->need_context());
+
+            emit(mov(Register::rsi, node->operand(1).const_value()));
             emit(mov(Register::rdi, Register::rbp));
-            emit(mov(Register::rax, reinterpret_cast<uintptr_t>(riscv::step)));
+            emit(mov(Register::rax, call_node->target()));
             emit(call(Register::rax));
+
+            // If the helper function returns a value, bind it.
+            if (node->value_count() == 2) {
+                auto output = node->value(1);
+                bind_register(output, register_of_id(output.type(), 0));
+            }
             break;
         }
         case ir::Opcode::cast: {

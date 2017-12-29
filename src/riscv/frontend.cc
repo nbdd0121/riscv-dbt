@@ -2,6 +2,7 @@
 #include "ir/builder.h"
 #include "ir/node.h"
 #include "riscv/basic_block.h"
+#include "riscv/context.h"
 #include "riscv/frontend.h"
 #include "riscv/instruction.h"
 #include "riscv/opcode.h"
@@ -265,8 +266,10 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
             case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
             default: {
-                last_memory = graph.manage(new ir::Node(ir::Opcode::emulate, {ir::Type::memory}, {last_memory}))->value(0);
-                last_memory.node()->attribute(util::read_as<uint64_t>(&inst));
+                auto serialized_inst = builder.constant(ir::Type::i64, util::read_as<uint64_t>(&inst));
+                last_memory = graph.manage(new ir::Call(
+                    reinterpret_cast<uintptr_t>(step), true, {ir::Type::memory}, {last_memory, serialized_inst}
+                ))->value(0);
                 break;
             }
         }
