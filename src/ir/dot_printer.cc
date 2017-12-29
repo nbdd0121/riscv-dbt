@@ -143,6 +143,11 @@ void Dot_printer::after(Node* node) {
         case Opcode::store_register:
             std::clog << " r" << static_cast<Register_access*>(node)->regnum();
             break;
+        case Opcode::call: {
+            auto call_node = static_cast<Call*>(node);
+            util::log(" {:#x}{}", call_node->target(), call_node->need_context() ? " with context" : "");
+            break;
+        }
         default: break;
     }
 
