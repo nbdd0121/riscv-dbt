@@ -27,12 +27,9 @@ class Instruction {
     using Rs3_field = util::Bitfield<uint32_t, 7, 3>;
     using Rm_field = util::Bitfield<uint32_t, 2, 0>;
 
-    // Decoded immediates for most instructions.
-    // For FENCE instruction, pred and succ will be stored here.
-    // For CSR*I, csr will be stored here.
-    // For atomic instructions, aq and rl will be stored here.
-    // For floating point arithemtic instructions, rs3 (if any) and rm will be stored here.
-    uint32_t immediate_;
+    // Opcode. Currently we limit it to 256 instructions. If it goes
+    // over it, then this class has to go through a major redesign.
+    uint8_t opcode_;
 
     // Destination register.
     // 3 unused bits.
@@ -48,12 +45,15 @@ class Instruction {
     // 2 unused bits.
     uint8_t rs2_;
 
-    // Opcode. Currently we limit it to 256 instructions. If it goes
-    // over it, then this class has to go through a major redesign.
-    uint8_t opcode_;
+    // Decoded immediates for most instructions.
+    // For FENCE instruction, pred and succ will be stored here.
+    // For CSR*I, csr will be stored here.
+    // For atomic instructions, aq and rl will be stored here.
+    // For floating point arithemtic instructions, rs3 (if any) and rm will be stored here.
+    uint32_t immediate_;
 
 public:
-    Instruction() noexcept: immediate_{0}, rd_{0}, rs1_{0}, rs2_{0}, opcode_{0} {}
+    Instruction() noexcept: opcode_{0}, rd_{0}, rs1_{0}, rs2_{0}, immediate_{0} {}
 
     /* Accessors */
     int rd() const noexcept { return rd_; }
