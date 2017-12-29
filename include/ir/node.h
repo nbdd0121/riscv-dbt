@@ -43,10 +43,6 @@ enum class Opcode: uint8_t {
     // Input: Memory, Value. Output: Control, Control.
     i_if,
 
-    // Input: Control, Control. Output: Control.
-    if_true,
-    if_false,
-
     // Input: Memory. Output: Control.
     jmp,
 

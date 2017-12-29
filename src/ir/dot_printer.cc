@@ -13,8 +13,6 @@ const char* Dot_printer::opcode_name(Opcode opcode) {
         CASE(end)
         CASE(block)
         case Opcode::i_if: return "if";
-        CASE(if_true)
-        CASE(if_false)
         CASE(jmp)
         CASE(constant)
         CASE(cast)
