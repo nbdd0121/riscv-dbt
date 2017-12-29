@@ -129,14 +129,18 @@ uint64_t Local_value_numbering::binary(Type type, Opcode opcode, uint64_t l, uin
     }
 }
 
-// Helper function that replaces current value with a constant value. It will keep type intact.
-void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
+Value Local_value_numbering::new_constant(Type type, uint64_t const_value) {
 
     // Create a new constant node.
-    Value new_value = _graph->manage(new Constant(value.type(), const_value))->value(0);
+    Value new_value = _graph->manage(new Constant(type, const_value))->value(0);
 
     auto pair = _set.insert(new_value);
-    replace(value, pair.second ? new_value : *pair.first);
+    return pair.second ? new_value : *pair.first;
+}
+
+// Helper function that replaces current value with a constant value. It will keep type intact.
+void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
+    replace(value, new_constant(value.type(), const_value));
 }
 
 void Local_value_numbering::lvn(Value value) {
@@ -307,14 +311,13 @@ void Local_value_numbering::after(Node* node) {
         }
 
         // More folding for add
-        if (opcode == Opcode::add && y.references().size() == 1) {
-            if (x.opcode() == Opcode::add && x.node()->operand(1).is_const()) {
-                static_cast<Constant*>(y.node())->const_value(
-                    sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value())
-                );
-                x = x.node()->operand(0);
-                node->operand_set(0, x);
-            }
+        if (opcode == Opcode::add && y.is_const() && x.opcode() == Opcode::add && x.node()->operand(1).is_const()) {
+            y = new_constant(
+                output.type(), sign_extend(output.type(), y.const_value() + x.node()->operand(1).const_value())
+            );
+            x = x.node()->operand(0);
+            node->operand_set(0, x);
+            node->operand_set(1, y);
         }
 
         return lvn(output);

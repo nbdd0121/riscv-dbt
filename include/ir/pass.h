@@ -95,6 +95,7 @@ private:
     static uint64_t cast(Type type, Type oldtype, bool sext, uint64_t value);
     static uint64_t binary(Type type, Opcode opcode, uint64_t l, uint64_t r);
 
+    Value new_constant(Type type, uint64_t const_value);
     void replace_with_constant(Value value, uint64_t const_value);
     void lvn(Value value);
 
