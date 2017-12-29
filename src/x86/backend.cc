@@ -555,7 +555,6 @@ void Backend::after(ir::Node* node) {
 
             // Special handling for i1 upcast
             if (op.type() == ir::Type::i1) {
-                Condition_code cc = emit_compare(op);
 
                 // Allocate and bind register.
                 Register reg = alloc_register(output.type());
@@ -565,6 +564,12 @@ void Backend::after(ir::Node* node) {
                     Operand reg32 = modify_size(ir::Type::i32, reg);
                     emit(i_xor(reg32, reg32));
                 }
+
+                // Compare instruction must be generated after xor, as xor will modify flags.
+                pin_register(reg);
+                Condition_code cc = emit_compare(op);
+                unpin_register(reg);
+
                 emit(setcc(cc, modify_size(ir::Type::i8, reg)));
                 break;
             }
