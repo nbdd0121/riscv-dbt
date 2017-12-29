@@ -119,9 +119,23 @@ void Dot_printer::after(Node* node) {
     std::clog << opcode_name(node->opcode());
 
     switch (node->opcode()) {
-        case Opcode::constant:
-            std::clog << ' ' << static_cast<int64_t>(static_cast<Constant*>(node)->const_value());
+        case Opcode::constant: {
+            uint64_t value = static_cast<Constant*>(node)->const_value();
+            int64_t svalue = value;
+
+            if (static_cast<int8_t>(value) == svalue) {
+
+                // For small enough number we print decimal.
+                std::clog << ' ' << svalue;
+
+            } else {
+                if (svalue < 0)
+                    util::log(" -{:#x}", -value);
+                else
+                    util::log(" {:#x}", value);
+            }
             break;
+        }
         case Opcode::cast:
             if (static_cast<Cast*>(node)->sign_extend()) std::clog << " sext";
             break;
