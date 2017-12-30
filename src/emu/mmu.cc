@@ -44,7 +44,7 @@ void Mmu::store_memory_misaligned(reg_t address, T value) {
         int size_in_page = page_size - page_offset;
         util::safe_memcpy(translated_page + page_offset, word, size_in_page);
         util::safe_memcpy(next_translated_page, word + size_in_page, sizeof(T) - size_in_page);
-        
+
         return;
     }
 
@@ -96,7 +96,7 @@ Paging_mmu::Paging_mmu() {
 }
 
 Paging_mmu::~Paging_mmu() {
-    
+
     // Free any mapped pages.
     for (const auto& mapping: map) {
         munmap(mapping.second, page_size);
@@ -174,6 +174,23 @@ void Flat_mmu::allocate_page(reg_t address, reg_t size) {
     if (mprotect(memory_ + address, size, PROT_READ | PROT_WRITE) == -1) {
         throw std::bad_alloc {};
     }
+}
+
+// Allocate memory at given virtual address and estabilish mapping.
+// The address and size must be page-aligned.
+void Id_mmu::allocate_page(reg_t address, reg_t size) {
+
+    // The input must be page-aligned.
+    ASSERT((address & page_mask) == 0 && (size & page_mask) == 0);
+
+    auto ptr = translate_page(address);
+
+    void *ret = mmap(ptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    if (ret != ptr) {
+        throw std::bad_alloc {};
+    }
+
+    return;
 }
 
 // As mentioned in mmu.h, we keep template interface for simplicity and tidyness, but the definition is in this file,

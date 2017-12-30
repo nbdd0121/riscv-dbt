@@ -164,6 +164,28 @@ public:
     virtual void allocate_page(reg_t address, reg_t size) override;
 };
 
+// This MMU performs identity mapping. The address space of the program and the emulator must not overlap.
+class Id_mmu final: public Mmu {
+public:
+    // Translating address of a page. The address must be page-aligned.
+    virtual std::byte* translate_page(reg_t address) override {
+
+        // The input must be page-aligned.
+        ASSERT((address & page_mask) == 0);
+
+        return reinterpret_cast<std::byte*>(address);
+    }
+
+    // In Id_mmu's case we divide the memory space into two regions: valid and invalid.
+    virtual size_t get_block_size(reg_t address) override {
+        return 0x800000000000 - address;
+    }
+
+    // Allocate memory at given virtual address and estabilish mapping.
+    // The address and size must be page-aligned.
+    virtual void allocate_page(reg_t address, reg_t size) override;
+};
+
 }
 
 #endif

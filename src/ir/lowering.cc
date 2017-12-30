@@ -15,6 +15,12 @@ void Lowering::after(Node* node) {
     Builder builder { *_graph };
     switch (node->opcode()) {
         case Opcode::load_memory: {
+
+            // In this case lowering is not needed.
+            if (dynamic_cast<emu::Id_mmu*>(_state.mmu.get())) {
+                break;
+            }
+
             if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
                 auto memory_base = builder.constant(Type::i64, reinterpret_cast<uintptr_t>(flat_mmu->memory_));
                 auto computed_address = builder.arithmetic(Opcode::add, node->operand(1), memory_base);
@@ -51,6 +57,12 @@ void Lowering::after(Node* node) {
             break;
         }
         case Opcode::store_memory: {
+
+            // In this case lowering is not needed.
+            if (dynamic_cast<emu::Id_mmu*>(_state.mmu.get())) {
+                break;
+            }
+
             if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(_state.mmu.get())) {
                 auto memory_base = builder.constant(Type::i64, reinterpret_cast<uintptr_t>(flat_mmu->memory_));
                 auto computed_address = builder.arithmetic(Opcode::add, node->operand(1), memory_base);
