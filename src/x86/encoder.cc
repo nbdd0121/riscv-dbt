@@ -258,7 +258,7 @@ void Encoder::emit_modrm(const Operand& operand, Register reg) {
         }
 
         // [base + index * scale + disp32]
-        emit_byte(0x80 | (reg_num << 3) | base_reg);
+        emit_byte(0x80 | (reg_num << 3) | 0b100);
         emit_byte((shift << 6) | (index_reg << 3) | base_reg);
         emit_dword(static_cast<uint32_t>(it.displacement));
         return;

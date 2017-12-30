@@ -145,7 +145,7 @@ void print_operand(const Operand& operand) {
             }
             std::clog << register_name(it.index);
             if (it.scale != 1) {
-                std::clog << '*' << it.scale;
+                std::clog << '*' << static_cast<int>(it.scale);
             }
         }
 
