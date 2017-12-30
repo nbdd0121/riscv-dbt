@@ -7,6 +7,11 @@
 namespace ir::pass {
 
 void Lowering::after(Node* node) {
+
+    // We perform target-independent lowering here. After lowering, load/store_memory represents loading and storing
+    // represents host address space instead of guest's. For paging MMU, memory operations are translated to helper
+    // function calls.
+
     Builder builder { *_graph };
     switch (node->opcode()) {
         case Opcode::load_memory: {

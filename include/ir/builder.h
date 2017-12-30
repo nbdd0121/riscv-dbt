@@ -13,11 +13,11 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
-    Node* create(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& opr) {
+    Node* create(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& opr) {
         return _graph.manage(new Node(opcode, std::move(type), std::move(opr)));
     }
 
-    Value control(Opcode opcode, std::vector<Value>&& opr) {
+    Value control(uint16_t opcode, std::vector<Value>&& opr) {
         return create(opcode, {Type::control}, std::move(opr))->value(0);
     }
 
@@ -52,17 +52,17 @@ public:
         return create(Opcode::store_memory, {Type::memory}, {dep, address, value})->value(0);
     }
 
-    Value arithmetic(Opcode opcode, Value left, Value right) {
+    Value arithmetic(uint16_t opcode, Value left, Value right) {
         ASSERT(left.type() == right.type());
         return create(opcode, {left.type()}, {left, right})->value(0);
     }
 
-    Value shift(Opcode opcode, Value left, Value right) {
+    Value shift(uint16_t opcode, Value left, Value right) {
         ASSERT(right.type() == Type::i8);
         return create(opcode, {left.type()}, {left, right})->value(0);
     }
 
-    Value compare(Opcode opcode, Value left, Value right) {
+    Value compare(uint16_t opcode, Value left, Value right) {
         ASSERT(left.type() == right.type());
         return create(opcode, {Type::i1}, {left, right})->value(0);
     }

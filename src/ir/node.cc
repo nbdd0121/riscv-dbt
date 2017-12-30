@@ -5,7 +5,7 @@
 
 namespace ir {
 
-Node::Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+Node::Node(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
     _operands(std::move(operands)),  _type{std::move(type)}, _opcode{opcode}, _visited{0} {
 
     link();

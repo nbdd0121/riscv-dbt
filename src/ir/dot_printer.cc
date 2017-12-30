@@ -6,7 +6,7 @@
 
 namespace ir::pass {
 
-const char* Dot_printer::opcode_name(Opcode opcode) {
+const char* Dot_printer::opcode_name(uint16_t opcode) {
     switch (opcode) {
 #define CASE(name) case Opcode::name: return #name;
         CASE(start)
@@ -73,13 +73,16 @@ void Dot_printer::after(Node* node) {
     // Draw the node with type, opcode
     util::log("\t\"{:x}\" [label=\"{{", reinterpret_cast<uintptr_t>(node));
 
-    Opcode opcode = node->opcode();
+    uint16_t opcode = node->opcode();
 
     // First compute whether input label is needed.
     bool need_label;
     if (node->operand_count() <= 1) {
         // No ambiguities in this case.
         need_label = false;
+
+    } else if (is_target_specific(opcode)) {
+        need_label = true;
 
     } else if (opcode == Opcode::call) {
         // If call has more than 1 arguments, we needs to distinguish between them.

@@ -29,7 +29,9 @@ static inline size_t get_type_size(Type type) {
     return static_cast<uint8_t>(type);
 }
 
-enum class Opcode: uint8_t {
+namespace Opcode {
+
+enum: uint16_t {
     /** Control flow opcodes **/
     // Input: None. Output: Memory.
     start,
@@ -113,18 +115,26 @@ enum class Opcode: uint8_t {
      * Input: Value, Value, Value. Output: Value.
      */
     mux,
+
+    /* Opcodes after target_start are target-specific opcodes */
+    target_start,
 };
 
-static inline bool is_pure_opcode(Opcode opcode) {
-    return static_cast<uint8_t>(opcode) >= static_cast<uint8_t>(Opcode::constant);
 }
 
-static inline bool is_binary_opcode(Opcode opcode) {
-    uint8_t value = static_cast<uint8_t>(opcode);
-    return value >= static_cast<uint8_t>(Opcode::add) && value <= static_cast<uint8_t>(Opcode::geu);
+static inline bool is_target_specific(uint16_t opcode) {
+    return opcode >= Opcode::target_start;
 }
 
-static inline bool is_commutative_opcode(Opcode opcode) {
+static inline bool is_pure_opcode(uint16_t opcode) {
+    return !is_target_specific(opcode) && opcode >= Opcode::constant;
+}
+
+static inline bool is_binary_opcode(uint16_t opcode) {
+    return opcode >= Opcode::add && opcode <= Opcode::geu;
+}
+
+static inline bool is_commutative_opcode(uint16_t opcode) {
     switch(opcode) {
         case Opcode::add:
         case Opcode::i_xor:
@@ -160,7 +170,7 @@ public:
     explicit operator bool() { return _node != nullptr; }
 
     // Some frequently used utility function.
-    inline Opcode opcode() const;
+    inline uint16_t opcode() const;
     inline bool is_const() const;
     inline uint64_t const_value() const;
 };
@@ -184,14 +194,14 @@ private:
     std::vector<Type> _type;
 
     // Opcode of the node.
-    Opcode _opcode;
+    uint16_t _opcode;
 
     // Whether the node is visited. For graph walking only.
     // 0 - not visited, 1 - visited, 2 - visiting.
     uint8_t _visited;
 
 public:
-    Node(Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands);
+    Node(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands);
     virtual ~Node();
 
     // Disable copy construction and assignment. Node should live on heap.
@@ -210,8 +220,8 @@ public:
     size_t value_count() const { return _type.size(); }
     Value value(size_t index) { return {this, index}; }
 
-    Opcode opcode() const { return _opcode; }
-    void opcode(Opcode opcode) { _opcode = opcode; }
+    uint16_t opcode() const { return _opcode; }
+    void opcode(uint16_t opcode) { _opcode = opcode; }
 
     // Operand accessors and mutators
     const std::vector<Value>& operands() const { return _operands; }
@@ -260,7 +270,7 @@ private:
     uint16_t _regnum;
 
 public:
-    Register_access(uint16_t regnum, Opcode opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+    Register_access(uint16_t regnum, uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
         Node(opcode, std::move(type), std::move(operands)), _regnum{regnum} {}
 
     uint16_t regnum() const { return _regnum; }
@@ -327,7 +337,7 @@ public:
 Type Value::type() const { return _node->_type[_index]; }
 const util::Array_multiset<Node*>& Value::references() const { return _node->_references[_index]; }
 
-Opcode Value::opcode() const { return _node->_opcode; }
+uint16_t Value::opcode() const { return _node->_opcode; }
 bool Value::is_const() const { return _node->_opcode == Opcode::constant; }
 uint64_t Value::const_value() const { return static_cast<Constant*>(_node)->const_value(); }
 

@@ -106,7 +106,7 @@ uint64_t Local_value_numbering::cast(Type type, Type oldtype, bool sext, uint64_
 }
 
 // Evaluate binary operations.
-uint64_t Local_value_numbering::binary(Type type, Opcode opcode, uint64_t l, uint64_t r) {
+uint64_t Local_value_numbering::binary(Type type, uint16_t opcode, uint64_t l, uint64_t r) {
     switch (opcode) {
         case Opcode::add: return sign_extend(type, l + r);
         case Opcode::sub: return sign_extend(type, l - r);

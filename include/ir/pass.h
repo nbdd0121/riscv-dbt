@@ -39,7 +39,7 @@ public:
 
 class Dot_printer: public Pass {
 public:
-    static const char* opcode_name(Opcode opcode);
+    static const char* opcode_name(uint16_t opcode);
     static const char* type_name(Type type);
 
 protected:
@@ -93,7 +93,7 @@ private:
     static uint64_t sign_extend(Type type, uint64_t value);
     static uint64_t zero_extend(Type type, uint64_t value);
     static uint64_t cast(Type type, Type oldtype, bool sext, uint64_t value);
-    static uint64_t binary(Type type, Opcode opcode, uint64_t l, uint64_t r);
+    static uint64_t binary(Type type, uint16_t opcode, uint64_t l, uint64_t r);
 
     Value new_constant(Type type, uint64_t const_value);
     void replace_with_constant(Value value, uint64_t const_value);
@@ -103,6 +103,7 @@ protected:
     virtual void after(Node* node) override;
 };
 
+// Target-independent lowering pass.
 class Lowering: public Pass {
 private:
     emu::State& _state;

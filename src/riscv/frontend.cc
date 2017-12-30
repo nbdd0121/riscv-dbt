@@ -26,13 +26,13 @@ struct Frontend {
 
     void emit_load(Instruction inst, ir::Type type, bool sext);
     void emit_store(Instruction inst, ir::Type type);
-    void emit_alui(Instruction inst, ir::Opcode op, bool w);
-    void emit_shifti(Instruction inst, ir::Opcode op, bool w);
-    void emit_slti(Instruction inst, ir::Opcode op);
-    void emit_alu(Instruction inst, ir::Opcode op, bool w);
-    void emit_shift(Instruction inst, ir::Opcode op, bool w);
-    void emit_slt(Instruction inst, ir::Opcode op);
-    void emit_branch(Instruction instead, ir::Opcode op, emu::reg_t pc);
+    void emit_alui(Instruction inst, uint16_t opcode, bool w);
+    void emit_shifti(Instruction inst, uint16_t opcode, bool w);
+    void emit_slti(Instruction inst, uint16_t opcode);
+    void emit_alu(Instruction inst, uint16_t opcode, bool w);
+    void emit_shift(Instruction inst, uint16_t opcode, bool w);
+    void emit_slt(Instruction inst, uint16_t opcode);
+    void emit_branch(Instruction instead, uint16_t opcode, emu::reg_t pc);
 
     void compile(const Basic_block& block);
 };
@@ -71,7 +71,7 @@ void Frontend::emit_store(Instruction inst, ir::Type type) {
     last_memory = builder.store_memory(last_memory, address, rs2_value);
 }
 
-void Frontend::emit_alui(Instruction inst, ir::Opcode opcode, bool w) {
+void Frontend::emit_alui(Instruction inst, uint16_t opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
     auto rs1_value = emit_load_register(type, inst.rs1());
@@ -80,7 +80,7 @@ void Frontend::emit_alui(Instruction inst, ir::Opcode opcode, bool w) {
     emit_store_register(inst.rd(), rd_value, true);
 }
 
-void Frontend::emit_shifti(Instruction inst, ir::Opcode opcode, bool w) {
+void Frontend::emit_shifti(Instruction inst, uint16_t opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
     auto rs1_value = emit_load_register(type, inst.rs1());
@@ -89,7 +89,7 @@ void Frontend::emit_shifti(Instruction inst, ir::Opcode opcode, bool w) {
     emit_store_register(inst.rd(), rd_value, true);
 }
 
-void Frontend::emit_slti(Instruction inst, ir::Opcode opcode) {
+void Frontend::emit_slti(Instruction inst, uint16_t opcode) {
     if (inst.rd() == 0) return;
     auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
     auto imm_value = builder.constant(ir::Type::i64, inst.imm());
@@ -97,7 +97,7 @@ void Frontend::emit_slti(Instruction inst, ir::Opcode opcode) {
     emit_store_register(inst.rd(), rd_value);
 }
 
-void Frontend::emit_alu(Instruction inst, ir::Opcode opcode, bool w) {
+void Frontend::emit_alu(Instruction inst, uint16_t opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
     auto rs1_value = emit_load_register(type, inst.rs1());
@@ -106,7 +106,7 @@ void Frontend::emit_alu(Instruction inst, ir::Opcode opcode, bool w) {
     emit_store_register(inst.rd(), rd_value, true);
 }
 
-void Frontend::emit_shift(Instruction inst, ir::Opcode opcode, bool w) {
+void Frontend::emit_shift(Instruction inst, uint16_t opcode, bool w) {
     if (inst.rd() == 0) return;
     ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
     auto rs1_value = emit_load_register(type, inst.rs1());
@@ -115,7 +115,7 @@ void Frontend::emit_shift(Instruction inst, ir::Opcode opcode, bool w) {
     emit_store_register(inst.rd(), rd_value, true);
 }
 
-void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
+void Frontend::emit_slt(Instruction inst, uint16_t opcode) {
     if (inst.rd() == 0) return;
     auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
     auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
@@ -123,7 +123,7 @@ void Frontend::emit_slt(Instruction inst, ir::Opcode opcode) {
     emit_store_register(inst.rd(), rd_value);
 }
 
-void Frontend::emit_branch(Instruction inst, ir::Opcode opcode, emu::reg_t pc) {
+void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
     auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
     auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
     auto cmp_value = builder.compare(opcode, rs1_value, rs2_value);
