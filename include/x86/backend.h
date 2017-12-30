@@ -11,6 +11,25 @@ namespace emu {
 struct State;
 }
 
+namespace x86::backend {
+
+namespace Target_opcode {
+
+enum: uint16_t {
+    // (Value base, Value index, Value scale, Value displacement) -> Value
+    address = ir::Opcode::target_start,
+    lea,
+};
+
+}
+
+class Dot_printer: public ir::pass::Dot_printer {
+protected:
+    virtual void write_node_content(std::ostream& stream, ir::Node* node) override;
+};
+
+}
+
 namespace x86 {
 
 class Backend: public ir::pass::Pass {
