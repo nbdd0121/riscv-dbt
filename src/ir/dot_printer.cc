@@ -68,6 +68,44 @@ void Dot_printer::finish() {
     std::clog << "}" << std::endl;
 }
 
+void Dot_printer::write_node_content(std::ostream& stream, Node* node) {
+    // Print opcode and opcode relevant information.
+    stream << opcode_name(node->opcode());
+
+    switch (node->opcode()) {
+        case Opcode::constant: {
+            uint64_t value = static_cast<Constant*>(node)->const_value();
+            int64_t svalue = value;
+
+            if (static_cast<int8_t>(value) == svalue) {
+
+                // For small enough number we print decimal.
+                stream << ' ' << svalue;
+
+            } else {
+                if (svalue < 0)
+                    util::log(" -{:#x}", -value);
+                else
+                    util::log(" {:#x}", value);
+            }
+            break;
+        }
+        case Opcode::cast:
+            if (static_cast<Cast*>(node)->sign_extend()) stream << " sext";
+            break;
+        case Opcode::load_register:
+        case Opcode::store_register:
+            stream << " r" << static_cast<Register_access*>(node)->regnum();
+            break;
+        case Opcode::call: {
+            auto call_node = static_cast<Call*>(node);
+            util::log(" {:#x}{}", call_node->target(), call_node->need_context() ? " with context" : "");
+            break;
+        }
+        default: break;
+    }
+}
+
 void Dot_printer::after(Node* node) {
 
     // Draw the node with type, opcode
@@ -116,41 +154,8 @@ void Dot_printer::after(Node* node) {
         }
     }
 
-    // Print opcode and opcode relevant information.
-    std::clog << opcode_name(node->opcode());
-
-    switch (node->opcode()) {
-        case Opcode::constant: {
-            uint64_t value = static_cast<Constant*>(node)->const_value();
-            int64_t svalue = value;
-
-            if (static_cast<int8_t>(value) == svalue) {
-
-                // For small enough number we print decimal.
-                std::clog << ' ' << svalue;
-
-            } else {
-                if (svalue < 0)
-                    util::log(" -{:#x}", -value);
-                else
-                    util::log(" {:#x}", value);
-            }
-            break;
-        }
-        case Opcode::cast:
-            if (static_cast<Cast*>(node)->sign_extend()) std::clog << " sext";
-            break;
-        case Opcode::load_register:
-        case Opcode::store_register:
-            std::clog << " r" << static_cast<Register_access*>(node)->regnum();
-            break;
-        case Opcode::call: {
-            auto call_node = static_cast<Call*>(node);
-            util::log(" {:#x}{}", call_node->target(), call_node->need_context() ? " with context" : "");
-            break;
-        }
-        default: break;
-    }
+    // Print the node content
+    write_node_content(std::clog, node);
 
     // If node produces multiple value, print out fields.
     if (node->value_count() != 1) {

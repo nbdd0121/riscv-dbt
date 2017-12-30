@@ -1,6 +1,7 @@
 #ifndef IR_PASS_H
 #define IR_PASS_H
 
+#include <ostream>
 #include <unordered_set>
 
 #include "ir/node.h"
@@ -43,6 +44,7 @@ public:
     static const char* type_name(Type type);
 
 protected:
+    virtual void write_node_content(std::ostream& stream, Node* node);
     virtual void start() override;
     virtual void finish() override;
     virtual void after(Node* node) override;
