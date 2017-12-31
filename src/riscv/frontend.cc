@@ -19,10 +19,21 @@ struct Frontend {
     // The latest memory value.
     ir::Value last_memory;
 
+    // Current pc (before the processing instruction).
+    emu::reg_t pc;
+
+    // Difference between stored instret and true instret (excluding the processing instruction).
+    emu::reg_t instret;
+
     Frontend(emu::State& state): state{state} {}
 
     ir::Value emit_load_register(ir::Type type, uint16_t reg);
     void emit_store_register(uint16_t reg, ir::Value value, bool sext = false);
+
+    // If some instruction has the possibility to throw, for correctness we need to update pc and instret to
+    // correct value before the instruction.
+    void update_pc();
+    void update_instret();
 
     void emit_load(Instruction inst, ir::Type type, bool sext);
     void emit_store(Instruction inst, ir::Type type);
@@ -54,7 +65,28 @@ void Frontend::emit_store_register(uint16_t reg, ir::Value value, bool sext) {
     last_memory = builder.store_register(last_memory, reg, value);
 }
 
+void Frontend::update_pc() {
+    // Update pc
+    auto pc_value = builder.constant(ir::Type::i64, pc);
+    last_memory = builder.store_register(last_memory, 64, pc_value);
+}
+
+void Frontend::update_instret() {
+    // Update instret
+    if (!state.no_instret) {
+        ir::Value instret_value;
+        std::tie(last_memory, instret_value) = builder.load_register(last_memory, 65);
+        auto instret_offset_value = builder.constant(ir::Type::i64, instret);
+        auto new_instret_value = builder.arithmetic(ir::Opcode::add, instret_value, instret_offset_value);
+        last_memory = builder.store_register(last_memory, 65, new_instret_value);
+        instret = 0;
+    }
+}
+
 void Frontend::emit_load(Instruction inst, ir::Type type, bool sext) {
+    update_pc();
+    update_instret();
+
     auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
     auto imm_value = builder.constant(ir::Type::i64, inst.imm());
     auto address = builder.arithmetic(ir::Opcode::add, rs1_value, imm_value);
@@ -64,6 +96,9 @@ void Frontend::emit_load(Instruction inst, ir::Type type, bool sext) {
 }
 
 void Frontend::emit_store(Instruction inst, ir::Type type) {
+    update_pc();
+    update_instret();
+
     auto rs2_value = emit_load_register(type, inst.rs2());
     auto rs1_value = emit_load_register(ir::Type::i64, inst.rs1());
     auto imm_value = builder.constant(ir::Type::i64, inst.imm());
@@ -128,14 +163,14 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
     auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
     auto cmp_value = builder.compare(opcode, rs1_value, rs2_value);
 
-    auto new_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
+    auto true_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
+    auto false_pc_value = builder.constant(ir::Type::i64, block->end_pc);
 
     bool use_mux = true;
     if (pc + inst.imm() == block->start_pc) use_mux = false;
 
     if (use_mux) {
-        auto pc_value = builder.constant(ir::Type::i64, block->end_pc);
-        auto mux_value = builder.mux(cmp_value, new_pc_value, pc_value);
+        auto mux_value = builder.mux(cmp_value, true_pc_value, false_pc_value);
         auto store_pc_value = builder.store_register(last_memory, 64, mux_value);
         auto jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
         auto end_value = builder.control(ir::Opcode::end, {jmp_value});
@@ -144,20 +179,24 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
     } else {
         auto if_node = builder.create(ir::Opcode::i_if, {ir::Type::control, ir::Type::control}, {last_memory, cmp_value});
 
-        // Building the true branch.
-        auto true_block_value = builder.block({if_node->value(0)});
-        auto store_pc_value = builder.store_register(true_block_value, 64, new_pc_value);
-        auto true_jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
+        // Build the false branch.
+        auto false_block_value = builder.block({if_node->value(1)});
+        auto false_pc_store = builder.store_register(false_block_value, 64, false_pc_value);
+        auto false_jmp_value = builder.control(ir::Opcode::jmp, {false_pc_store});
 
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
-            (*graph.start()->value(0).references().begin())->operand_add(true_jmp_value);
-            auto end_value = builder.control(ir::Opcode::end, {if_node->value(1)});
+            (*graph.start()->value(0).references().begin())->operand_add(if_node->value(0));
+            auto end_value = builder.control(ir::Opcode::end, {false_jmp_value});
             graph.root(end_value.node());
             return;
         }
 
-        auto end_value = builder.control(ir::Opcode::end, {true_jmp_value, if_node->value(1)});
+        // Building the true branch.
+        auto true_block_value = builder.block({if_node->value(0)});
+        auto true_pc_store = builder.store_register(true_block_value, 64, true_pc_value);
+        auto true_jmp_value = builder.control(ir::Opcode::jmp, {true_pc_store});
+        auto end_value = builder.control(ir::Opcode::end, {true_jmp_value, false_jmp_value});
         graph.root(end_value.node());
     }
 }
@@ -169,21 +208,12 @@ void Frontend::compile(const Basic_block& block) {
     auto block_value = builder.block({start_value});
     last_memory = block_value;
 
-    // Update pc
-    auto end_pc_value = builder.constant(ir::Type::i64, block.end_pc);
-    last_memory = builder.store_register(last_memory, 64, end_pc_value);
+    pc = block.start_pc;
+    instret = 0;
 
-    // Update instret
-    if (!state.no_instret) {
-        ir::Value instret_value;
-        std::tie(last_memory, instret_value) = builder.load_register(last_memory, 65);
-        auto instret_offset_value = builder.constant(ir::Type::i64, block.instructions.size());
-        auto new_instret_value = builder.arithmetic(ir::Opcode::add, instret_value, instret_offset_value);
-        last_memory = builder.store_register(last_memory, 65, new_instret_value);
-    }
+    for (size_t i = 0; i < block.instructions.size() - 1; i++) {
+        auto inst = block.instructions[i];
 
-    riscv::reg_t pc = block.start_pc;
-    for (auto& inst: block.instructions) {
         switch (inst.opcode()) {
             case Opcode::auipc: {
                 if (inst.rd() == 0) break;
@@ -236,35 +266,6 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::sllw: emit_shift(inst, ir::Opcode::shl, true); break;
             case Opcode::srlw: emit_shift(inst, ir::Opcode::shr, true); break;
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
-            case Opcode::jal: {
-                if (inst.rd()) {
-                    last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
-                }
-                ASSERT(pc + inst.length() == block.end_pc);
-                auto new_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
-                last_memory = builder.store_register(last_memory, 64, new_pc_value);
-                break;
-            }
-            case Opcode::jalr: {
-                auto rs_value = emit_load_register(ir::Type::i64, inst.rs1());
-                auto imm_value = builder.constant(ir::Type::i64, inst.imm());
-                auto new_pc_value = builder.arithmetic(
-                    ir::Opcode::i_and,
-                    builder.arithmetic(ir::Opcode::add, rs_value, imm_value),
-                    builder.constant(ir::Type::i64, ~1)
-                );
-                if (inst.rd()) {
-                    last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
-                }
-                last_memory = builder.store_register(last_memory, 64, new_pc_value);
-                break;
-            }
-            case Opcode::beq: emit_branch(inst, ir::Opcode::eq, pc); return;
-            case Opcode::bne: emit_branch(inst, ir::Opcode::ne, pc); return;
-            case Opcode::blt: emit_branch(inst, ir::Opcode::lt, pc); return;
-            case Opcode::bge: emit_branch(inst, ir::Opcode::ge, pc); return;
-            case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
-            case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
             default: {
                 auto serialized_inst = builder.constant(ir::Type::i64, util::read_as<uint64_t>(&inst));
                 last_memory = graph.manage(new ir::Call(
@@ -273,7 +274,58 @@ void Frontend::compile(const Basic_block& block) {
                 break;
             }
         }
+
         pc += inst.length();
+        instret++;
+    }
+
+    // For last instruction, update instret beforehand.
+    instret++;
+    update_instret();
+
+    auto inst = block.instructions.back();
+    switch (inst.opcode()) {
+        case Opcode::jal: {
+            if (inst.rd()) {
+                auto end_pc_value = builder.constant(ir::Type::i64, pc + inst.length());
+                last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
+            }
+            ASSERT(pc + inst.length() == block.end_pc);
+            auto new_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
+            last_memory = builder.store_register(last_memory, 64, new_pc_value);
+            break;
+        }
+        case Opcode::jalr: {
+            auto rs_value = emit_load_register(ir::Type::i64, inst.rs1());
+            auto imm_value = builder.constant(ir::Type::i64, inst.imm());
+            auto new_pc_value = builder.arithmetic(
+                ir::Opcode::i_and,
+                builder.arithmetic(ir::Opcode::add, rs_value, imm_value),
+                builder.constant(ir::Type::i64, ~1)
+            );
+            if (inst.rd()) {
+                auto end_pc_value = builder.constant(ir::Type::i64, pc + inst.length());
+                last_memory = builder.store_register(last_memory, inst.rd(), end_pc_value);
+            }
+            last_memory = builder.store_register(last_memory, 64, new_pc_value);
+            break;
+        }
+        case Opcode::beq: emit_branch(inst, ir::Opcode::eq, pc); return;
+        case Opcode::bne: emit_branch(inst, ir::Opcode::ne, pc); return;
+        case Opcode::blt: emit_branch(inst, ir::Opcode::lt, pc); return;
+        case Opcode::bge: emit_branch(inst, ir::Opcode::ge, pc); return;
+        case Opcode::bltu: emit_branch(inst, ir::Opcode::ltu, pc); return;
+        case Opcode::bgeu: emit_branch(inst, ir::Opcode::geu, pc); return;
+        default: {
+            pc += inst.length();
+            update_pc();
+
+            auto serialized_inst = builder.constant(ir::Type::i64, util::read_as<uint64_t>(&inst));
+            last_memory = graph.manage(new ir::Call(
+                reinterpret_cast<uintptr_t>(step), true, {ir::Type::memory}, {last_memory, serialized_inst}
+            ))->value(0);
+            break;
+        }
     }
 
     auto jmp_value = builder.control(ir::Opcode::jmp, {last_memory});
