@@ -23,6 +23,13 @@ enum: uint16_t {
 
 }
 
+class Lowering: public ir::pass::Pass {
+private:
+    ir::Value match_address(ir::Value value, bool required);
+protected:
+    virtual void after(ir::Node* node) override;
+};
+
 class Dot_printer: public ir::pass::Dot_printer {
 protected:
     virtual void write_node_content(std::ostream& stream, ir::Node* node) override;
@@ -97,6 +104,7 @@ public:
     void emit_shift(ir::Node* node, Opcode opcode);
     void emit_unary(ir::Node* node, Opcode opcode);
     Condition_code emit_compare(ir::Value value);
+    Memory emit_address(ir::Value value);
 
     void clear();
 

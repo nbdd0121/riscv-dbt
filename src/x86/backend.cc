@@ -45,10 +45,14 @@ static bool same_location(const x86::Operand& a, const x86::Operand& b) {
     return am.base == bm.base && am.index == bm.index && am.scale == bm.scale && am.displacement == bm.displacement;
 }
 
+static x86::Register modify_size(ir::Type type, x86::Register loc) {
+    return register_of_id(type, register_id(loc));
+}
+
 static x86::Operand modify_size(ir::Type type, const x86::Operand& loc) {
     using namespace x86;
     if (loc.is_register()) {
-        return register_of_id(type, register_id(loc.as_register()));
+        return modify_size(type, loc.as_register());
     } else if (loc.is_immediate()) {
         return loc;
     } else {
@@ -441,6 +445,44 @@ Condition_code Backend::emit_compare(ir::Value value) {
     return cc;
 }
 
+Memory Backend::emit_address(ir::Value value) {
+    int& refcount = reference_count[value];
+    if (refcount == 0) {
+        refcount = value.references().size();
+    }
+
+    auto node = value.node();
+    auto base = node->operand(0);
+    auto index = node->operand(1);
+    auto scale = node->operand(2);
+    auto disp = node->operand(3);
+
+    ASSERT(scale.is_const() && disp.is_const());
+
+    Register base_reg = base.is_const() && base.const_value() == 0
+        ? Register::none
+        : modify_size(ir::Type::i64, get_register_location(base));
+
+    if (scale.const_value() == 0) {
+        if (--refcount == 0) {
+            decrease_reference(base);
+        }
+
+        return qword(base_reg + node->operand(3).const_value());
+    }
+
+    if (base_reg != Register::none) pin_register(base_reg);
+    Register index_reg = modify_size(ir::Type::i64, get_register_location(index));
+    if (base_reg != Register::none) unpin_register(base_reg);
+
+    if (--refcount == 0) {
+        decrease_reference(base);
+        decrease_reference(index);
+    }
+
+    return qword(base_reg + index_reg * node->operand(2).const_value() + node->operand(3).const_value());
+}
+
 void Backend::after(ir::Node* node) {
     switch (node->opcode()) {
         case ir::Opcode::block:
@@ -481,14 +523,12 @@ void Backend::after(ir::Node* node) {
             auto output = node->value(1);
             auto address = node->operand(1);
 
-            Register loc = get_register_location(address);
-            decrease_reference(address);
+            ASSERT (address.opcode() == backend::Target_opcode::address);
+            Memory mem = emit_address(address);
+            mem.size = get_type_size(output.type()) / 8;
 
             Register reg = alloc_register(output.type());
             bind_register(output, reg);
-
-            Memory mem = qword(loc + 0);
-            mem.size = get_type_size(output.type()) / 8;
 
             emit(mov(reg, mem));
             break;
@@ -500,14 +540,24 @@ void Backend::after(ir::Node* node) {
             Operand loc_value = get_location_ex(value, false, true);
             if (loc_value.is_register()) pin_register(loc_value.as_register());
 
-            Register loc = get_register_location(address);
-            decrease_reference(address);
-
-            Memory mem = qword(loc + 0);
+            ASSERT (address.opcode() == backend::Target_opcode::address);
+            Memory mem = emit_address(address);
             mem.size = get_type_size(value.type()) / 8;
 
             emit(mov(mem, loc_value));
             if (loc_value.is_register()) unpin_register(loc_value.as_register());
+            decrease_reference(value);
+            break;
+        }
+        case backend::Target_opcode::lea: {
+            auto output = node->value(0);
+
+            Memory mem = emit_address(node->operand(0));
+
+            Register reg = alloc_register(output.type());
+            bind_register(output, reg);
+
+            emit(lea(modify_size(ir::Type::i64, reg), mem));
             break;
         }
         case ir::Opcode::call: {
@@ -561,7 +611,7 @@ void Backend::after(ir::Node* node) {
                 bind_register(output, reg);
 
                 if (output.type() != ir::Type::i8) {
-                    Operand reg32 = modify_size(ir::Type::i32, reg);
+                    Register reg32 = modify_size(ir::Type::i32, reg);
                     emit(i_xor(reg32, reg32));
                 }
 
@@ -673,6 +723,7 @@ void Backend::after(ir::Node* node) {
         case ir::Opcode::ge:
         case ir::Opcode::ltu:
         case ir::Opcode::geu: break;
+        case backend::Target_opcode::address: break;
         default: ASSERT(0);
     }
 }

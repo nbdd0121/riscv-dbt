@@ -155,8 +155,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
         ir::pass::Lowering{state_}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
+        x86::backend::Lowering{}.run(graph);
+
         if (state_.disassemble) {
-            // ir::pass::Dot_printer{}.run(graph);
+            // x86::backend::Dot_printer{}.run(graph);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
