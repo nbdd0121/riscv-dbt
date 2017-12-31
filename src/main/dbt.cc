@@ -606,7 +606,16 @@ void Dbt_compiler::emit_lb(riscv::Instruction inst, bool u) {
     emu::Mmu* mmu = runtime_.state_.mmu.get();
 
     // We can generate better code if the MMU is flat.
-    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+    if (dynamic_cast<emu::Id_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << movzx(x86::Register::eax, byte(x86::Register::rax + imm));
+        } else {
+            *this << movsx(x86::Register::rax, byte(x86::Register::rax + imm));
+        }
+
+    } else if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
 
         // For all load and save instructions we ignore the case where rs1 = 0, as this should never happen. Even if it
@@ -654,7 +663,16 @@ void Dbt_compiler::emit_lh(riscv::Instruction inst, bool u) {
     emu::Mmu* mmu = runtime_.state_.mmu.get();
 
     // We can generate better code if the MMU is flat.
-    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+    if (dynamic_cast<emu::Id_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << movzx(x86::Register::eax, word(x86::Register::rax + imm));
+        } else {
+            *this << movsx(x86::Register::rax, word(x86::Register::rax + imm));
+        }
+
+    } else if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
         *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
 
@@ -699,7 +717,16 @@ void Dbt_compiler::emit_lw(riscv::Instruction inst, bool u) {
     emu::Mmu* mmu = runtime_.state_.mmu.get();
 
     // We can generate better code if the MMU is flat.
-    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+    if (dynamic_cast<emu::Id_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+
+        if (u) {
+            *this << mov(x86::Register::eax, dword(x86::Register::rax + imm));
+        } else {
+            *this << movsx(x86::Register::rax, dword(x86::Register::rax + imm));
+        }
+
+    } else if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
         *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
 
@@ -744,7 +771,11 @@ void Dbt_compiler::emit_ld(riscv::Instruction inst) {
     emu::Mmu* mmu = runtime_.state_.mmu.get();
 
     // We can generate better code if the MMU is flat.
-    if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
+    if (dynamic_cast<emu::Id_mmu*>(mmu)) {
+        *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
+        *this << mov(x86::Register::rax, qword(x86::Register::rax + imm));
+
+    } else if (emu::Flat_mmu* flat_mmu = dynamic_cast<emu::Flat_mmu*>(mmu)) {
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(flat_mmu->memory_) + imm);
         *this << add(x86::Register::rax, qword(memory_of_register(rs1)));
         *this << mov(x86::Register::rax, qword(x86::Register::rax + 0));
