@@ -19,13 +19,18 @@
 
 static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
 Options:\n\
-  --paging              Use soft paging MMU instead of a flat MMU. The emulated program\n\
-                        will have larger address space in expense of performance.\n\
+  --paging              Use soft paging MMU instead of a flat MMU. The emulated\n\
+                        program will have larger address space in expense of\n\
+                        performance.\n\
   --strace              Log system calls.\n\
   --disassemble         Log decoded instructions.\n\
   --engine=interpreter  Use interpreter instead of dynamic binary translator.\n\
-  --engine=dbt          Use simple binary translator instead of IR-based optimising binary translator.\n\
-  --no-instret          Disable precise instret updating in binary translated code.\n\
+  --engine=dbt          Use simple binary translator instead of IR-based\n\
+                        optimising binary translator.\n\
+  --no-instret          Disable precise instret updating in binary translated\n\
+                        code.\n\
+  --no-strict-exception Disable strict enforcement of excecution correctness in\n\
+                        case of segmentation fault.\n\
   --help                Display this help message.\n\
 ";
 
@@ -36,11 +41,14 @@ int main(int argc, const char **argv) {
     /* Arguments to be parsed */
     // By default we use flat mmu since it is faster.
     bool use_paging = false;
-    bool strace = false;
-    bool disassemble = false;
     bool use_dbt = false;
     bool use_ir = true;
-    bool no_instret = false;
+
+    emu::State state;
+    state.strace = false;
+    state.disassemble = false;
+    state.no_instret = false;
+    state.strict_exception = true;
 
     // Parsing arguments
     int arg_index;
@@ -55,9 +63,9 @@ int main(int argc, const char **argv) {
         if (strcmp(arg, "--paging") == 0) {
             use_paging = true;
         } else if (strcmp(arg, "--strace") == 0) {
-            strace = true;
+            state.strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
-            disassemble = true;
+            state.disassemble = true;
         } else if (strcmp(arg, "--engine=dbt") == 0) {
             use_ir = false;
             use_dbt = true;
@@ -65,7 +73,9 @@ int main(int argc, const char **argv) {
             use_ir = false;
             use_dbt = false;
         } else if (strcmp(arg, "--no-instret") == 0) {
-            no_instret = true;
+            state.no_instret = true;
+        } else if (strcmp(arg, "--no-strict-exception") == 0) {
+            state.strict_exception = false;
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;
@@ -80,11 +90,6 @@ int main(int argc, const char **argv) {
         return 1;
     }
     const char *program_name = argv[arg_index];
-
-    emu::State state;
-    state.strace = strace;
-    state.disassemble = disassemble;
-    state.no_instret = no_instret;
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
     if (use_paging) {

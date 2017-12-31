@@ -36,6 +36,9 @@ struct State {
 
     // A flag to determine whether instret should be updated precisely in binary translated code.
     bool no_instret;
+
+    // A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
+    bool strict_exception;
 };
 
 // This is not really an error. However it shares some properties with an exception, as it needs to break out from

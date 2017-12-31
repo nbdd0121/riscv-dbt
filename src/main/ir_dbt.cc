@@ -151,7 +151,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
         riscv::Basic_block basic_block = decoder.decode_basic_block();
 
         graph = riscv::compile(state_, basic_block);
-        ir::pass::Register_access_elimination{66}.run(graph);
+        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
         ir::pass::Lowering{state_}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
