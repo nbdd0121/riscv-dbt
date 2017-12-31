@@ -31,6 +31,9 @@ void Register_access_elimination::after(Node* node) {
     // After the above optimizations, there are still redundancies. A store node after another store node need not
     // depend on previous nodes w/ exceptions. We keep `has_store_after_exception` for this purpose.
 
+    // In non-strict mode many limitations are lifted. store_register and last_exception is no longer required to
+    // depend on each other.
+
     switch (node->opcode()) {
         case Opcode::block: {
             ASSERT(!last_effect);
@@ -79,7 +82,7 @@ void Register_access_elimination::after(Node* node) {
                 }
 
             } else {
-                if (last_exception) dependencies.push_back(last_exception);
+                if (_strict && last_exception) dependencies.push_back(last_exception);
             }
 
             if (dependencies.empty()) {
@@ -99,9 +102,11 @@ void Register_access_elimination::after(Node* node) {
             std::vector<Value> dependencies;
 
             // Nodes w/ exceptions depend on all previous stores.
-            for (size_t regnum = 0; regnum < last_load.size(); regnum++) {
-                if (has_store_after_exception[regnum]) dependencies.push_back(last_store[regnum]->value(0));
-                has_store_after_exception[regnum] = 0;
+            if (_strict) {
+                for (size_t regnum = 0; regnum < last_load.size(); regnum++) {
+                    if (has_store_after_exception[regnum]) dependencies.push_back(last_store[regnum]->value(0));
+                    has_store_after_exception[regnum] = 0;
+                }
             }
 
             // We need to depend on last_exception or last_effect if we do not depend on them indirectly.
@@ -139,7 +144,7 @@ void Register_access_elimination::after(Node* node) {
                 last_store[regnum] = nullptr;
             }
 
-            if (need_last_exception && last_exception) dependencies.push_back(last_exception);
+            if ((!_strict || need_last_exception) && last_exception) dependencies.push_back(last_exception);
             if (dependencies.empty()) {
                 ASSERT(last_effect);
                 dependencies.push_back(last_effect);

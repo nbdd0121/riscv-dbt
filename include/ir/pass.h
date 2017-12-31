@@ -59,9 +59,13 @@ private:
 
     Value last_exception;
     Value last_effect;
+
+    // Whether the pass is allowed to move store_register after memory operations.
+    bool _strict;
+
 public:
-    Register_access_elimination(int regcount):
-        last_load(regcount), last_store(regcount), has_store_after_exception(regcount) {}
+    Register_access_elimination(int regcount, bool strict = true):
+        last_load(regcount), last_store(regcount), has_store_after_exception(regcount), _strict{strict} {}
 
 private:
     Value merge_memory(std::vector<Value> values);
