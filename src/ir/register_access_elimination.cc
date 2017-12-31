@@ -47,17 +47,13 @@ void Register_access_elimination::after(Node* node) {
                 break;
             }
 
-            // Otherwise this is the first load after side-effect or last store. Calculate the dependency here.
-            auto store = last_store[regnum];
-
             // Eliminate load immediately after store
-            if (store && store->opcode() == Opcode::store_register) {
-                replace(node->value(1), store->operand(1));
+            if (last_store[regnum]) {
+                replace(node->value(1), last_store[regnum]->operand(1));
                 break;
             }
 
-            Value dep = store ? store->value(0) : last_effect;
-            node->operand_set(0, dep);
+            node->operand_set(0, last_effect);
 
             last_load[regnum] = node;
             break;
