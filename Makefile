@@ -1,11 +1,11 @@
 LD = g++-7
 CXX = g++-7
 
-LD_FLAGS = -g
-CXX_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
+LD_FLAGS = -g -pie -Wl,-Ttext-segment=0x30000000
+CXX_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
 
-LD_RELEASE_FLAGS = -g -flto -O2
-CXX_RELEASE_FLAGS = -g -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DASSERT_STRATEGY=ASSERT_STRATEGY_ASSUME -flto -fno-stack-protector
+LD_RELEASE_FLAGS = -g -flto -O2 -pie -Wl,-Ttext-segment=0x30000000
+CXX_RELEASE_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DASSERT_STRATEGY=ASSERT_STRATEGY_ASSUME -flto -fno-stack-protector
 
 OBJS = \
 	emu/elf_loader.o \
