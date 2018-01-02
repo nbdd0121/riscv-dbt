@@ -331,6 +331,8 @@ public:
     Node* root() const { return _root; }
     void root(Node* root) { _root = root; }
 
+    Graph clone() const;
+
     friend pass::Pass;
 };
 
