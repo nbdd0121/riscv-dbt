@@ -660,7 +660,7 @@ void Backend::after(ir::Node* node) {
                     if (op_type == ir::Type::i32) {
                         emit(mov(modify_size(ir::Type::i32, reg), loc0));
                     } else {
-                        emit(movzx(reg, loc0));
+                        emit(movzx(modify_size(ir::Type::i32, reg), loc0));
                     }
                 }
             }
