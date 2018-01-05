@@ -157,6 +157,10 @@ Graph Graph::clone() const {
             operands[i] = { mapping[oldvalue.node()], oldvalue.index() };
         }
         mapping[node]->operands(std::move(operands));
+
+        if (node->opcode() == Opcode::block) {
+            static_cast<Block*>(mapping[node])->end(mapping[static_cast<Block*>(node)->end()]);
+        }
     }
 
     ret.root(mapping[_root]);
