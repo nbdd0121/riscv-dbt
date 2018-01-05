@@ -157,22 +157,32 @@ void Ir_dbt::compile(emu::reg_t pc) {
         riscv::Decoder decoder {&state_, pc};
         riscv::Basic_block basic_block = decoder.decode_basic_block();
 
+        // Frontend stages.
         graph = riscv::compile(state_, basic_block);
-        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
+        ir::pass::Block_marker{}.run(graph);
         ir::pass::Lowering{state_}.run(graph);
+
+        // Optimisation passes.
+        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
-        x86::backend::Lowering{}.run(graph);
+        // We will store the IR graph before backend transformations. Clean up memory and clone a copy for backend.
+        graph.garbage_collect();
+        ir::Graph graph_for_codegen = graph.clone();
 
+        // Dump IR if --disassemble is used.
         if (state_.disassemble) {
-            // x86::backend::Dot_printer{}.run(graph);
+            x86::backend::Dot_printer{}.run(graph);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
-        ir::pass::Block_marker{}.run(graph);
-        graph.garbage_collect();
+        // Target-specific lowering.
+        x86::backend::Lowering{}.run(graph_for_codegen);
 
-        x86::Backend{state_, block_ptr->code}.run(graph);
+        // This garbage collection is required for Value::references to correctly reflect number of users.
+        graph_for_codegen.garbage_collect();
+
+        x86::Backend{state_, block_ptr->code}.run(graph_for_codegen);
         generate_eh_frame(*block_ptr);
     }
 
