@@ -166,7 +166,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
     auto true_pc_value = builder.constant(ir::Type::i64, pc + inst.imm());
     auto false_pc_value = builder.constant(ir::Type::i64, block->end_pc);
 
-    bool use_mux = true;
+    bool use_mux = false;
     if (pc + inst.imm() == block->start_pc) use_mux = false;
 
     if (use_mux) {

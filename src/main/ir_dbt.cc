@@ -133,9 +133,16 @@ void Ir_dbt::step(riscv::Context& context) {
         compile(pc);
     }
 
-    auto func = reinterpret_cast<void(*)(riscv::Context&)>(icache_[tag]);
+    // The return value is the address to patch.
+    auto func = reinterpret_cast<void*(*)(riscv::Context&)>(icache_[tag]);
     ASSERT(func);
-    func(context);
+
+    if (_code_ptr_to_patch) {
+        // Patch the trampoline. Note that there is a 4-byte prologue to skip when patching.
+        util::write_as<uint64_t>(_code_ptr_to_patch, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
+    }
+
+    _code_ptr_to_patch = func(context);
 }
 
 void Ir_dbt::compile(emu::reg_t pc) {

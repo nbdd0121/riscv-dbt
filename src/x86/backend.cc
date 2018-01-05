@@ -775,20 +775,14 @@ void Backend::run(ir::Graph& graph) {
     emit(push(Register::rbp));
     emit(mov(Register::rbp, Register::rdi));
 
-    // In the simple case, we don't have to do relocations.
-    if (blocks.size() == 1) {
-        run_on(graph, static_cast<ir::Block*>(blocks[0])->end());
-        emit(pop(Register::rbp));
-        emit(ret());
-        return;
-    }
-
     // Push end to the block list to ease processing.
     blocks.push_back(graph.root());
 
     // These are used for relocation
     std::unordered_map<ir::Node*, size_t> label_def;
     std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
+
+    size_t end_refcount = graph.root()->operand_count();
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
@@ -826,6 +820,55 @@ void Backend::run(ir::Graph& graph) {
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
             target = *end->value(0).references().begin();
+
+            // If the jump target of this block is the end node.
+            if (target->opcode() == ir::Opcode::end) {
+                auto store_reg = end->operand(0);
+                if (store_reg.opcode() == ir::Opcode::fence) {
+                    for (auto operand: store_reg.node()->operands()) {
+                        if (operand.opcode() == ir::Opcode::store_register &&
+                            static_cast<ir::Register_access*>(operand.node())->regnum() == 64) {
+
+                            store_reg = operand;
+                            break;
+                        }
+                    }
+                }
+
+                // If the pc is set to a constant before the jump, we would like to emit
+                //     jmp translated_address
+                // But since it is possible that the target is not yet translated, we generate
+                //     jmp trampoline
+                // .trampoline:
+                //     return address to patch
+                // And then when the target address is known, the jump instruction can be patched to jump to target.
+                if (store_reg.opcode() == ir::Opcode::store_register &&
+                    static_cast<ir::Register_access*>(store_reg.node())->regnum() == 64 &&
+                    store_reg.node()->operand(1).is_const()) {
+
+                    // TODO: What if reallocation happens in between?
+                    uintptr_t current_rip =
+                        reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + _encoder.buffer().size();
+
+                    // The tail jump code.
+                    emit(mov(Register::rax, 0xCCCCCCCCC));
+                    emit(jmp(Register::rax));
+
+                    // Trampoline.
+                    emit(pop(Register::rbp));
+                    emit(mov(Register::rax, 0xCCCCCCCCC));
+                    emit(ret());
+
+                    // Set the jump target to the address of trampoline.
+                    util::write_as<uint64_t>((char*)current_rip+2, current_rip+12);
+
+                    // Set the return value of trampoline to the address of the jump to patch.
+                    util::write_as<uint64_t>((char*)current_rip+15, current_rip+2);
+
+                    end_refcount--;
+                    continue;
+                }
+            }
         }
 
         if (target != next_block) {
@@ -846,8 +889,13 @@ void Backend::run(ir::Graph& graph) {
         }
     }
 
-    emit(pop(Register::rbp));
-    emit(ret());
+    if (end_refcount) {
+        emit(pop(Register::rbp));
+
+        // Return 0, meaning that nothing needs to be patched.
+        emit(i_xor(Register::eax, Register::eax));
+        emit(ret());
+    }
 }
 
 }
