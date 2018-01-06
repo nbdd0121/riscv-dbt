@@ -776,13 +776,13 @@ void Backend::run(ir::Graph& graph) {
     emit(mov(Register::rbp, Register::rdi));
 
     // Push end to the block list to ease processing.
-    blocks.push_back(graph.root());
+    blocks.push_back(graph.end());
 
     // These are used for relocation
     std::unordered_map<ir::Node*, size_t> label_def;
     std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
 
-    size_t end_refcount = graph.root()->operand_count();
+    size_t end_refcount = graph.end()->operand_count();
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
@@ -879,7 +879,7 @@ void Backend::run(ir::Graph& graph) {
         clear();
     }
 
-    label_def[graph.root()] = _encoder.buffer().size();
+    label_def[graph.end()] = _encoder.buffer().size();
 
     // Patching labels
     for (const auto& pair: label_def) {

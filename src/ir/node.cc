@@ -57,12 +57,13 @@ void Node::operand_update(Value oldvalue, Value newvalue) {
 
 Graph::Graph() {
     _start = manage(new Node(Opcode::start, {Type::control}, {}));
+    _end = manage(new Node(Opcode::end, {Type::control}, {}));
 }
 
 Graph& Graph::operator=(Graph&& graph) {
     _heap.swap(graph._heap);
     _start = graph._start;
-    _root = graph._root;
+    _end = graph._end;
     return *this;
 }
 
@@ -114,6 +115,10 @@ Graph Graph::clone() const {
                 // This node is already managed.
                 mapping[node] = ret.start();
                 continue;
+            case Opcode::end:
+                // This node is already managed.
+                mapping[node] = ret.end();
+                continue;
             case Opcode::constant:
                 result = new Constant(node->_type[0], static_cast<Constant*>(node)->const_value());
                 break;
@@ -162,8 +167,6 @@ Graph Graph::clone() const {
             static_cast<Block*>(mapping[node])->end(mapping[static_cast<Block*>(node)->end()]);
         }
     }
-
-    ret.root(mapping[_root]);
 
     return std::move(ret);
 }

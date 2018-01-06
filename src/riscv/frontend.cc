@@ -173,8 +173,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         auto mux_value = builder.mux(cmp_value, true_pc_value, false_pc_value);
         auto store_pc_value = builder.store_register(last_memory, 64, mux_value);
         auto jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
-        auto end_value = builder.control(ir::Opcode::end, {jmp_value});
-        graph.root(end_value.node());
+        graph.end()->operands({jmp_value});
 
     } else {
         auto if_node = builder.create(ir::Opcode::i_if, {ir::Type::control, ir::Type::control}, {last_memory, cmp_value});
@@ -187,8 +186,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
             (*graph.start()->value(0).references().begin())->operand_add(if_node->value(0));
-            auto end_value = builder.control(ir::Opcode::end, {false_jmp_value});
-            graph.root(end_value.node());
+            graph.end()->operands({false_jmp_value});
             return;
         }
 
@@ -196,8 +194,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         auto true_block_value = builder.block({if_node->value(0)});
         auto true_pc_store = builder.store_register(true_block_value, 64, true_pc_value);
         auto true_jmp_value = builder.control(ir::Opcode::jmp, {true_pc_store});
-        auto end_value = builder.control(ir::Opcode::end, {true_jmp_value, false_jmp_value});
-        graph.root(end_value.node());
+        graph.end()->operands({true_jmp_value, false_jmp_value});
     }
 }
 
@@ -329,8 +326,7 @@ void Frontend::compile(const Basic_block& block) {
     }
 
     auto jmp_value = builder.control(ir::Opcode::jmp, {last_memory});
-    auto end_value = builder.control(ir::Opcode::end, {jmp_value});
-    graph.root(end_value.node());
+    graph.end()->operands({jmp_value});
 }
 
 ir::Graph compile(emu::State& state, const Basic_block& block) {

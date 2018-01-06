@@ -35,7 +35,7 @@ protected:
 
 public:
     void run_on(Graph& graph, Node* node);
-    void run(Graph& graph) { run_on(graph, graph.root()); }
+    void run(Graph& graph) { run_on(graph, graph.end()); }
 };
 
 class Dot_printer: public Pass {

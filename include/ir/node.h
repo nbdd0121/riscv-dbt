@@ -306,7 +306,7 @@ class Graph {
 private:
     std::vector<Node*> _heap;
     Node* _start;
-    Node* _root = nullptr;
+    Node* _end;
 
 public:
     Graph();
@@ -327,9 +327,7 @@ public:
     void garbage_collect();
 
     Node* start() const { return _start; }
-
-    Node* root() const { return _root; }
-    void root(Node* root) { _root = root; }
+    Node* end() const { return _end; }
 
     Graph clone() const;
 
