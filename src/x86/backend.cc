@@ -66,19 +66,22 @@ namespace x86 {
 
 void Backend::emit(const Instruction& inst) {
     bool disassemble = _state.disassemble;
-    std::byte *pc;
+    size_t size_before_emit;
     if (disassemble) {
-        pc = _encoder.buffer().data() + _encoder.buffer().size();
+        size_before_emit = _encoder.buffer().size();
     }
     try {
         _encoder.encode(inst);
     } catch (...) {
         if (disassemble) {
-            x86::disassembler::print_instruction(reinterpret_cast<uintptr_t>(pc), nullptr, 0, inst);
+            x86::disassembler::print_instruction(
+                reinterpret_cast<uintptr_t>(_encoder.buffer().data() + size_before_emit), nullptr, 0, inst
+            );
         }
         throw;
     }
     if (disassemble) {
+        std::byte *pc = _encoder.buffer().data() + size_before_emit;
         std::byte *new_pc = _encoder.buffer().data() + _encoder.buffer().size();
         x86::disassembler::print_instruction(
             reinterpret_cast<uintptr_t>(pc), reinterpret_cast<const char*>(pc), new_pc - pc, inst);
