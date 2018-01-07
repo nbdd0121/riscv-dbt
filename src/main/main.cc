@@ -19,17 +19,17 @@
 
 static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
 Options:\n\
-  --paging              Use soft paging MMU instead of a flat MMU. The emulated\n\
-                        program will have larger address space in expense of\n\
-                        performance.\n\
+  --mmu=paging          Use soft paging MMU. The emulated program will have\n\
+                        larger address space in expense of performance.\n\
+  --mmu=flat            Use a flat MMU, but do not use identical mapping.\n\
   --strace              Log system calls.\n\
   --disassemble         Log decoded instructions.\n\
   --engine=interpreter  Use interpreter instead of dynamic binary translator.\n\
   --engine=dbt          Use simple binary translator instead of IR-based\n\
                         optimising binary translator.\n\
-  --no-instret          Disable precise instret updating in binary translated\n\
+  --with-instret        Enable precise instret updating in binary translated\n\
                         code.\n\
-  --no-strict-exception Disable strict enforcement of excecution correctness in\n\
+  --strict-exception    Enable strict enforcement of excecution correctness in\n\
                         case of segmentation fault.\n\
   --help                Display this help message.\n\
 ";
@@ -39,16 +39,17 @@ int main(int argc, const char **argv) {
     setup_fault_handler();
 
     /* Arguments to be parsed */
-    // By default we use flat mmu since it is faster.
+    // By default we use id mmu since it is faster.
     bool use_paging = false;
+    bool use_flat = false;
     bool use_dbt = false;
     bool use_ir = true;
 
     emu::State state;
     state.strace = false;
     state.disassemble = false;
-    state.no_instret = false;
-    state.strict_exception = true;
+    state.no_instret = true;
+    state.strict_exception = false;
 
     // Parsing arguments
     int arg_index;
@@ -60,8 +61,10 @@ int main(int argc, const char **argv) {
             break;
         }
 
-        if (strcmp(arg, "--paging") == 0) {
+        if (strcmp(arg, "--mmu=paging") == 0) {
             use_paging = true;
+        } else if (strcmp(arg, "--mmu=flat") == 0) {
+            use_flat = true;
         } else if (strcmp(arg, "--strace") == 0) {
             state.strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
@@ -72,16 +75,22 @@ int main(int argc, const char **argv) {
         } else if (strcmp(arg, "--engine=interpreter") == 0) {
             use_ir = false;
             use_dbt = false;
-        } else if (strcmp(arg, "--no-instret") == 0) {
-            state.no_instret = true;
-        } else if (strcmp(arg, "--no-strict-exception") == 0) {
-            state.strict_exception = false;
+        } else if (strcmp(arg, "--with-instret") == 0) {
+            state.no_instret = false;
+        } else if (strcmp(arg, "--strict-exception") == 0) {
+            state.strict_exception = true;
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;
         } else {
             util::error("{}: unrecognized option '{}'\n", argv[0], arg);
+            return 1;
         }
+    }
+
+    if (use_paging && use_flat) {
+        util::error("{}: '--mmu=paging' and '--mmu=flat' cannot be used together\n", argv[0]);
+        return 1;
     }
 
     // The next argument is the path to the executable.
@@ -94,8 +103,10 @@ int main(int argc, const char **argv) {
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
     if (use_paging) {
         state.mmu = std::make_unique<emu::Paging_mmu>();
-    } else {
+    } else if (use_flat) {
         state.mmu = std::make_unique<emu::Flat_mmu>(0x10000000);
+    } else {
+        state.mmu = std::make_unique<emu::Id_mmu>();
     }
 
     emu::Mmu *mmu = state.mmu.get();
