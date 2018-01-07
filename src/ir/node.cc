@@ -171,4 +171,29 @@ Graph Graph::clone() const {
     return std::move(ret);
 }
 
+void Graph::inline_graph(Value control, Graph&& graph) {
+
+    // We can only inline control to end.
+    ASSERT(control.references().size() == 1);
+    ASSERT(*control.references().begin() == _end);
+
+    // Redirect control to the end node in this graph.
+    const auto& controls_to_end = graph.end()->operands();
+    auto operands = _end->operands();
+
+    // erase will invalidate iterator at or after the point of erase, so move back one first.
+    auto iter = std::find(operands.begin(), operands.end(), control) - 1;
+    operands.erase(iter + 1);
+    operands.insert(iter + 1, controls_to_end.begin(), controls_to_end.end());
+    graph.end()->operands({});
+    _end->operands(std::move(operands));
+
+    // Redirect the start node.
+    pass::Pass::replace(graph.start()->value(0), control);
+
+    // Take control of everything except start and end.
+    _heap.insert(_heap.end(), graph._heap.begin() + 2, graph._heap.end());
+    graph._heap.resize(2);
+}
+
 }

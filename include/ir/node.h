@@ -330,6 +330,7 @@ public:
     Node* end() const { return _end; }
 
     Graph clone() const;
+    void inline_graph(Value control, Graph&& graph);
 
     friend pass::Pass;
 };
