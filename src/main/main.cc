@@ -31,6 +31,8 @@ Options:\n\
                         code.\n\
   --strict-exception    Enable strict enforcement of excecution correctness in\n\
                         case of segmentation fault.\n\
+  --inline-limit=<n>    Number of basic blocks that can be inlined in single\n\
+                        compilation by the IR-based binary translator.\n\
   --help                Display this help message.\n\
 ";
 
@@ -50,6 +52,7 @@ int main(int argc, const char **argv) {
     state.disassemble = false;
     state.no_instret = true;
     state.strict_exception = false;
+    state.inline_limit = 16;
 
     // Parsing arguments
     int arg_index;
@@ -79,6 +82,8 @@ int main(int argc, const char **argv) {
             state.no_instret = false;
         } else if (strcmp(arg, "--strict-exception") == 0) {
             state.strict_exception = true;
+        } else if (strncmp(arg, "--inline-limit=", strlen("--inline-limit=")) == 0) {
+            state.inline_limit = atoi(arg + strlen("--inline-limit="));
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;

@@ -39,6 +39,9 @@ struct State {
 
     // A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
     bool strict_exception;
+
+    // Upper limit of number of blocks that can be inlined by IR DBT.
+    int inline_limit;
 };
 
 // This is not really an error. However it shares some properties with an exception, as it needs to break out from

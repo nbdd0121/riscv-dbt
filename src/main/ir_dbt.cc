@@ -219,7 +219,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                         // The keepalive edge can avoid blocks being unreachable in case of an endless loop.
                         graph_for_codegen.end()->operand_update(operand, block->value(0));
 
-                    } else if (counter < 16) {
+                    } else if (counter < state_.inline_limit) {
 
                         // To avoid spending too much time inlining all possible branches, we set an upper limit.
 
