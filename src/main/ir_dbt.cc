@@ -149,13 +149,11 @@ void Ir_dbt::step(riscv::Context& context) {
     _code_ptr_to_patch = func(context);
 }
 
-void Ir_dbt::compile(emu::reg_t pc) {
-    const ptrdiff_t tag = (pc >> 1) & 4095;
+void Ir_dbt::decode(emu::reg_t pc) {
     auto& block_ptr = inst_cache_[pc];
 
     if (!block_ptr) {
         block_ptr = std::make_unique<Ir_block>();
-        block_ptr->code.reserve(4096);
 
         ir::Graph& graph = block_ptr->graph;
         riscv::Decoder decoder {&state_, pc};
@@ -170,14 +168,87 @@ void Ir_dbt::compile(emu::reg_t pc) {
         ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
-        // We will store the IR graph before backend transformations. Clean up memory and clone a copy for backend.
+        // Clean up memory.
         graph.garbage_collect();
+    }
+}
+
+void Ir_dbt::compile(emu::reg_t pc) {
+    const ptrdiff_t tag = (pc >> 1) & 4095;
+
+    decode(pc);
+    auto& block_ptr = inst_cache_[pc];
+    ASSERT(block_ptr);
+
+    if (block_ptr->code.empty()) {
+        block_ptr->code.reserve(4096);
+
+        ir::Graph& graph = block_ptr->graph;
         ir::Graph graph_for_codegen = graph.clone();
+
+        // A map between emulated pc and entry point in the graph.
+        std::unordered_map<emu::reg_t, ir::Node*> block_map;
+        block_map[pc] = *graph_for_codegen.start()->value(0).references().begin();
+
+        int counter = 0;
+        bool changed = true;
+
+        // Keep inlining until no changes are made.
+        while (changed) {
+            changed = false;
+            for (auto operand: graph_for_codegen.end()->operands()) {
+
+                // This is a keepalive edge.
+                if (operand.type() != ir::Type::control) continue;
+
+                ir::Value target_pc_value = ir::pass::Register_access_elimination::get_tail_jmp_pc(operand, 64);
+
+                // We can inline tail jump.
+                if (target_pc_value && target_pc_value.is_const()) {
+                    auto target_pc = target_pc_value.const_value();
+                    if (!target_pc) continue;
+
+                    auto block = block_map[target_pc];
+
+                    if (block) {
+
+                        // Add a new entry edge to the block.
+                        block->operand_add(operand);
+
+                        // Replace the control edge to a keepalive edge.
+                        // The keepalive edge can avoid blocks being unreachable in case of an endless loop.
+                        graph_for_codegen.end()->operand_update(operand, block->value(0));
+
+                    } else if (counter < 16) {
+
+                        // To avoid spending too much time inlining all possible branches, we set an upper limit.
+
+                        // Decode and clone the graph of the block to be inlined.
+                        decode(target_pc);
+                        ir::Graph graph_to_inline = inst_cache_[target_pc]->graph.clone();
+
+                        // Store the entry point of the inlined graph.
+                        block_map[target_pc] = *graph_to_inline.start()->value(0).references().begin();
+
+                        if (state_.disassemble) {
+                            util::log("inline {:x} to {:x}\n", target_pc, pc);
+                        }
+
+                        // Inline the graph. Note that the iterator is invalidated so we need to break.
+                        graph_for_codegen.inline_graph(operand, std::move(graph_to_inline));
+
+                        changed = true;
+                        counter++;
+                        break;
+                    }
+                }
+            }
+        }
 
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {
             util::log("IR for {:x}\n", pc);
-            x86::backend::Dot_printer{}.run(graph);
+            x86::backend::Dot_printer{}.run(graph_for_codegen);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 

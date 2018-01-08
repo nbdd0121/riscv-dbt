@@ -183,10 +183,10 @@ void Graph::inline_graph(Value control, Graph&& graph) {
     const auto& controls_to_end = graph.end()->operands();
     auto operands = _end->operands();
 
-    // erase will invalidate iterator at or after the point of erase, so move back one first.
-    auto iter = std::find(operands.begin(), operands.end(), control) - 1;
-    operands.erase(iter + 1);
-    operands.insert(iter + 1, controls_to_end.begin(), controls_to_end.end());
+    // We will erase the old control and insert new ones at the back. By doing so inlining will be breadth-first
+    // instead of depth first.
+    operands.erase(std::find(operands.begin(), operands.end(), control));
+    operands.insert(operands.end(), controls_to_end.begin(), controls_to_end.end());
     graph.end()->operands({});
     _end->operands(std::move(operands));
 

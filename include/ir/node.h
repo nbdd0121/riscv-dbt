@@ -36,7 +36,8 @@ enum: uint16_t {
     // Input: None. Output: Memory.
     start,
 
-    // Input: Control[]. Output: None.
+    // Input: (Control|Memory)[]. Output: None.
+    // Memory edges are keepalive edges to keep endless loop alive.
     end,
 
     // Input: Control[]. Output: Memory.

@@ -35,6 +35,7 @@ public:
     Ir_dbt(emu::State& state) noexcept;
     ~Ir_dbt();
     void step(riscv::Context& context);
+    void decode(emu::reg_t pc);
     void compile(emu::reg_t pc);
 };
 
