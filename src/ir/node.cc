@@ -137,7 +137,9 @@ Graph Graph::clone() const {
                 );
                 break;
             case Opcode::block:
-                result = new Block({});
+            case Opcode::jmp:
+            case Opcode::i_if:
+                result = new Paired(node->_opcode, std::vector<Type>(node->_type), {});
                 break;
             case Opcode::call:
                 result = new Call(
@@ -165,8 +167,8 @@ Graph Graph::clone() const {
         }
         mapping[node]->operands(std::move(operands));
 
-        if (node->opcode() == Opcode::block) {
-            static_cast<Block*>(mapping[node])->end(mapping[static_cast<Block*>(node)->end()]);
+        if (node->opcode() == Opcode::block || node->opcode() == Opcode::jmp || node->opcode() == Opcode::i_if) {
+            static_cast<Paired*>(mapping[node])->mate(mapping[static_cast<Paired*>(node)->mate()]);
         }
     }
 

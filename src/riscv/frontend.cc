@@ -172,16 +172,16 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
     if (use_mux) {
         auto mux_value = builder.mux(cmp_value, true_pc_value, false_pc_value);
         auto store_pc_value = builder.store_register(last_memory, 64, mux_value);
-        auto jmp_value = builder.control(ir::Opcode::jmp, {store_pc_value});
+        auto jmp_value = builder.jmp(store_pc_value);
         graph.end()->operands({jmp_value});
 
     } else {
-        auto if_node = builder.create(ir::Opcode::i_if, {ir::Type::control, ir::Type::control}, {last_memory, cmp_value});
+        auto if_node = builder.i_if(last_memory, cmp_value);
 
         // Build the false branch.
         auto false_block_value = builder.block({if_node->value(1)});
         auto false_pc_store = builder.store_register(false_block_value, 64, false_pc_value);
-        auto false_jmp_value = builder.control(ir::Opcode::jmp, {false_pc_store});
+        auto false_jmp_value = builder.jmp(false_pc_store);
 
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
@@ -193,7 +193,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         // Building the true branch.
         auto true_block_value = builder.block({if_node->value(0)});
         auto true_pc_store = builder.store_register(true_block_value, 64, true_pc_value);
-        auto true_jmp_value = builder.control(ir::Opcode::jmp, {true_pc_store});
+        auto true_jmp_value = builder.jmp(true_pc_store);
         graph.end()->operands({true_jmp_value, false_jmp_value});
     }
 }
@@ -325,7 +325,7 @@ void Frontend::compile(const Basic_block& block) {
         }
     }
 
-    auto jmp_value = builder.control(ir::Opcode::jmp, {last_memory});
+    auto jmp_value = builder.jmp(last_memory);
     graph.end()->operands({jmp_value});
 }
 

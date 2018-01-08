@@ -761,7 +761,7 @@ void Backend::run(ir::Graph& graph) {
 
         ASSERT(block->opcode() == ir::Opcode::block);
 
-        auto end = static_cast<ir::Block*>(block)->end();
+        auto end = static_cast<ir::Paired*>(block)->mate();
 
         if (end->opcode() == ir::Opcode::i_if) {
             ASSERT(end->value(0).references().size() == 1);
@@ -794,7 +794,7 @@ void Backend::run(ir::Graph& graph) {
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
         auto next_block = blocks[i + 1];
-        auto end = static_cast<ir::Block*>(block)->end();
+        auto end = static_cast<ir::Paired*>(block)->mate();
 
         // Store the label for relocation purpose.
         label_def[block] = _encoder.buffer().size();

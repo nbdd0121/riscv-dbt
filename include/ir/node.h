@@ -277,15 +277,17 @@ public:
     uint16_t regnum() const { return _regnum; }
 };
 
-class Block: public Node {
+// For all nodes that is paired with another node. This include block/jmp/if.
+class Paired: public Node {
 private:
-    Node* _end;
+    Node* _mate;
 
 public:
-    Block(std::vector<Value>&& operands): Node(Opcode::block, {Type::memory}, std::move(operands)) {}
+    // Inherit constructor.
+    using Node::Node;
 
-    Node* end() const { return _end; }
-    void end(Node* end) { _end = end; }
+    Node* mate() const { return _mate; }
+    void mate(Node* mate) { _mate = mate; }
 };
 
 class Call: public Node {

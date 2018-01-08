@@ -22,7 +22,15 @@ public:
     }
 
     Value block(std::vector<Value>&& operands) {
-        return _graph.manage(new Block(std::move(operands)))->value(0);
+        return _graph.manage(new Paired(Opcode::block, {Type::memory}, std::move(operands)))->value(0);
+    }
+
+    Value jmp(Value operand) {
+        return _graph.manage(new Paired(Opcode::jmp, {Type::control}, {operand}))->value(0);
+    }
+
+    Node* i_if(Value memory, Value cond) {
+        return _graph.manage(new Paired(Opcode::i_if, {Type::control, Type::control}, {memory, cond}));
     }
 
     Value constant(Type type, uint64_t value) {
