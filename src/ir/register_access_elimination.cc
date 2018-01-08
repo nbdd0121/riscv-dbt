@@ -135,7 +135,8 @@ void Register_access_elimination::after(Node* node) {
                 // The following logic is similar to store_register.
                 if (last_load[regnum]) dependencies.push_back(last_load[regnum]->value(0));
                 if (has_store_after_exception[regnum]) {
-                    if (!last_load[regnum]) dependencies.push_back(last_store[regnum]->value(0));
+                    ASSERT(!last_load[regnum]);
+                    dependencies.push_back(last_store[regnum]->value(0));
                     need_last_exception = false;
                 }
 

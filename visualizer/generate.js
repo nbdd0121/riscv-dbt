@@ -15,8 +15,8 @@ for (let line of lines) {
         continue;
     }
 
-    if (line.startsWith('Decoding ')) {
-        pc = line.replace('Decoding ', '');
+    if (line.startsWith('IR for ')) {
+        pc = line.replace('IR for ', '');
         continue;
     }
 

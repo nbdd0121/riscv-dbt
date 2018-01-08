@@ -172,6 +172,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {
+            util::log("IR for {:x}\n", pc);
             x86::backend::Dot_printer{}.run(graph);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
