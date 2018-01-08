@@ -29,7 +29,7 @@ private:
     // The "slow" instruction cache that contains all code that are compiled previously.
     std::unordered_map<emu::reg_t, std::unique_ptr<Ir_block>> inst_cache_;
 
-    void* _code_ptr_to_patch = nullptr;
+    std::byte* _code_ptr_to_patch = nullptr;
 
 public:
     Ir_dbt(emu::State& state) noexcept;

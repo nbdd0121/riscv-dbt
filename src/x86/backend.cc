@@ -787,6 +787,7 @@ void Backend::run(ir::Graph& graph) {
     // These are used for relocation
     std::unordered_map<ir::Node*, size_t> label_def;
     std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
+    std::vector<size_t> trampoline_loc;
 
     size_t end_refcount = graph.end()->operand_count();
 
@@ -832,29 +833,17 @@ void Backend::run(ir::Graph& graph) {
                 // If the pc is set to a constant before the jump, we would like to emit
                 //     jmp translated_address
                 // But since it is possible that the target is not yet translated, we generate
-                //     jmp trampoline
                 // .trampoline:
-                //     return address to patch
-                // And then when the target address is known, the jump instruction can be patched to jump to target.
+                //     mov rax, .trampoline
+                //     ret
+                // And then when the target address is known, the trampoline will be replaced with the jump.
 
-                // TODO: What if reallocation happens in between?
-                uintptr_t current_rip =
-                    reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + _encoder.buffer().size();
+                trampoline_loc.push_back(_encoder.buffer().size());
 
-                // The tail jump code.
-                emit(mov(Register::rax, 0xCCCCCCCCC));
-                emit(jmp(Register::rax));
-
-                // Trampoline.
+                // Trampoline. It will be patched later.
                 emit(pop(Register::rbp));
                 emit(mov(Register::rax, 0xCCCCCCCCC));
                 emit(ret());
-
-                // Set the jump target to the address of trampoline.
-                util::write_as<uint64_t>((char*)current_rip+2, current_rip+12);
-
-                // Set the return value of trampoline to the address of the jump to patch.
-                util::write_as<uint64_t>((char*)current_rip+15, current_rip+2);
 
                 end_refcount--;
                 continue;
@@ -877,6 +866,12 @@ void Backend::run(ir::Graph& graph) {
         for (auto use: uses) {
             util::write_as<uint32_t>(_encoder.buffer().data() + use - 4, pair.second - use);
         }
+    }
+
+    // Patching trampolines.
+    for (auto loc: trampoline_loc) {
+        uintptr_t rip = reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + loc;
+        util::write_as<uint64_t>(reinterpret_cast<void*>(rip + 3), rip);
     }
 
     if (end_refcount) {

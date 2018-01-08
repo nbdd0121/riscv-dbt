@@ -134,12 +134,16 @@ void Ir_dbt::step(riscv::Context& context) {
     }
 
     // The return value is the address to patch.
-    auto func = reinterpret_cast<void*(*)(riscv::Context&)>(icache_[tag]);
+    auto func = reinterpret_cast<std::byte*(*)(riscv::Context&)>(icache_[tag]);
     ASSERT(func);
 
     if (_code_ptr_to_patch) {
-        // Patch the trampoline. Note that there is a 4-byte prologue to skip when patching.
-        util::write_as<uint64_t>(_code_ptr_to_patch, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
+        // Patch the trampoline.
+        // mov rax, i64 => 48 B8 i64
+        // jmp rax => FF E0
+        util::write_as<uint16_t>(_code_ptr_to_patch, 0xB848);
+        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
+        util::write_as<uint16_t>(_code_ptr_to_patch + 10, 0xE0FF);
     }
 
     _code_ptr_to_patch = func(context);
