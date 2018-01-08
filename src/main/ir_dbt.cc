@@ -197,10 +197,6 @@ void Ir_dbt::compile(emu::reg_t pc) {
         while (changed) {
             changed = false;
             for (auto operand: graph_for_codegen.end()->operands()) {
-
-                // This is a keepalive edge.
-                if (operand.type() != ir::Type::control) continue;
-
                 ir::Value target_pc_value = ir::pass::Register_access_elimination::get_tail_jmp_pc(operand, 64);
 
                 // We can inline tail jump.
@@ -215,9 +211,9 @@ void Ir_dbt::compile(emu::reg_t pc) {
                         // Add a new entry edge to the block.
                         block->operand_add(operand);
 
-                        // Replace the control edge to a keepalive edge.
-                        // The keepalive edge can avoid blocks being unreachable in case of an endless loop.
-                        graph_for_codegen.end()->operand_update(operand, block->value(0));
+                        // Note that now operand is referenced by `block` and the end node. This is a special as
+                        // usually control can only be referenced by one node. The edge from end to operand is called
+                        // keepalive edge which prevents GC from reclaiming endless loops.
 
                     } else if (counter < state_.inline_limit) {
 

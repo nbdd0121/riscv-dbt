@@ -770,8 +770,19 @@ void Backend::run(ir::Graph& graph) {
             to_process.push_back(*end->value(1).references().begin());
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
-            ASSERT(end->value(0).references().size() == 1);
-            to_process.push_back(*end->value(0).references().begin());
+            size_t refcount = end->value(0).references().size();
+
+            if (refcount == 1) {
+                to_process.push_back(*end->value(0).references().begin());
+
+            } else {
+
+                // This jmp also contains a keepalive edge from end.
+                ASSERT(refcount == 2);
+                for (auto ref: end->value(0).references()) {
+                    if (ref->opcode() != ir::Opcode::jmp) to_process.push_back(ref);
+                }
+            }
         }
     }
 

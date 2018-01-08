@@ -6,7 +6,13 @@
 namespace ir::pass {
 
 Value Register_access_elimination::get_tail_jmp_pc(Value control, uint16_t pc_regnum) {
-    ASSERT(control.references().size() == 1);
+    size_t refcount = control.references().size();
+    if (refcount != 1) {
+        // This jmp contains a keepalive edge, it therefore cannot be a tail jump.
+        ASSERT(refcount == 2);
+        return {};
+    }
+
     auto target = *control.references().begin();
 
     // Not tail position
