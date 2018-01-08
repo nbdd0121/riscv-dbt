@@ -80,6 +80,8 @@ void Graph::garbage_collect() {
     // Mark all reachable nodes.
     pass::Pass{}.run(*this);
 
+    ASSERT(_start->_visited);
+
     // Unlink to clear up references. This is necessary to maintain correctness of outgoing references.
     size_t size = _heap.size();
     for (size_t i = 0; i < size; i++) {
