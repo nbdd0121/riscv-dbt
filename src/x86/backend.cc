@@ -764,10 +764,13 @@ void Backend::run(ir::Graph& graph) {
         auto end = static_cast<ir::Block*>(block)->end();
 
         if (end->opcode() == ir::Opcode::i_if) {
+            ASSERT(end->value(0).references().size() == 1);
+            ASSERT(end->value(1).references().size() == 1);
             to_process.push_back(*end->value(0).references().begin());
             to_process.push_back(*end->value(1).references().begin());
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
+            ASSERT(end->value(0).references().size() == 1);
             to_process.push_back(*end->value(0).references().begin());
         }
     }
@@ -824,20 +827,8 @@ void Backend::run(ir::Graph& graph) {
             ASSERT(end->opcode() == ir::Opcode::jmp);
             target = *end->value(0).references().begin();
 
-            // If the jump target of this block is the end node.
-            if (target->opcode() == ir::Opcode::end) {
-                auto store_reg = end->operand(0);
-                if (store_reg.opcode() == ir::Opcode::fence) {
-                    for (auto operand: store_reg.node()->operands()) {
-                        if (operand.opcode() == ir::Opcode::store_register &&
-                            static_cast<ir::Register_access*>(operand.node())->regnum() == 64) {
-
-                            store_reg = operand;
-                            break;
-                        }
-                    }
-                }
-
+            ir::Value target_pc = ir::pass::Register_access_elimination::get_tail_jmp_pc(end->value(0), 64);
+            if (target_pc && target_pc.is_const()) {
                 // If the pc is set to a constant before the jump, we would like to emit
                 //     jmp translated_address
                 // But since it is possible that the target is not yet translated, we generate
@@ -845,32 +836,28 @@ void Backend::run(ir::Graph& graph) {
                 // .trampoline:
                 //     return address to patch
                 // And then when the target address is known, the jump instruction can be patched to jump to target.
-                if (store_reg.opcode() == ir::Opcode::store_register &&
-                    static_cast<ir::Register_access*>(store_reg.node())->regnum() == 64 &&
-                    store_reg.node()->operand(1).is_const()) {
 
-                    // TODO: What if reallocation happens in between?
-                    uintptr_t current_rip =
-                        reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + _encoder.buffer().size();
+                // TODO: What if reallocation happens in between?
+                uintptr_t current_rip =
+                    reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + _encoder.buffer().size();
 
-                    // The tail jump code.
-                    emit(mov(Register::rax, 0xCCCCCCCCC));
-                    emit(jmp(Register::rax));
+                // The tail jump code.
+                emit(mov(Register::rax, 0xCCCCCCCCC));
+                emit(jmp(Register::rax));
 
-                    // Trampoline.
-                    emit(pop(Register::rbp));
-                    emit(mov(Register::rax, 0xCCCCCCCCC));
-                    emit(ret());
+                // Trampoline.
+                emit(pop(Register::rbp));
+                emit(mov(Register::rax, 0xCCCCCCCCC));
+                emit(ret());
 
-                    // Set the jump target to the address of trampoline.
-                    util::write_as<uint64_t>((char*)current_rip+2, current_rip+12);
+                // Set the jump target to the address of trampoline.
+                util::write_as<uint64_t>((char*)current_rip+2, current_rip+12);
 
-                    // Set the return value of trampoline to the address of the jump to patch.
-                    util::write_as<uint64_t>((char*)current_rip+15, current_rip+2);
+                // Set the return value of trampoline to the address of the jump to patch.
+                util::write_as<uint64_t>((char*)current_rip+15, current_rip+2);
 
-                    end_refcount--;
-                    continue;
-                }
+                end_refcount--;
+                continue;
             }
         }
 
