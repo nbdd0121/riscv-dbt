@@ -245,6 +245,8 @@ void Ir_dbt::compile(emu::reg_t pc) {
             }
         }
 
+        ir::pass::Block_combine{}.run(graph_for_codegen);
+
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {
             util::log("IR for {:x}\n", pc);

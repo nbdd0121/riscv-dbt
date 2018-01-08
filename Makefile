@@ -11,6 +11,7 @@ OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
 	emu/syscall.o \
+	ir/block_combine.o \
 	ir/block_marker.o \
 	ir/dot_printer.o \
 	ir/local_value_numbering.o \
