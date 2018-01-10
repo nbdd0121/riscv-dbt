@@ -183,6 +183,28 @@ static inline bool operator ==(Value a, Value b) {
 static inline bool operator !=(Value a, Value b) { return !(a == b); }
 
 class Node {
+public:
+    // Helper classes for iterating output values.
+    class Value_iterator {
+        Node* _node;
+        size_t _index;
+    public:
+        Value_iterator(Node* node, size_t index) noexcept: _node{node}, _index{index} {};
+        Value operator *() const { return _node->value(_index); }
+        bool operator !=(const Value_iterator& iter) const noexcept {
+            ASSERT(_node == iter._node);
+            return _index != iter._index;
+        }
+        Value_iterator& operator ++() noexcept { _index++; return *this; }
+    };
+
+    class Value_iterable {
+        Node* _node;
+    public:
+        Value_iterable(Node* node) noexcept: _node{node} {};
+        Value_iterator begin() const noexcept { return {_node, 0}; }
+        Value_iterator end() const noexcept { return {_node, _node->value_count()}; }
+    };
 private:
 
     // Values that this node references.
@@ -220,6 +242,7 @@ public:
     // A node can produce one or more values. The following functions allow access to these values.
     size_t value_count() const { return _type.size(); }
     Value value(size_t index) { return {this, index}; }
+    Value_iterable values() { return {this}; }
 
     uint16_t opcode() const { return _opcode; }
     void opcode(uint16_t opcode) { _opcode = opcode; }

@@ -160,10 +160,9 @@ void Dot_printer::after(Node* node) {
     // If node produces multiple value, print out fields.
     if (node->value_count() != 1) {
         std::clog << "|{";
-        for (size_t i = 0; i < node->value_count(); i++) {
-            if (i != 0) std::clog << '|';
-            Value value = node->value(i);
-            util::log("<o{}>{}", i, type_name(value.type()));
+        for (auto value: node->values()) {
+            if (value.index() != 0) std::clog << '|';
+            util::log("<o{}>{}", value.index(), type_name(value.type()));
         }
         std::clog << '}';
     }

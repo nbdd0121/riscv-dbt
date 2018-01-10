@@ -9,8 +9,8 @@ size_t Local_value_numbering::Hash::operator ()(Value value) const noexcept {
 
     ASSERT(is_pure_opcode(node->opcode()));
 
-    for (size_t i = 0; i < node->value_count(); i++) {
-        hash ^= static_cast<uint8_t>(node->value(i).type());
+    for (auto value: node->values()) {
+        hash ^= static_cast<uint8_t>(value.type());
     }
 
     for (auto operand: node->operands()) {
@@ -334,6 +334,10 @@ void Local_value_numbering::after(Node* node) {
         }
 
         return lvn(output);
+    }
+
+    if (opcode == Opcode::i_not || opcode == Opcode::neg) {
+        return lvn(node->value(0));
     }
 
     ASSERT(0);
