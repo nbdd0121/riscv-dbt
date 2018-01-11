@@ -81,8 +81,8 @@ void Dominance::compute_idom() {
     std::function<size_t(size_t)> eval = [&](size_t node) {
         auto ancestor = ancestors[node];
         if (ancestor == -1 || ancestors[ancestor] == -1) return node;
-        size_t ancestor_best = eval(ancestor);
-        if (sdoms[bests[node]] > sdoms[ancestor_best]) bests[node] = ancestor_best;
+        eval(ancestor);
+        if (sdoms[bests[node]] > sdoms[bests[ancestor]]) bests[node] = bests[ancestor];
         ancestors[node] = ancestors[ancestor];
         return bests[node];
     };
@@ -135,6 +135,7 @@ void Dominance::compute_df() {
 
             // Walk up the DOM tree until the idom is met.
             while (runner != idom) {
+                ASSERT(runner);
                 _df[runner].insert(node);
                 runner = _idom[runner];
             }
