@@ -336,8 +336,26 @@ void Local_value_numbering::after(Node* node) {
         return lvn(output);
     }
 
-    if (opcode == Opcode::i_not || opcode == Opcode::neg) {
-        return lvn(node->value(0));
+    if (opcode == Opcode::i_not) {
+        auto output = node->value(0);
+        auto input = node->operand(0);
+
+        if (input.is_const()) {
+            return replace_with_constant(output, sign_extend(output.type(), ~input.const_value()));
+        }
+
+        return lvn(output);
+    }
+
+    if (opcode == Opcode::neg) {
+        auto output = node->value(0);
+        auto input = node->operand(0);
+
+        if (input.is_const()) {
+            return replace_with_constant(output, sign_extend(output.type(), -input.const_value()));
+        }
+
+        return lvn(output);
     }
 
     ASSERT(0);
