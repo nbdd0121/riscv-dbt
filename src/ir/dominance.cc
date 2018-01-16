@@ -53,10 +53,16 @@ void Dominance::compute_idom() {
             vertices.push_back(node);
             parents.push_back(parent);
 
+            if (node->opcode() == Opcode::end) continue;
+
             auto end = static_cast<Paired*>(node)->mate();
             for (auto value: end->values()) {
+
+                // Skip keepalive edges.
+                bool skip_end = value.references().size() == 2;
+
                 for (auto ref: value.references()) {
-                    if (ref->opcode() == Opcode::end) continue;
+                    if (skip_end && ref->opcode() == Opcode::end) continue;
                     stack.push_front({id, ref});
                 }
             }
@@ -97,6 +103,10 @@ void Dominance::compute_idom() {
         auto node = vertices[i];
         auto parent = parents[i];
         for (auto operand: node->operands()) {
+
+            // Skip keepalive edges.
+            if (node->opcode() == Opcode::end && operand.references().size() == 2) continue;
+
             size_t pred = dfn[operand.node()];
             size_t u = eval(pred);
             if (sdoms[i] > sdoms[u]) {
