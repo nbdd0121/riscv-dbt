@@ -80,10 +80,12 @@ void Dominance::compute_idom() {
     // Lengauer-Tarjan algorithm with simple eval and link.
     std::function<size_t(size_t)> eval = [&](size_t node) {
         auto ancestor = ancestors[node];
-        if (ancestor == -1 || ancestors[ancestor] == -1) return node;
-        eval(ancestor);
-        if (sdoms[bests[node]] > sdoms[bests[ancestor]]) bests[node] = bests[ancestor];
-        ancestors[node] = ancestors[ancestor];
+        if (ancestor == -1) return node;
+        if (ancestors[ancestor] != -1) {
+            eval(ancestor);
+            if (sdoms[bests[node]] > sdoms[bests[ancestor]]) bests[node] = bests[ancestor];
+            ancestors[node] = ancestors[ancestor];
+        }
         return bests[node];
     };
 
