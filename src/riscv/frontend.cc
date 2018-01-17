@@ -16,6 +16,8 @@ struct Frontend {
     emu::State& state;
     const Basic_block* block;
 
+    ir::Node* block_node;
+
     // The latest memory value.
     ir::Value last_memory;
 
@@ -173,15 +175,28 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         auto mux_value = builder.mux(cmp_value, true_pc_value, false_pc_value);
         auto store_pc_value = builder.store_register(last_memory, 64, mux_value);
         auto jmp_value = builder.jmp(store_pc_value);
+
+        // Pair block and jmp node up.
+        static_cast<ir::Paired*>(jmp_value.node())->mate(block_node);
+        static_cast<ir::Paired*>(block_node)->mate(jmp_value.node());
+
         graph.end()->operands({jmp_value});
 
     } else {
         auto if_node = builder.i_if(last_memory, cmp_value);
 
+        // Pair block and if node up.
+        static_cast<ir::Paired*>(if_node)->mate(block_node);
+        static_cast<ir::Paired*>(block_node)->mate(if_node);
+
         // Build the false branch.
         auto false_block_value = builder.block({if_node->value(1)});
         auto false_pc_store = builder.store_register(false_block_value, 64, false_pc_value);
         auto false_jmp_value = builder.jmp(false_pc_store);
+
+        // Pair block and jmp node up
+        static_cast<ir::Paired*>(false_jmp_value.node())->mate(false_block_value.node());
+        static_cast<ir::Paired*>(false_block_value.node())->mate(false_jmp_value.node());
 
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
@@ -194,6 +209,11 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         auto true_block_value = builder.block({if_node->value(0)});
         auto true_pc_store = builder.store_register(true_block_value, 64, true_pc_value);
         auto true_jmp_value = builder.jmp(true_pc_store);
+
+        // Pair block and jmp node up
+        static_cast<ir::Paired*>(true_jmp_value.node())->mate(true_block_value.node());
+        static_cast<ir::Paired*>(true_block_value.node())->mate(true_jmp_value.node());
+
         graph.end()->operands({true_jmp_value, false_jmp_value});
     }
 }
@@ -203,6 +223,7 @@ void Frontend::compile(const Basic_block& block) {
 
     auto start_value = graph.start()->value(0);
     auto block_value = builder.block({start_value});
+    block_node = block_value.node();
     last_memory = block_value;
 
     pc = block.start_pc;
@@ -326,6 +347,11 @@ void Frontend::compile(const Basic_block& block) {
     }
 
     auto jmp_value = builder.jmp(last_memory);
+
+    // Pair block and jmp node up.
+    static_cast<ir::Paired*>(jmp_value.node())->mate(block_node);
+    static_cast<ir::Paired*>(block_node)->mate(jmp_value.node());
+
     graph.end()->operands({jmp_value});
 }
 

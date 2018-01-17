@@ -29,8 +29,10 @@ public:
         return _graph.manage(new Paired(Opcode::jmp, {Type::control}, {operand}))->value(0);
     }
 
-    Node* i_if(Value memory, Value cond) {
-        return _graph.manage(new Paired(Opcode::i_if, {Type::control, Type::control}, {memory, cond}));
+    Paired* i_if(Value memory, Value cond) {
+        auto node = new Paired(Opcode::i_if, {Type::control, Type::control}, {memory, cond});
+        _graph.manage(node);
+        return node;
     }
 
     Value constant(Type type, uint64_t value) {

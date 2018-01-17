@@ -12,7 +12,6 @@ OBJS = \
 	emu/mmu.o \
 	emu/syscall.o \
 	ir/block_combine.o \
-	ir/block_marker.o \
 	ir/dominance.o \
 	ir/dot_printer.o \
 	ir/local_value_numbering.o \

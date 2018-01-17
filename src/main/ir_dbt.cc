@@ -161,8 +161,6 @@ void Ir_dbt::decode(emu::reg_t pc) {
 
         // Frontend stages.
         graph = riscv::compile(state_, basic_block);
-        ir::pass::Block_marker{}.run(graph);
-        ir::pass::Lowering{state_}.run(graph);
 
         // Optimisation passes.
         ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
@@ -241,7 +239,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
             }
         }
 
+        // Optimisation passes.
         ir::pass::Block_combine{}.run(graph_for_codegen);
+        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph_for_codegen);
+        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {
@@ -250,7 +251,8 @@ void Ir_dbt::compile(emu::reg_t pc) {
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
-        // Target-specific lowering.
+        // Lowering and target-specific lowering.
+        ir::pass::Lowering{state_}.run(graph_for_codegen);
         x86::backend::Lowering{}.run(graph_for_codegen);
 
         // This garbage collection is required for Value::references to correctly reflect number of users.

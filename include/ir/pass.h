@@ -80,15 +80,6 @@ protected:
     virtual void after(Node* node) override;
 };
 
-// Block marker will link the block node and jmp/if node together using attribute.pointer.
-// It therefore frees front-ends from maintaining this constraint themselves.
-class Block_marker: public Pass {
-    Node* block_end = nullptr;
-
-public:
-    virtual bool before(Node* node) override;
-};
-
 class Local_value_numbering: public Pass {
 private:
     struct Hash {
