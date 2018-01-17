@@ -242,7 +242,6 @@ void Ir_dbt::compile(emu::reg_t pc) {
         // Optimisation passes.
         ir::pass::Block_combine{}.run(graph_for_codegen);
         ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph_for_codegen);
-        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {
@@ -253,6 +252,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         // Lowering and target-specific lowering.
         ir::pass::Lowering{state_}.run(graph_for_codegen);
+        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
         x86::backend::Lowering{}.run(graph_for_codegen);
 
         // This garbage collection is required for Value::references to correctly reflect number of users.
