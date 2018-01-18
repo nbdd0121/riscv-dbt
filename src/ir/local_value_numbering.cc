@@ -181,17 +181,17 @@ void Local_value_numbering::after(Node* node) {
             size_t ysize = get_type_size(y.type());
             size_t size = get_type_size(output.type());
 
-            // If the size is same, then eliminate.
-            if (ysize == size) {
-                return replace(output, y);
-            }
-
             // A down-cast followed by an up-cast cannot be folded.
             size_t xsize = get_type_size(x.type());
             if (ysize > xsize && xsize < size) return lvn(output);
 
             // An up-cast followed by an up-cast cannot be folded if sext does not match.
             if (ysize < xsize && xsize < size && x_sext != sext) return lvn(output);
+
+            // If the size is same, then eliminate.
+            if (ysize == size) {
+                return replace(output, y);
+            }
 
             // This can either be up-cast followed by up-cast, up-cast followed by down-cast.
             // As the result is an up-cast, we need to select the correct sext.
