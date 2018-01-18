@@ -14,6 +14,7 @@ const char* Dot_printer::opcode_name(uint16_t opcode) {
         CASE(block)
         case Opcode::i_if: return "if";
         CASE(jmp)
+        CASE(phi)
         CASE(constant)
         CASE(cast)
         CASE(load_register)
@@ -127,7 +128,7 @@ void Dot_printer::after(Node* node) {
     } else if (is_target_specific(opcode)) {
         need_label = true;
 
-    } else if (opcode == Opcode::call) {
+    } else if (opcode == Opcode::call || opcode == Opcode::phi) {
         // If call has more than 1 arguments, we needs to distinguish between them.
         need_label = node->operand_count() > 2;
 

@@ -49,6 +49,9 @@ enum: uint16_t {
     // Input: Memory. Output: Control.
     jmp,
 
+    // Input: Memory, Value[]. Output: Value.
+    phi,
+
     /** Opcodes with side-effects **/
 
     /* Machine register load/store */
