@@ -320,6 +320,62 @@ void Local_value_numbering::after(Node* node) {
             node->operand_set(1, y);
         }
 
+        // Translate ands to casts
+        if (opcode == Opcode::i_and && y.is_const()) {
+
+            if (y.const_value() == 0xFF) {
+                // For i8, 0xFF is sign-extended to -1.
+                ASSERT(output.type() != Type::i8);
+                auto downcast = _graph->manage(new Cast(Type::i8, false, x));
+                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            } else if (y.const_value() == 0xFFFF) {
+                ASSERT(output.type() != Type::i8 && output.type() != Type::i16);
+                auto downcast = _graph->manage(new Cast(Type::i16, false, x));
+                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            } else if (y.const_value() == 0xFFFFFFFF) {
+                ASSERT(output.type() == Type::i64);
+                auto downcast = _graph->manage(new Cast(Type::i32, false, x));
+                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            }
+        }
+
+        // Translate shls followed by shrs to casts
+        if ((opcode == Opcode::shr || opcode == Opcode::sar) && y.is_const() && x.opcode() == Opcode::shl &&
+            x.node()->operand(1).is_const() && y.const_value() == x.node()->operand(1).const_value()) {
+
+            auto op = x.node()->operand(0);
+            bool sext = opcode == Opcode::sar;
+            auto width = get_type_size(output.type()) - y.const_value();
+            if (width == 8) {
+                auto downcast = _graph->manage(new Cast(Type::i8, false, op));
+                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            } else if (width == 16) {
+                auto downcast = _graph->manage(new Cast(Type::i16, false, op));
+                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            } else if (width == 32) {
+                auto downcast = _graph->manage(new Cast(Type::i32, false, op));
+                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                replace(output, upcast->value(0));
+                after(downcast);
+                return after(upcast);
+            }
+        }
+
         return lvn(output);
     }
 
