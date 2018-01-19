@@ -220,6 +220,11 @@ void Dominance::compute_ipdom() {
                 if (skip_end && ref->opcode() == Opcode::end) continue;
 
                 size_t pred = dfn[ref];
+
+                // Unencountered node in DFS. This indicates an infinite loop, in this case we abort post-dominator
+                // tree construction.
+                if (pred == 0 && ref->opcode() != Opcode::end) return;
+
                 size_t u = eval(pred);
                 if (sdoms[i] > sdoms[u]) {
                     sdoms[i] = sdoms[u];
@@ -266,6 +271,36 @@ void Dominance::compute_df() {
             }
         }
     }
+
+void Dominance::compute_pdf() {
+
+    // Abort if post-dominator tree does not exist.
+    if (_ipdom.empty()) return;
+
+    for (auto node: _blocks) {
+
+        // Nodes in post-dominance frontier must have multiple successor.
+        auto end = static_cast<Paired*>(node)->mate();
+        if (end->value_count() == 1) continue;
+
+        auto ipdom = _ipdom[node];
+        for (auto value: end->values()) {
+
+            // Skip keepalive edges.
+            bool skip_end = value.references().size() == 2;
+
+            for (auto runner: value.references()) {
+                if (skip_end && runner->opcode() == Opcode::end) continue;
+
+                while (runner != ipdom) {
+                    ASSERT(runner);
+                    _pdf[runner].insert(node);
+                    runner = _ipdom[runner];
+                }
+            }
+        }
+    }
+}
 }
 
 }
