@@ -780,7 +780,7 @@ void Backend::run(ir::Graph& graph) {
                 // This jmp also contains a keepalive edge from end.
                 ASSERT(refcount == 2);
                 for (auto ref: end->value(0).references()) {
-                    if (ref->opcode() != ir::Opcode::jmp) to_process.push_back(ref);
+                    if (ref->opcode() != ir::Opcode::end) to_process.push_back(ref);
                 }
             }
         }
@@ -837,7 +837,20 @@ void Backend::run(ir::Graph& graph) {
             }
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
-            target = *end->value(0).references().begin();
+
+            size_t refcount = end->value(0).references().size();
+
+            if (refcount == 1) {
+                target = *end->value(0).references().begin();
+
+            } else {
+
+                // This jmp also contains a keepalive edge from end.
+                ASSERT(refcount == 2);
+                for (auto ref: end->value(0).references()) {
+                    if (ref->opcode() != ir::Opcode::end) target = ref;
+                }
+            }
 
             ir::Value target_pc = ir::pass::Register_access_elimination::get_tail_jmp_pc(end->value(0), 64);
             if (target_pc && target_pc.is_const()) {
