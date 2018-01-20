@@ -1,5 +1,6 @@
 #include "emu/mmu.h"
 #include "emu/state.h"
+#include "ir/analysis.h"
 #include "util/format.h"
 #include "util/functional.h"
 #include "util/int_size.h"
@@ -770,19 +771,7 @@ void Backend::run(ir::Graph& graph) {
             to_process.push_back(*end->value(1).references().begin());
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
-            size_t refcount = end->value(0).references().size();
-
-            if (refcount == 1) {
-                to_process.push_back(*end->value(0).references().begin());
-
-            } else {
-
-                // This jmp also contains a keepalive edge from exit.
-                ASSERT(refcount == 2);
-                for (auto ref: end->value(0).references()) {
-                    if (ref->opcode() != ir::Opcode::exit) to_process.push_back(ref);
-                }
-            }
+            to_process.push_back(ir::analysis::Block::get_target(end->value(0)));
         }
     }
 
@@ -837,22 +826,8 @@ void Backend::run(ir::Graph& graph) {
             }
         } else {
             ASSERT(end->opcode() == ir::Opcode::jmp);
-
-            size_t refcount = end->value(0).references().size();
-
-            if (refcount == 1) {
-                target = *end->value(0).references().begin();
-
-            } else {
-
-                // This jmp also contains a keepalive edge from end.
-                ASSERT(refcount == 2);
-                for (auto ref: end->value(0).references()) {
-                    if (ref->opcode() != ir::Opcode::exit) target = ref;
-                }
-            }
-
-            ir::Value target_pc = ir::pass::Register_access_elimination::get_tail_jmp_pc(end->value(0), 64);
+            target = ir::analysis::Block::get_target(end->value(0));
+            ir::Value target_pc = ir::analysis::Block::get_tail_jmp_pc(end->value(0), 64);
             if (target_pc && target_pc.is_const()) {
                 // If the pc is set to a constant before the jump, we would like to emit
                 //     jmp translated_address

@@ -5,6 +5,23 @@
 
 namespace ir {
 
+namespace analysis {
+
+// Helper function for control flow related analysis.
+class Block {
+public:
+    // Get the real target of a control. Ignore keepalive edges.
+    static Node* get_target(Value control);
+
+    // Given a control, verify if it is a tail jump (jump to exit), and whether the pc of the next block is a known
+    // value. The value of pc of next block will be returned, or null will be returned if it is not a tail jump, or
+    // the value of pc is unknown.
+    static Value get_tail_jmp_pc(Value control, uint16_t pc_regnum);
+
+};
+
+}
+
 class Dominance {
     Graph& _graph;
     std::vector<Node*> _blocks;

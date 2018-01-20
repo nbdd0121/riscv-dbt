@@ -2,6 +2,7 @@
 
 #include "emu/state.h"
 #include "emu/unwind.h"
+#include "ir/analysis.h"
 #include "ir/pass.h"
 #include "main/ir_dbt.h"
 #include "main/signal.h"
@@ -195,7 +196,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
         while (changed) {
             changed = false;
             for (auto operand: graph_for_codegen.exit()->operands()) {
-                ir::Value target_pc_value = ir::pass::Register_access_elimination::get_tail_jmp_pc(operand, 64);
+                ir::Value target_pc_value = ir::analysis::Block::get_tail_jmp_pc(operand, 64);
 
                 // We can inline tail jump.
                 if (target_pc_value && target_pc_value.is_const()) {
