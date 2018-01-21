@@ -239,10 +239,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
             }
         }
 
-        // Optimisation passes.
         // Insert keepalive edges and merge blocks without interesting control flow.
-        ir::analysis::Block{graph_for_codegen}.update_keepalive();
-        ir::pass::Block_combine{}.run(graph_for_codegen);
+        ir::analysis::Block block_analysis{graph_for_codegen};
+        block_analysis.update_keepalive();
+        block_analysis.simplify_graph();
         ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph_for_codegen);
         ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 

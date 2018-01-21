@@ -2,6 +2,7 @@
 #include <list>
 
 #include "ir/analysis.h"
+#include "ir/pass.h"
 #include "util/reverse_iterable.h"
 
 namespace ir::analysis {
@@ -139,6 +140,52 @@ void Block::update_keepalive() {
         }
 
         ASSERT(!queue.empty());
+    }
+}
+
+void Block::simplify_graph() {
+    size_t block_count = _blocks.size();
+    for (size_t i = 0; i < block_count; i++) {
+        auto block = static_cast<ir::Paired*>(_blocks[i]);
+        auto end = static_cast<ir::Paired*>(block->mate());
+
+        // One predecessor and one successor. If the block is empty, then it can be folded away.
+        if (block->operand_count() == 1 && end->opcode() == Opcode::jmp && end->value(0).references().size() == 1 &&
+            end->operand(0) == block->value(0)) {
+
+            // Link predecessor and successor together.
+            ir::pass::Pass::replace(end->value(0), block->operand(0));
+
+            // Remove current block as successor. This will maintain the constraint that control is used only once.
+            block->operand_set(0, end->value(0));
+
+            // Update constraints
+            _blocks.erase(_blocks.begin() + i);
+            i--;
+            block_count--;
+            continue;
+        }
+
+        // One predecessor, and current block is the only successor of previous block. Merge them in this case.
+        if (block->operand_count() == 1 && block->operand(0).opcode() == Opcode::jmp &&
+            block->operand(0).references().size() == 1) {
+
+            auto prev_jmp = static_cast<ir::Paired*>(block->operand(0).node());
+            auto prev_block = static_cast<ir::Paired*>(prev_jmp->mate());
+
+            // Link two blocks together.
+            ir::pass::Pass::replace(block->value(0), prev_jmp->operand(0));
+
+            // Update mate information.
+            end->mate(prev_block);
+            prev_block->mate(end);
+
+            // Update constraints
+            _blocks.erase(_blocks.begin() + i);
+            i--;
+            block_count--;
+            continue;
+        }
     }
 }
 

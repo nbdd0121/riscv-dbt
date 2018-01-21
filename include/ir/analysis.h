@@ -32,6 +32,7 @@ private:
 
 public:
     void update_keepalive();
+    void simplify_graph();
 
 };
 

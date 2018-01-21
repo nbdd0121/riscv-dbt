@@ -100,12 +100,6 @@ protected:
     virtual void after(Node* node) override;
 };
 
-// Eliminate jump when it is the only jump to the target block.
-class Block_combine: public Pass {
-protected:
-    virtual void after(Node* node) override;
-};
-
 // Target-independent lowering pass.
 class Lowering: public Pass {
 private:
