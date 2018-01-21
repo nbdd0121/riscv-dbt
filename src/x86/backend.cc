@@ -741,16 +741,16 @@ void Backend::run(ir::Graph& graph) {
     std::vector<ir::Node*> blocks;
     std::vector<ir::Node*> to_process;
 
-    auto start = graph.start();
-    ASSERT(start->value(0).references().size() == 1);
-    to_process.push_back(*start->value(0).references().begin());
+    auto entry = graph.entry();
+    ASSERT(entry->value(0).references().size() == 1);
+    to_process.push_back(*entry->value(0).references().begin());
 
     // Some very naive basic block scheduling.
     while (!to_process.empty()) {
         auto block = to_process.back();
         to_process.pop_back();
 
-        if (block->opcode() == ir::Opcode::end) continue;
+        if (block->opcode() == ir::Opcode::exit) continue;
 
         // Make sure the block is not yet in the list.
         if (std::find(blocks.begin(), blocks.end(), block) != blocks.end()) {
@@ -777,10 +777,10 @@ void Backend::run(ir::Graph& graph) {
 
             } else {
 
-                // This jmp also contains a keepalive edge from end.
+                // This jmp also contains a keepalive edge from exit.
                 ASSERT(refcount == 2);
                 for (auto ref: end->value(0).references()) {
-                    if (ref->opcode() != ir::Opcode::end) to_process.push_back(ref);
+                    if (ref->opcode() != ir::Opcode::exit) to_process.push_back(ref);
                 }
             }
         }
@@ -792,15 +792,15 @@ void Backend::run(ir::Graph& graph) {
     emit(push(Register::rbp));
     emit(mov(Register::rbp, Register::rdi));
 
-    // Push end to the block list to ease processing.
-    blocks.push_back(graph.end());
+    // Push exit to the block list to ease processing.
+    blocks.push_back(graph.exit());
 
     // These are used for relocation
     std::unordered_map<ir::Node*, size_t> label_def;
     std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
     std::vector<size_t> trampoline_loc;
 
-    size_t end_refcount = graph.end()->operand_count();
+    size_t exit_refcount = graph.exit()->operand_count();
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
@@ -848,7 +848,7 @@ void Backend::run(ir::Graph& graph) {
                 // This jmp also contains a keepalive edge from end.
                 ASSERT(refcount == 2);
                 for (auto ref: end->value(0).references()) {
-                    if (ref->opcode() != ir::Opcode::end) target = ref;
+                    if (ref->opcode() != ir::Opcode::exit) target = ref;
                 }
             }
 
@@ -869,7 +869,7 @@ void Backend::run(ir::Graph& graph) {
                 emit(mov(Register::rax, 0xCCCCCCCCC));
                 emit(ret());
 
-                end_refcount--;
+                exit_refcount--;
                 continue;
             }
         }
@@ -882,7 +882,7 @@ void Backend::run(ir::Graph& graph) {
         clear();
     }
 
-    label_def[graph.end()] = _encoder.buffer().size();
+    label_def[graph.exit()] = _encoder.buffer().size();
 
     // Patching labels
     for (const auto& pair: label_def) {
@@ -898,7 +898,7 @@ void Backend::run(ir::Graph& graph) {
         util::write_as<uint64_t>(reinterpret_cast<void*>(rip + 3), rip);
     }
 
-    if (end_refcount) {
+    if (exit_refcount) {
         emit(pop(Register::rbp));
 
         // Return 0, meaning that nothing needs to be patched.

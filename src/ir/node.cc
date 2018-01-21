@@ -56,14 +56,14 @@ void Node::operand_update(Value oldvalue, Value newvalue) {
 }
 
 Graph::Graph() {
-    _start = manage(new Node(Opcode::start, {Type::control}, {}));
-    _end = manage(new Node(Opcode::end, {Type::control}, {}));
+    _entry = manage(new Node(Opcode::entry, {Type::control}, {}));
+    _exit = manage(new Node(Opcode::exit, {Type::control}, {}));
 }
 
 Graph& Graph::operator=(Graph&& graph) {
     _heap.swap(graph._heap);
-    _start = graph._start;
-    _end = graph._end;
+    _entry = graph._entry;
+    _exit = graph._exit;
     return *this;
 }
 
@@ -80,7 +80,7 @@ void Graph::garbage_collect() {
     // Mark all reachable nodes.
     pass::Pass{}.run(*this);
 
-    ASSERT(_start->_visited);
+    ASSERT(_entry->_visited);
 
     // Unlink to clear up references. This is necessary to maintain correctness of outgoing references.
     size_t size = _heap.size();
@@ -113,19 +113,19 @@ Graph Graph::clone() const {
     for (auto node: _heap) {
         Node* result;
         switch (node->opcode()) {
-            case Opcode::start:
+            case Opcode::entry:
                 // This node is already managed.
-                mapping[node] = ret.start();
+                mapping[node] = ret._entry;
                 continue;
-            case Opcode::end:
+            case Opcode::exit:
                 // This node is already managed.
-                mapping[node] = ret.end();
+                mapping[node] = ret._exit;
                 continue;
             case Opcode::constant:
                 result = new Constant(node->_type[0], static_cast<Constant*>(node)->const_value());
                 break;
             case Opcode::cast:
-                result = new Cast(node->_type[0], static_cast<Cast*>(node)->sign_extend(), ret.start()->value(0));
+                result = new Cast(node->_type[0], static_cast<Cast*>(node)->sign_extend(), ret._entry->value(0));
                 break;
             case Opcode::load_register:
             case Opcode::store_register:
@@ -177,25 +177,25 @@ Graph Graph::clone() const {
 
 void Graph::inline_graph(Value control, Graph&& graph) {
 
-    // We can only inline control to end.
+    // We can only inline control to exit.
     ASSERT(control.references().size() == 1);
-    ASSERT(*control.references().begin() == _end);
+    ASSERT(*control.references().begin() == _exit);
 
-    // Redirect control to the end node in this graph.
-    const auto& controls_to_end = graph.end()->operands();
-    auto operands = _end->operands();
+    // Redirect control to the exit node in this graph.
+    const auto& controls_to_exit = graph.exit()->operands();
+    auto operands = _exit->operands();
 
     // We will erase the old control and insert new ones at the back. By doing so inlining will be breadth-first
     // instead of depth first.
     operands.erase(std::find(operands.begin(), operands.end(), control));
-    operands.insert(operands.end(), controls_to_end.begin(), controls_to_end.end());
-    graph.end()->operands({});
-    _end->operands(std::move(operands));
+    operands.insert(operands.end(), controls_to_exit.begin(), controls_to_exit.end());
+    graph.exit()->operands({});
+    _exit->operands(std::move(operands));
 
-    // Redirect the start node.
-    pass::Pass::replace(graph.start()->value(0), control);
+    // Redirect the entry node.
+    pass::Pass::replace(graph.entry()->value(0), control);
 
-    // Take control of everything except start and end.
+    // Take control of everything except entry and exit.
     _heap.insert(_heap.end(), graph._heap.begin() + 2, graph._heap.end());
     graph._heap.resize(2);
 }

@@ -6,7 +6,7 @@
 namespace ir {
 
 void Dominance::compute_blocks() {
-    std::deque<Node*> queue { *_graph.start()->value(0).references().begin() };
+    std::deque<Node*> queue { *_graph.entry()->value(0).references().begin() };
     while (!queue.empty()) {
         auto node = queue.front();
         queue.pop_front();
@@ -18,7 +18,7 @@ void Dominance::compute_blocks() {
         auto end = static_cast<Paired*>(node)->mate();
         for (auto value: end->values()) {
             for (auto ref: value.references()) {
-                if (ref->opcode() == Opcode::end) continue;
+                if (ref->opcode() == Opcode::exit) continue;
                 queue.push_back(ref);
             }
         }
@@ -27,7 +27,7 @@ void Dominance::compute_blocks() {
 
 void Dominance::compute_idom() {
 
-    // Mapping between dfn and vertex. 0 represents the start node.
+    // Mapping between dfn and vertex. 0 represents the entry node.
     std::unordered_map<Node*, size_t> dfn;
     std::vector<Node*> vertices;
 
@@ -36,7 +36,7 @@ void Dominance::compute_idom() {
 
     // Do a depth-first search to assign these nodes a DFN and determine their parents in DFS tree.
     {
-        std::deque<std::pair<size_t, Node*>> stack { {-1, _graph.start() }};
+        std::deque<std::pair<size_t, Node*>> stack { {-1, _graph.entry() }};
         while (!stack.empty()) {
             size_t parent;
             Node* node;
@@ -45,24 +45,24 @@ void Dominance::compute_idom() {
 
             auto& id = dfn[node];
 
-            // If id == 0, then it is either the start node, or this is a freshly encountered node.
-            // As the start node will only be visited once, id != 0 means the node is already visited.
+            // If id == 0, then it is either the entry node, or this is a freshly encountered node.
+            // As the entry node will only be visited once, id != 0 means the node is already visited.
             if (id != 0) continue;
 
             id = vertices.size();
             vertices.push_back(node);
             parents.push_back(parent);
 
-            if (node->opcode() == Opcode::end) continue;
+            if (node->opcode() == Opcode::exit) continue;
 
-            auto end = node->opcode() == Opcode::start ? node : static_cast<Paired*>(node)->mate();
+            auto end = node->opcode() == Opcode::entry ? node : static_cast<Paired*>(node)->mate();
             for (auto value: end->values()) {
 
                 // Skip keepalive edges.
-                bool skip_end = value.references().size() == 2;
+                bool skip_exit = value.references().size() == 2;
 
                 for (auto ref: value.references()) {
-                    if (skip_end && ref->opcode() == Opcode::end) continue;
+                    if (skip_exit && ref->opcode() == Opcode::exit) continue;
                     stack.push_front({id, ref});
                 }
             }
@@ -103,11 +103,11 @@ void Dominance::compute_idom() {
         for (auto operand: node->operands()) {
 
             // Skip keepalive edges.
-            if (node->opcode() == Opcode::end && operand.references().size() == 2) continue;
+            if (node->opcode() == Opcode::exit && operand.references().size() == 2) continue;
 
-            // Retrieve the starting block.
+            // Retrieve the starting node.
             auto block = operand.node();
-            if (block->opcode() != Opcode::start) block = static_cast<Paired*>(block)->mate();
+            if (block->opcode() != Opcode::entry) block = static_cast<Paired*>(block)->mate();
 
             size_t pred = dfn[block];
             size_t u = eval(pred);
@@ -138,7 +138,7 @@ void Dominance::compute_idom() {
 
 void Dominance::compute_ipdom() {
 
-    // Mapping between dfn and vertex. 0 represents the end node.
+    // Mapping between dfn and vertex. 0 represents the exit node.
     std::unordered_map<Node*, size_t> dfn;
     std::vector<Node*> vertices;
 
@@ -147,7 +147,7 @@ void Dominance::compute_ipdom() {
 
     // Do a depth-first search to assign these nodes a DFN and determine their parents in DFS tree.
     {
-        std::deque<std::pair<size_t, Node*>> stack { {-1, _graph.end() }};
+        std::deque<std::pair<size_t, Node*>> stack { {-1, _graph.exit() }};
         while (!stack.empty()) {
             size_t parent;
             Node* node;
@@ -156,8 +156,8 @@ void Dominance::compute_ipdom() {
 
             auto& id = dfn[node];
 
-            // If id == 0, then it is either the end node, or this is a freshly encountered node.
-            // As the end node will only be visited once, id != 0 means the node is already visited.
+            // If id == 0, then it is either the exit node, or this is a freshly encountered node.
+            // As the exit node will only be visited once, id != 0 means the node is already visited.
             if (id != 0) continue;
 
             id = vertices.size();
@@ -169,9 +169,9 @@ void Dominance::compute_ipdom() {
                 // Skip keepalive edges.
                 if (id == 0 && operand.references().size() == 2) continue;
 
-                // Retrive the starting block.
+                // Retrive the starting node.
                 auto block = operand.node();
-                if (block->opcode() != Opcode::start) block = static_cast<Paired*>(block)->mate();
+                if (block->opcode() != Opcode::entry) block = static_cast<Paired*>(block)->mate();
 
                 stack.push_front({id, block});
             }
@@ -210,20 +210,20 @@ void Dominance::compute_ipdom() {
         auto node = vertices[i];
         auto parent = parents[i];
 
-        auto end = node->opcode() == Opcode::start ? node : static_cast<Paired*>(node)->mate();
+        auto end = node->opcode() == Opcode::entry ? node : static_cast<Paired*>(node)->mate();
         for (auto value: end->values()) {
 
             // Skip keepalive edges.
-            bool skip_end = value.references().size() == 2;
+            bool skip_exit = value.references().size() == 2;
 
             for (auto ref: value.references()) {
-                if (skip_end && ref->opcode() == Opcode::end) continue;
+                if (skip_exit && ref->opcode() == Opcode::exit) continue;
 
                 size_t pred = dfn[ref];
 
                 // Unencountered node in DFS. This indicates an infinite loop, in this case we abort post-dominator
                 // tree construction.
-                if (pred == 0 && ref->opcode() != Opcode::end) return;
+                if (pred == 0 && ref->opcode() != Opcode::exit) return;
 
                 size_t u = eval(pred);
                 if (sdoms[i] > sdoms[u]) {
@@ -261,7 +261,7 @@ void Dominance::compute_df() {
         auto idom = _idom[node];
         for (auto operand: node->operands()) {
             auto runner = operand.node();
-            if (runner->opcode() != Opcode::start) runner = static_cast<Paired*>(runner)->mate();
+            if (runner->opcode() != Opcode::entry) runner = static_cast<Paired*>(runner)->mate();
 
             // Walk up the DOM tree until the idom is met.
             while (runner != idom) {
@@ -287,10 +287,10 @@ void Dominance::compute_pdf() {
         for (auto value: end->values()) {
 
             // Skip keepalive edges.
-            bool skip_end = value.references().size() == 2;
+            bool skip_exit = value.references().size() == 2;
 
             for (auto runner: value.references()) {
-                if (skip_end && runner->opcode() == Opcode::end) continue;
+                if (skip_exit && runner->opcode() == Opcode::exit) continue;
 
                 while (runner != ipdom) {
                     ASSERT(runner);

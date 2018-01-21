@@ -34,11 +34,11 @@ namespace Opcode {
 enum: uint16_t {
     /** Control flow opcodes **/
     // Input: None. Output: Memory.
-    start,
+    entry,
 
     // Input: (Control|Memory)[]. Output: None.
     // Memory edges are keepalive edges to keep endless loop alive.
-    end,
+    exit,
 
     // Input: Control[]. Output: Memory.
     block,
@@ -331,8 +331,8 @@ public:
 class Graph {
 private:
     std::vector<Node*> _heap;
-    Node* _start;
-    Node* _end;
+    Node* _entry;
+    Node* _exit;
 
 public:
     Graph();
@@ -352,8 +352,8 @@ public:
     // cached.
     void garbage_collect();
 
-    Node* start() const { return _start; }
-    Node* end() const { return _end; }
+    Node* entry() const { return _entry; }
+    Node* exit() const { return _exit; }
 
     Graph clone() const;
     void inline_graph(Value control, Graph&& graph);

@@ -16,7 +16,7 @@ Value Register_access_elimination::get_tail_jmp_pc(Value control, uint16_t pc_re
     auto target = *control.references().begin();
 
     // Not tail position
-    if (target->opcode() != ir::Opcode::end) return {};
+    if (target->opcode() != ir::Opcode::exit) return {};
 
     auto last_mem = control.node()->operand(0);
     if (last_mem.opcode() == ir::Opcode::fence) {

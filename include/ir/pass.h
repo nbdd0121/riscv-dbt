@@ -35,7 +35,7 @@ protected:
 
 public:
     void run_on(Graph& graph, Node* node);
-    void run(Graph& graph) { run_on(graph, graph.end()); }
+    void run(Graph& graph) { run_on(graph, graph.exit()); }
 };
 
 class Dot_printer: public Pass {
@@ -64,7 +64,7 @@ private:
     bool _strict;
 
 public:
-    // Given a control, verify if it is a tail jump (jump to end), and whether the pc of the next block is a known
+    // Given a control, verify if it is a tail jump (jump to exit), and whether the pc of the next block is a known
     // value. The value of pc of next block will be returned, or null will be returned if it is not a tail jump, or
     // the value of pc is unknown.
     static Value get_tail_jmp_pc(Value control, uint16_t pc_regnum);

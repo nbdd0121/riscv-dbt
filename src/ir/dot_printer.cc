@@ -9,8 +9,8 @@ namespace ir::pass {
 const char* Dot_printer::opcode_name(uint16_t opcode) {
     switch (opcode) {
 #define CASE(name) case Opcode::name: return #name;
-        CASE(start)
-        CASE(end)
+        CASE(entry)
+        CASE(exit)
         CASE(block)
         case Opcode::i_if: return "if";
         CASE(jmp)
@@ -174,7 +174,7 @@ void Dot_printer::after(Node* node) {
         auto operand = operands[i];
 
         // Skip keepalive edges.
-        if (node->opcode() == Opcode::end && operand.references().size() == 2) continue;
+        if (node->opcode() == Opcode::exit && operand.references().size() == 2) continue;
 
         const char* color;
         switch (operand.type()) {

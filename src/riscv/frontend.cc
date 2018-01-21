@@ -180,7 +180,7 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         static_cast<ir::Paired*>(jmp_value.node())->mate(block_node);
         static_cast<ir::Paired*>(block_node)->mate(jmp_value.node());
 
-        graph.end()->operands({jmp_value});
+        graph.exit()->operands({jmp_value});
 
     } else {
         auto if_node = builder.i_if(last_memory, cmp_value);
@@ -200,8 +200,8 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
 
         // If the jump target happens to be the basic block itself, create a loop.
         if (pc + inst.imm() == block->start_pc) {
-            (*graph.start()->value(0).references().begin())->operand_add(if_node->value(0));
-            graph.end()->operands({false_jmp_value});
+            (*graph.entry()->value(0).references().begin())->operand_add(if_node->value(0));
+            graph.exit()->operands({false_jmp_value});
             return;
         }
 
@@ -214,15 +214,15 @@ void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
         static_cast<ir::Paired*>(true_jmp_value.node())->mate(true_block_value.node());
         static_cast<ir::Paired*>(true_block_value.node())->mate(true_jmp_value.node());
 
-        graph.end()->operands({true_jmp_value, false_jmp_value});
+        graph.exit()->operands({true_jmp_value, false_jmp_value});
     }
 }
 
 void Frontend::compile(const Basic_block& block) {
     this->block = &block;
 
-    auto start_value = graph.start()->value(0);
-    auto block_value = builder.block({start_value});
+    auto entry_value = graph.entry()->value(0);
+    auto block_value = builder.block({entry_value});
     block_node = block_value.node();
     last_memory = block_value;
 
@@ -352,7 +352,7 @@ void Frontend::compile(const Basic_block& block) {
     static_cast<ir::Paired*>(jmp_value.node())->mate(block_node);
     static_cast<ir::Paired*>(block_node)->mate(jmp_value.node());
 
-    graph.end()->operands({jmp_value});
+    graph.exit()->operands({jmp_value});
 }
 
 ir::Graph compile(emu::State& state, const Basic_block& block) {

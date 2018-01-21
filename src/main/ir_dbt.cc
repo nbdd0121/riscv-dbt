@@ -186,7 +186,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         // A map between emulated pc and entry point in the graph.
         std::unordered_map<emu::reg_t, ir::Node*> block_map;
-        block_map[pc] = *graph_for_codegen.start()->value(0).references().begin();
+        block_map[pc] = *graph_for_codegen.entry()->value(0).references().begin();
 
         int counter = 0;
         bool changed = true;
@@ -194,7 +194,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
         // Keep inlining until no changes are made.
         while (changed) {
             changed = false;
-            for (auto operand: graph_for_codegen.end()->operands()) {
+            for (auto operand: graph_for_codegen.exit()->operands()) {
                 ir::Value target_pc_value = ir::pass::Register_access_elimination::get_tail_jmp_pc(operand, 64);
 
                 // We can inline tail jump.
@@ -222,7 +222,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                         ir::Graph graph_to_inline = inst_cache_[target_pc]->graph.clone();
 
                         // Store the entry point of the inlined graph.
-                        block_map[target_pc] = *graph_to_inline.start()->value(0).references().begin();
+                        block_map[target_pc] = *graph_to_inline.entry()->value(0).references().begin();
 
                         if (state_.disassemble) {
                             util::log("inline {:x} to {:x}\n", target_pc, pc);
