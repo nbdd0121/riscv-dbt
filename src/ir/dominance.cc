@@ -166,8 +166,10 @@ void Dominance::compute_ipdom() {
 
             for (auto operand: node->operands()) {
 
-                // Skip keepalive edges.
-                if (id == 0 && operand.references().size() == 2) continue;
+                // Note that we will treat keepalive edges as real edges. Otherwise, post-dominator tree may not exist
+                // if there are infinite loops. Note that this is only safe when blocks referenced by keepalive edges
+                // have otherwise no ways to reach the exit node. The keepalive edges inserted by ir::analysis::Block
+                // always satisfy the constraint.
 
                 // Retrive the starting node.
                 auto block = operand.node();
@@ -213,17 +215,11 @@ void Dominance::compute_ipdom() {
         auto end = node->opcode() == Opcode::entry ? node : static_cast<Paired*>(node)->mate();
         for (auto value: end->values()) {
 
-            // Skip keepalive edges.
-            bool skip_exit = value.references().size() == 2;
-
             for (auto ref: value.references()) {
-                if (skip_exit && ref->opcode() == Opcode::exit) continue;
-
                 size_t pred = dfn[ref];
 
-                // Unencountered node in DFS. This indicates an infinite loop, in this case we abort post-dominator
-                // tree construction.
-                if (pred == 0 && ref->opcode() != Opcode::exit) return;
+                // Unencountered node in DFS. This should not happen if keepalive edges are correctly inserted.
+                ASSERT(pred != 0 || ref->opcode() == Opcode::exit);
 
                 size_t u = eval(pred);
                 if (sdoms[i] > sdoms[u]) {
@@ -271,12 +267,9 @@ void Dominance::compute_df() {
             }
         }
     }
+}
 
 void Dominance::compute_pdf() {
-
-    // Abort if post-dominator tree does not exist.
-    if (_ipdom.empty()) return;
-
     for (auto node: _blocks) {
 
         // Nodes in post-dominance frontier must have multiple successor.
@@ -285,13 +278,7 @@ void Dominance::compute_pdf() {
 
         auto ipdom = _ipdom[node];
         for (auto value: end->values()) {
-
-            // Skip keepalive edges.
-            bool skip_exit = value.references().size() == 2;
-
             for (auto runner: value.references()) {
-                if (skip_exit && runner->opcode() == Opcode::exit) continue;
-
                 while (runner != ipdom) {
                     ASSERT(runner);
                     _pdf[runner].insert(node);
@@ -300,7 +287,6 @@ void Dominance::compute_pdf() {
             }
         }
     }
-}
 }
 
 }
