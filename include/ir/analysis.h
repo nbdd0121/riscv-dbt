@@ -18,6 +18,21 @@ public:
     // the value of pc is unknown.
     static Value get_tail_jmp_pc(Value control, uint16_t pc_regnum);
 
+private:
+    Graph& _graph;
+    std::vector<Node*> _blocks;
+
+public:
+    Block(Graph& graph): _graph{graph} {
+        enumerate_blocks();
+    }
+
+private:
+    void enumerate_blocks();
+
+public:
+    void update_keepalive();
+
 };
 
 }
