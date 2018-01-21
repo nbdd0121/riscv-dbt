@@ -258,9 +258,11 @@ public:
     }
 
     void operand_set(size_t index, Value value);
+    size_t operand_find(Value value);
     void operand_add(Value value);
+    void operand_delete(Value value);
     void operand_swap(size_t first, size_t second) { std::swap(_operands[first], _operands[second]); }
-    void operand_update(Value oldvalue, Value newvalue);
+    void operand_update(Value oldvalue, Value newvalue) { operand_set(operand_find(oldvalue), newvalue); }
 
     friend Value;
     friend Graph;

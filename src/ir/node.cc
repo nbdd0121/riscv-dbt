@@ -44,15 +44,21 @@ void Node::operand_set(size_t index, Value value) {
     ptr = value;
 }
 
+size_t Node::operand_find(Value value) {
+    auto ptr = std::find(_operands.begin(), _operands.end(), value);
+    ASSERT(ptr != _operands.end());
+    return ptr - _operands.begin();
+}
+
 void Node::operand_add(Value value) {
     _operands.push_back(value);
     value.node()->_references[value.index()].insert(this);
 }
 
-void Node::operand_update(Value oldvalue, Value newvalue) {
-    auto ptr = std::find(_operands.begin(), _operands.end(), oldvalue);
-    ASSERT(ptr != _operands.end());
-    operand_set(ptr - _operands.begin(), newvalue);
+void Node::operand_delete(Value value) {
+    size_t index = operand_find(value);
+    _operands.erase(_operands.begin() + index);
+    value.node()->_references[value.index()].remove(this);
 }
 
 Graph::Graph() {

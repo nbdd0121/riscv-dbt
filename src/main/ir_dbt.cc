@@ -190,59 +190,61 @@ void Ir_dbt::compile(emu::reg_t pc) {
         block_map[pc] = *graph_for_codegen.entry()->value(0).references().begin();
 
         int counter = 0;
-        bool changed = true;
+        size_t operand_count = graph_for_codegen.exit()->operand_count();
 
-        // Keep inlining until no changes are made.
-        while (changed) {
-            changed = false;
-            for (auto operand: graph_for_codegen.exit()->operands()) {
-                ir::Value target_pc_value = ir::analysis::Block::get_tail_jmp_pc(operand, 64);
+        for (size_t i = 0; i < operand_count; i++) {
+            auto operand = graph_for_codegen.exit()->operand(i);
+            ir::Value target_pc_value = ir::analysis::Block::get_tail_jmp_pc(operand, 64);
 
-                // We can inline tail jump.
-                if (target_pc_value && target_pc_value.is_const()) {
-                    auto target_pc = target_pc_value.const_value();
-                    if (!target_pc) continue;
+            // We can inline tail jump.
+            if (target_pc_value && target_pc_value.is_const()) {
+                auto target_pc = target_pc_value.const_value();
+                if (!target_pc) continue;
 
-                    auto block = block_map[target_pc];
+                auto block = block_map[target_pc];
 
-                    if (block) {
+                if (block) {
 
-                        // Add a new entry edge to the block.
-                        block->operand_add(operand);
+                    // Add a new edge to the block, and remove the old edge to exit node.
+                    graph_for_codegen.exit()->operand_delete(operand);
+                    block->operand_add(operand);
 
-                        // Note that now operand is referenced by `block` and the end node. This is a special as
-                        // usually control can only be referenced by one node. The edge from end to operand is called
-                        // keepalive edge which prevents GC from reclaiming endless loops.
+                    // Update constraints
+                    i--;
+                    operand_count--;
 
-                    } else if (counter < state_.inline_limit) {
+                } else if (counter < state_.inline_limit) {
 
-                        // To avoid spending too much time inlining all possible branches, we set an upper limit.
+                    // To avoid spending too much time inlining all possible branches, we set an upper limit.
 
-                        // Decode and clone the graph of the block to be inlined.
-                        decode(target_pc);
-                        ir::Graph graph_to_inline = inst_cache_[target_pc]->graph.clone();
+                    // Decode and clone the graph of the block to be inlined.
+                    decode(target_pc);
+                    ir::Graph graph_to_inline = inst_cache_[target_pc]->graph.clone();
 
-                        // Store the entry point of the inlined graph.
-                        block_map[target_pc] = *graph_to_inline.entry()->value(0).references().begin();
+                    // Store the entry point of the inlined graph.
+                    block_map[target_pc] = *graph_to_inline.entry()->value(0).references().begin();
 
-                        if (state_.disassemble) {
-                            util::log("inline {:x} to {:x}\n", target_pc, pc);
-                        }
-
-                        // Inline the graph. Note that the iterator is invalidated so we need to break.
-                        graph_for_codegen.inline_graph(operand, std::move(graph_to_inline));
-
-                        changed = true;
-                        counter++;
-                        break;
+                    if (state_.disassemble) {
+                        util::log("inline {:x} to {:x}\n", target_pc, pc);
                     }
+
+                    // Inline the graph. Note that the iterator is invalidated so we need to break.
+                    graph_for_codegen.inline_graph(operand, std::move(graph_to_inline));
+
+                    // Update constraints
+                    i--;
+                    operand_count = graph_for_codegen.exit()->operand_count();
+                    counter++;
                 }
             }
         }
 
         // Optimisation passes.
+        // Insert keepalive edges and merge blocks without interesting control flow.
+        ir::analysis::Block{graph_for_codegen}.update_keepalive();
         ir::pass::Block_combine{}.run(graph_for_codegen);
         ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph_for_codegen);
+        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.
         if (state_.disassemble) {

@@ -173,15 +173,15 @@ void Dot_printer::after(Node* node) {
     for (size_t i = 0; i < operands.size(); i++) {
         auto operand = operands[i];
 
-        // Skip keepalive edges.
-        if (node->opcode() == Opcode::exit && operand.references().size() == 2) continue;
-
         const char* color;
         switch (operand.type()) {
             case Type::control: color = "red"; break;
             case Type::memory: color = "blue"; break;
             default: color = nullptr; break;
         }
+
+        // Color keepalive edges differently.
+        if (node->opcode() == Opcode::exit && operand.references().size() == 2) color = "pink";
 
         util::log(need_label ? "\t\"{:x}\":i{} -> " : "\t\"{:x}\" -> ", reinterpret_cast<uintptr_t>(node), i);
         util::log(
