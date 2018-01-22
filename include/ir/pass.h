@@ -77,15 +77,15 @@ protected:
 class Local_value_numbering: public Pass {
 private:
     struct Hash {
-        size_t operator ()(Value value) const noexcept;
+        size_t operator ()(Node* node) const noexcept;
     };
 
     struct Equal_to {
-        bool operator ()(Value a, Value b) const noexcept;
+        bool operator ()(Node* a, Node* b) const noexcept;
     };
 
 private:
-    std::unordered_set<Value, Hash, Equal_to> _set;
+    std::unordered_set<Node*, Hash, Equal_to> _set;
 
     static uint64_t sign_extend(Type type, uint64_t value);
     static uint64_t zero_extend(Type type, uint64_t value);
@@ -94,7 +94,7 @@ private:
 
     Value new_constant(Type type, uint64_t const_value);
     void replace_with_constant(Value value, uint64_t const_value);
-    void lvn(Value value);
+    void lvn(Node* node);
 
 protected:
     virtual void after(Node* node) override;

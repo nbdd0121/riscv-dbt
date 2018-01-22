@@ -3,9 +3,8 @@
 
 namespace ir::pass {
 
-size_t Local_value_numbering::Hash::operator ()(Value value) const noexcept {
-    Node *node = value.node();
-    size_t hash = value.index() ^ static_cast<uint8_t>(node->opcode());
+size_t Local_value_numbering::Hash::operator ()(Node* node) const noexcept {
+    size_t hash = static_cast<uint8_t>(node->opcode());
 
     ASSERT(is_pure_opcode(node->opcode()));
 
@@ -30,36 +29,31 @@ size_t Local_value_numbering::Hash::operator ()(Value value) const noexcept {
     return hash;
 }
 
-bool Local_value_numbering::Equal_to::operator ()(Value a, Value b) const noexcept {
-    Node *anode = a.node();
-    Node *bnode = b.node();
+bool Local_value_numbering::Equal_to::operator ()(Node* a, Node* b) const noexcept {
+    if (a->opcode() != b->opcode()) return false;
 
-    if (a.index() != b.index()) return false;
+    ASSERT(is_pure_opcode(a->opcode()));
 
-    if (anode->opcode() != bnode->opcode()) return false;
+    if (a->value_count() != b->value_count()) return false;
 
-    ASSERT(is_pure_opcode(anode->opcode()));
-
-    if (anode->value_count() != bnode->value_count()) return false;
-
-    for (size_t i = 0; i < anode->value_count(); i++) {
-        if (anode->value(i).type() != bnode->value(i).type()) return false;
+    for (size_t i = 0; i < a->value_count(); i++) {
+        if (a->value(i).type() != b->value(i).type()) return false;
     }
 
-    size_t operand_count = anode->operand_count();
-    if (operand_count != bnode->operand_count()) return false;
+    size_t operand_count = a->operand_count();
+    if (operand_count != b->operand_count()) return false;
 
     for (size_t i = 0; i < operand_count; i++) {
-        if (anode->operand(i) != bnode->operand(i)) return false;
+        if (a->operand(i) != b->operand(i)) return false;
     }
 
-    switch (anode->opcode()) {
+    switch (a->opcode()) {
         case Opcode::constant:
-            if (static_cast<Constant*>(anode)->const_value() != static_cast<Constant*>(bnode)->const_value())
+            if (static_cast<Constant*>(a)->const_value() != static_cast<Constant*>(b)->const_value())
                 return false;
             break;
         case Opcode::cast:
-            if (static_cast<Cast*>(anode)->sign_extend() != static_cast<Cast*>(bnode)->sign_extend()) return false;
+            if (static_cast<Cast*>(a)->sign_extend() != static_cast<Cast*>(b)->sign_extend()) return false;
             break;
         default: break;
     }
@@ -132,25 +126,31 @@ uint64_t Local_value_numbering::binary(Type type, uint16_t opcode, uint64_t l, u
 Value Local_value_numbering::new_constant(Type type, uint64_t const_value) {
 
     // Create a new constant node.
-    Value new_value = _graph->manage(new Constant(type, const_value))->value(0);
+    Node* new_node = _graph->manage(new Constant(type, const_value));
 
-    auto pair = _set.insert(new_value);
-    return pair.second ? new_value : *pair.first;
+    auto pair = _set.insert(new_node);
+    return pair.second ? new_node->value(0) : (*pair.first)->value(0);
 }
 
 // Helper function that replaces current value with a constant value. It will keep type intact.
 void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
+    if (value.references().empty()) return;
     replace(value, new_constant(value.type(), const_value));
 }
 
-void Local_value_numbering::lvn(Value value) {
+void Local_value_numbering::lvn(Node* node) {
     // perform the actual local value numbering.
-    // Try insert into the set. If insertion succeeded, then this is a new value, so return.
-    auto pair = _set.insert(value);
+    // Try insert into the set. If insertion succeeded, then this is a new node, so return.
+    auto pair = _set.insert(node);
     if (pair.second) return;
 
     // Otherwise replace with the existing one.
-    if (value != *pair.first) replace(value, *pair.first);
+    if (node != *pair.first) {
+        auto target = *pair.first;
+        for (auto v: node->values()) {
+            replace(v, target->value(v.index()));
+        }
+    }
 }
 
 void Local_value_numbering::after(Node* node) {
@@ -159,7 +159,7 @@ void Local_value_numbering::after(Node* node) {
     if (!is_pure_opcode(opcode)) return;
 
     if (opcode == Opcode::constant) {
-        return lvn(node->value(0));
+        return lvn(node);
     }
 
     if (opcode == Opcode::cast) {
@@ -183,10 +183,10 @@ void Local_value_numbering::after(Node* node) {
 
             // A down-cast followed by an up-cast cannot be folded.
             size_t xsize = get_type_size(x.type());
-            if (ysize > xsize && xsize < size) return lvn(output);
+            if (ysize > xsize && xsize < size) return lvn(node);
 
             // An up-cast followed by an up-cast cannot be folded if sext does not match.
-            if (ysize < xsize && xsize < size && x_sext != sext) return lvn(output);
+            if (ysize < xsize && xsize < size && x_sext != sext) return lvn(node);
 
             // If the size is same, then eliminate.
             if (ysize == size) {
@@ -202,7 +202,7 @@ void Local_value_numbering::after(Node* node) {
             node->operand_set(0, y);
         }
 
-        return lvn(output);
+        return lvn(node);
     }
 
     if (is_binary_opcode(opcode)) {
@@ -230,7 +230,7 @@ void Local_value_numbering::after(Node* node) {
                         case Opcode::sub:
                             node->opcode(Opcode::neg);
                             node->operands({y});
-                            return lvn(output);
+                            return lvn(node);
                         case Opcode::shl:
                         case Opcode::shr:
                         case Opcode::sar:
@@ -239,12 +239,12 @@ void Local_value_numbering::after(Node* node) {
                         case Opcode::ltu:
                             node->opcode(Opcode::ne);
                             node->operand_swap(0, 1);
-                            return lvn(output);
+                            return lvn(node);
                         // 0 >= unsigned is identical to unsigned == 0
                         case Opcode::geu:
                             node->opcode(Opcode::eq);
                             node->operand_swap(0, 1);
-                            return lvn(output);
+                            return lvn(node);
                         default: break;
                     }
                 }
@@ -281,7 +281,7 @@ void Local_value_numbering::after(Node* node) {
                     case Opcode::i_xor:
                         node->opcode(Opcode::i_not);
                         node->operands({x});
-                        return lvn(output);
+                        return lvn(node);
                     case Opcode::i_and:
                         return replace(output, x);
                     case Opcode::i_or:
@@ -376,7 +376,7 @@ void Local_value_numbering::after(Node* node) {
             }
         }
 
-        return lvn(output);
+        return lvn(node);
     }
 
     if (opcode == Opcode::mux) {
@@ -389,7 +389,7 @@ void Local_value_numbering::after(Node* node) {
             return replace(output, x.const_value() ? y : z);
         }
 
-        return lvn(output);
+        return lvn(node);
     }
 
     if (opcode == Opcode::i_not) {
@@ -400,7 +400,7 @@ void Local_value_numbering::after(Node* node) {
             return replace_with_constant(output, sign_extend(output.type(), ~input.const_value()));
         }
 
-        return lvn(output);
+        return lvn(node);
     }
 
     if (opcode == Opcode::neg) {
@@ -411,7 +411,7 @@ void Local_value_numbering::after(Node* node) {
             return replace_with_constant(output, sign_extend(output.type(), -input.const_value()));
         }
 
-        return lvn(output);
+        return lvn(node);
     }
 
     if (opcode == Opcode::mul || opcode == Opcode::mulu) {
