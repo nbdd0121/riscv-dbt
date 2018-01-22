@@ -1,5 +1,8 @@
+#include "ir/builder.h"
 #include "ir/node.h"
 #include "ir/pass.h"
+#include "util/bit_op.h"
+#include "util/int128.h"
 
 namespace ir::pass {
 
@@ -415,6 +418,102 @@ void Local_value_numbering::after(Node* node) {
     }
 
     if (opcode == Opcode::mul || opcode == Opcode::mulu) {
+        auto lo = node->value(0);
+        auto hi = node->value(1);
+        auto op0 = node->operand(0);
+        auto op1 = node->operand(1);
+
+        // Fold if both operands are constant.
+        if (op0.is_const() && op1.is_const()) {
+            if (lo.type() == Type::i64) {
+                if (opcode == Opcode::mul) {
+                    util::int128_t a = static_cast<int64_t>(op0.const_value());
+                    util::int128_t b = static_cast<int64_t>(op1.const_value());
+                    replace_with_constant(hi, (a * b) >> 64);
+                } else {
+                    util::uint128_t a = op0.const_value();
+                    util::uint128_t b = op1.const_value();
+                    replace_with_constant(hi, (a * b) >> 64);
+                }
+                replace_with_constant(lo, op0.const_value() * op1.const_value());
+            } else {
+                uint64_t a = opcode == Opcode::mul ? op0.const_value() : zero_extend(op0.type(), op0.const_value());
+                uint64_t b = opcode == Opcode::mul ? op1.const_value() : zero_extend(op1.type(), op1.const_value());
+                replace_with_constant(lo, sign_extend(lo.type(), a * b));
+                replace_with_constant(hi, sign_extend(lo.type(), (a * b) >> get_type_size(lo.type())));
+            }
+            return;
+        }
+
+        // Normalize constant to the right.
+        if (op0.is_const()) {
+            std::swap(op0, op1);
+            node->operand_swap(0, 1);
+        }
+
+        if (op1.is_const()) {
+            uint64_t v = op1.const_value();
+            if (v == 0) {
+                replace_with_constant(lo, 0);
+                replace_with_constant(hi, 0);
+                return;
+            } else if (v == 1) {
+                replace(lo, op0);
+                replace_with_constant(hi, 0);
+                return;
+            }
+
+            // Reduce multiplication to shifts for power of two.
+            int logv = util::log2_floor(v);
+            if ((1ULL << logv) == v) {
+                Builder builder { *_graph };
+                replace(lo, builder.shift(Opcode::shl, op0, builder.constant(Type::i8, logv)));
+                if (!hi.references().empty()) {
+                    replace(hi, builder.shift(
+                        opcode == Opcode::mul ? Opcode::sar : Opcode::shr,
+                        op0,
+                        builder.constant(Type::i8, get_type_size(hi.type()) - logv)
+                    ));
+                }
+                return;
+            }
+        }
+
+        // If the same node exists in lvn table already, use it.
+        auto iter = _set.find(node);
+        if (iter != _set.end()) {
+            replace(lo, (*iter)->value(0));
+            replace(hi, (*iter)->value(1));
+            return;
+        }
+
+        // Multiplication node is a little bit more complex than other nodes: if signedness differ, lo parts are still
+        // the same, but the hi parts will be different. Therefore we need to also query the node with different
+        // signedness. To do so, we pretend to be of opposite sign to lookup in lvn table, the restore the signedness.
+        node->opcode(opcode == Opcode::mul ? Opcode::mulu : Opcode::mul);
+        iter = _set.find(node);
+        node->opcode(opcode);
+        if (iter != _set.end()) {
+            auto other_node = *iter;
+
+            // Only lo output of the other node is used, then redirect to this node.
+            if (other_node->value(1).references().empty()) {
+                _set.erase(iter);
+                replace(other_node->value(0), lo);
+                _set.insert(node);
+                return;
+            }
+
+            // Only lo output of this node is used, then redirect to the other node.
+            if (hi.references().empty()) {
+                replace(lo, other_node->value(0));
+                return;
+            }
+
+            // Hi parts of both nodes are used. We will consider the node as fresh in this case.
+        }
+
+        _set.insert(node);
         return;
     }
 
