@@ -206,6 +206,10 @@ void Backend::move_location(ir::Value value, const Operand& loc) {
 }
 
 void Backend::bind_register(ir::Value value, Register loc) {
+    ASSERT(!register_content[register_id(loc)]);
+    if (value.references().empty()) {
+        return;
+    }
     location[value] = loc;
     register_content[register_id(loc)] = value;
     reference_count[value] = value.references().size();
@@ -398,6 +402,49 @@ void Backend::emit_unary(ir::Node* node, Opcode opcode) {
     }
 
     emit(unary(opcode, reg));
+}
+
+void Backend::emit_mul(ir::Node* node, Opcode opcode) {
+    auto lo = node->value(0);
+    auto hi = node->value(1);
+    auto op0 = node->operand(0);
+    auto op1 = node->operand(1);
+
+    // In this case, we can reuse the ALU routine and 2-address form of imul.
+    if (opcode == Opcode::imul && hi.references().empty() && !op1.is_const()) return emit_alu(node, opcode);
+
+    ASSERT(lo.type() == hi.type());
+    Register rax = register_of_id(lo.type(), 0);
+    Register rdx = register_of_id(hi.type(), 2);
+
+    // If one of the operand is already in rax, let it be the first operand.
+    if (register_content[0] == op1) {
+        std::swap(op0, op1);
+    }
+
+    // Fix op0 into rax.
+    if (op0.is_const()) {
+        if (register_content[0]) spill_register(rax);
+        emit(mov(rax, op0.const_value()));
+    } else {
+        ensure_register(op0, rax);
+    }
+    decrease_reference(op0);
+    pin_register(rax);
+
+    // Location of op1
+    Operand loc = get_location_ex(op1, true, false);
+    decrease_reference(op1);
+
+    unpin_register(rax);
+
+    // Make sure useful values in rax and rdx are stored away safely.
+    if (register_content[0]) spill_register(rax);
+    if (register_content[2]) spill_register(rdx);
+
+    bind_register(lo, rax);
+    bind_register(hi, rdx);
+    emit(unary(opcode, loc));
 }
 
 Condition_code Backend::emit_compare(ir::Value value) {
@@ -723,6 +770,8 @@ void Backend::after(ir::Node* node) {
         case ir::Opcode::ge:
         case ir::Opcode::ltu:
         case ir::Opcode::geu: break;
+        case ir::Opcode::mul: emit_mul(node, Opcode::imul); break;
+        case ir::Opcode::mulu: emit_mul(node, Opcode::mul); break;
         case backend::Target_opcode::address: break;
         default: ASSERT(0);
     }

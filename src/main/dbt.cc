@@ -1668,7 +1668,7 @@ void Dbt_compiler::emit_mulh(riscv::Instruction inst, bool u) {
     if (rs1 == rs2) {
         *this << unary(u ? x86::Opcode::mul : x86::Opcode::imul, x86::Register::rax);
     } else {
-        *this << unary(u ? x86::Opcode::mul : x86::Opcode::imul,qword(memory_of_register(rs2)));
+        *this << unary(u ? x86::Opcode::mul : x86::Opcode::imul, qword(memory_of_register(rs2)));
     }
 
     *this << mov(qword(memory_of_register(rd)), x86::Register::rdx);

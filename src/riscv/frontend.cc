@@ -45,6 +45,7 @@ struct Frontend {
     void emit_alu(Instruction inst, uint16_t opcode, bool w);
     void emit_shift(Instruction inst, uint16_t opcode, bool w);
     void emit_slt(Instruction inst, uint16_t opcode);
+    void emit_mul(Instruction inst);
     void emit_branch(Instruction instead, uint16_t opcode, emu::reg_t pc);
 
     void compile(const Basic_block& block);
@@ -158,6 +159,35 @@ void Frontend::emit_slt(Instruction inst, uint16_t opcode) {
     auto rs2_value = emit_load_register(ir::Type::i64, inst.rs2());
     auto rd_value = builder.compare(opcode, rs1_value, rs2_value);
     emit_store_register(inst.rd(), rd_value);
+}
+
+void Frontend::emit_mul(Instruction inst) {
+    if (inst.rd() == 0) return;
+
+    // Detemrine the type and opcode for IR node first.
+    ir::Type type = inst.opcode() == Opcode::mulw ? ir::Type::i32 : ir::Type::i64;
+    uint16_t opcode =
+        inst.opcode() == Opcode::mulhu || inst.opcode() == Opcode::mulhsu ? ir::Opcode::mulu : ir::Opcode::mul;
+
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto rs2_value = emit_load_register(type, inst.rs2());
+    auto mul_node = builder.create(opcode, {type, type}, {rs1_value, rs2_value});
+
+    if (inst.opcode() == Opcode::mul || inst.opcode() == Opcode::mulw) {
+        emit_store_register(inst.rd(), mul_node->value(0));
+    } else if (inst.opcode() == Opcode::mulh || inst.opcode() == Opcode::mulhu) {
+        emit_store_register(inst.rd(), mul_node->value(1), true);
+    } else {
+        // For mulhsu, we translate to the following:
+        // First do unsigned multiplication first.
+        // If rs1 < 0, then the result is high bits - rs2.
+        // Otherwise, the result is high bits.
+        auto cmp = builder.compare(ir::Opcode::lt, rs1_value, builder.constant(type, 0));
+        auto result = builder.mux(
+            cmp, builder.arithmetic(ir::Opcode::sub, mul_node->value(1), rs2_value), mul_node->value(1)
+        );
+        emit_store_register(inst.rd(), result);
+    }
 }
 
 void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {
@@ -284,6 +314,12 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::sllw: emit_shift(inst, ir::Opcode::shl, true); break;
             case Opcode::srlw: emit_shift(inst, ir::Opcode::shr, true); break;
             case Opcode::sraw: emit_shift(inst, ir::Opcode::sar, true); break;
+            /* M extension */
+            case Opcode::mul:
+            case Opcode::mulh:
+            case Opcode::mulhsu:
+            case Opcode::mulhu:
+            case Opcode::mulw: emit_mul(inst); break;
             default: {
                 auto serialized_inst = builder.constant(ir::Type::i64, util::read_as<uint64_t>(&inst));
                 last_memory = graph.manage(new ir::Call(

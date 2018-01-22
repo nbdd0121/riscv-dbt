@@ -103,6 +103,7 @@ public:
     void emit_alu(ir::Node* node, Opcode opcode);
     void emit_shift(ir::Node* node, Opcode opcode);
     void emit_unary(ir::Node* node, Opcode opcode);
+    void emit_mul(ir::Node* node, Opcode opcode);
     Condition_code emit_compare(ir::Value value);
     Memory emit_address(ir::Value value);
 

@@ -414,6 +414,10 @@ void Local_value_numbering::after(Node* node) {
         return lvn(output);
     }
 
+    if (opcode == Opcode::mul || opcode == Opcode::mulu) {
+        return;
+    }
+
     ASSERT(0);
 }
 

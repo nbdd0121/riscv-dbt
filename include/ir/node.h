@@ -117,6 +117,12 @@ enum: uint16_t {
      */
     mux,
 
+    /* Other arithmetic ops */
+    // Multiplication. If returns both higher and lower bits.
+    // Input: Value, Value. Output: Value, Value.
+    mul,
+    mulu,
+
     /* Opcodes after target_start are target-specific opcodes */
     target_start,
 };
@@ -132,6 +138,7 @@ static inline bool is_pure_opcode(uint16_t opcode) {
 }
 
 static inline bool is_binary_opcode(uint16_t opcode) {
+    // Due to the specialness of multiplication, they are not included here.
     return opcode >= Opcode::add && opcode <= Opcode::geu;
 }
 
@@ -143,6 +150,8 @@ static inline bool is_commutative_opcode(uint16_t opcode) {
         case Opcode::i_and:
         case Opcode::eq:
         case Opcode::ne:
+        case Opcode::mul:
+        case Opcode::mulu:
             return true;
         default:
             return false;
