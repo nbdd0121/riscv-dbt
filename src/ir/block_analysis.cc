@@ -188,4 +188,66 @@ void Block::simplify_graph() {
     }
 }
 
+void Block::reorder() {
+    // A very simple algorithm that gives a heuristic penalty about a certain ordering of blocks.
+    // We would like to reduce the number of jumps as much as possible. Therefore we assign a penalty of one if we need
+    // to emit a jump. However if we use such heuristic, then there could be many plateaus, causing difficulties to
+    // find minimum. Therefore we also add an additional penalty which measures the distance between two blocks.
+    auto penalty = [](std::vector<ir::Node*>& blocks) {
+        size_t penalty = 0;
+        size_t block_count = blocks.size();
+        for (size_t i = 0; i < block_count; i++) {
+            auto block = blocks[i];
+            auto end = static_cast<ir::Paired*>(block)->mate();
+            for (auto value: end->values()) {
+                auto target = get_target(value);
+
+                // We do not consider jump to self.
+                if (target == block) continue;
+
+                size_t target_index;
+                if (target->opcode() == ir::Opcode::exit) {
+                    target_index = blocks.size();
+                } else {
+                    target_index = std::find(blocks.begin(), blocks.end(), target) - blocks.begin();
+                }
+
+                // Perfect position.
+                if (target_index == i + 1) continue;
+
+                // We add distance + 1 to the penalty.
+                penalty += target_index > i ? target_index - i : i - target_index + 1;
+            }
+        }
+        return penalty;
+    };
+
+    size_t current_penalty = penalty(_blocks);
+    size_t block_count = _blocks.size();
+
+    // For each iteration in the loop, we will look at i-th and (i+1)th block, so upper bound is block_count - 1.
+    // The entry block must always be at 0, so the lower bound is 1.
+    for (size_t i = 1; i < block_count - 1; i++) {
+
+        // Tentative change the order.
+        std::swap(_blocks[i], _blocks[i + 1]);
+        size_t new_penalty = penalty(_blocks);
+
+        if (new_penalty < current_penalty) {
+
+            // If the penalty improves, then acknowledge the swap.
+            current_penalty = new_penalty;
+
+            // After swapping the pair, we need to inspect (i-1)th and i-th (the (i+1)th block) block, as such a swap
+            // may now be profitable. However if i is already 1, there are no earlier blocks so do not attempt to move
+            // pointer back.
+            if (i != 1) i -= 2;
+        } else {
+
+            // If the penalty does not improve, restore the old ordering and continue.
+            std::swap(_blocks[i], _blocks[i + 1]);
+        }
+    }
+}
+
 }

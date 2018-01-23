@@ -1,6 +1,7 @@
 #ifndef X86_BACKEND_H
 #define X86_BACKEND_H
 
+#include "ir/analysis.h"
 #include "ir/pass.h"
 #include "x86/encoder.h"
 #include "x86/instruction.h"
@@ -42,6 +43,7 @@ namespace x86 {
 class Backend: public ir::pass::Pass {
 private:
     emu::State& _state;
+    ir::analysis::Block& _block_analysis;
     x86::Encoder _encoder;
 
     int stack_size = 0;
@@ -61,7 +63,8 @@ private:
     std::array<bool, 16> pinned {};
 
 public:
-    Backend(emu::State& state, util::Code_buffer& buffer): _state {state}, _encoder{buffer} {}
+    Backend(emu::State& state, util::Code_buffer& buffer, ir::analysis::Block& block_analysis):
+        _state {state}, _block_analysis{block_analysis}, _encoder{buffer} {}
 
     void emit(const Instruction& inst);
     void emit_move(ir::Type type, const Operand& dst, const Operand& src);

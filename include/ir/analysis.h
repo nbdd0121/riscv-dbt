@@ -39,6 +39,9 @@ public:
     void update_keepalive();
     void simplify_graph();
 
+    // Reorder basic blocks so that number of jumps emitted by backend is reduced.
+    void reorder();
+
 };
 
 }

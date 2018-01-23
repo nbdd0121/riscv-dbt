@@ -788,43 +788,8 @@ void Backend::clear() {
 }
 
 void Backend::run(ir::Graph& graph) {
-    std::vector<ir::Node*> blocks;
-    std::vector<ir::Node*> to_process;
-
-    auto entry = graph.entry();
-    ASSERT(entry->value(0).references().size() == 1);
-    to_process.push_back(*entry->value(0).references().begin());
-
-    // Some very naive basic block scheduling.
-    while (!to_process.empty()) {
-        auto block = to_process.back();
-        to_process.pop_back();
-
-        if (block->opcode() == ir::Opcode::exit) continue;
-
-        // Make sure the block is not yet in the list.
-        if (std::find(blocks.begin(), blocks.end(), block) != blocks.end()) {
-            continue;
-        }
-
-        blocks.push_back(block);
-
-        ASSERT(block->opcode() == ir::Opcode::block);
-
-        auto end = static_cast<ir::Paired*>(block)->mate();
-
-        if (end->opcode() == ir::Opcode::i_if) {
-            ASSERT(end->value(0).references().size() == 1);
-            ASSERT(end->value(1).references().size() == 1);
-            to_process.push_back(*end->value(0).references().begin());
-            to_process.push_back(*end->value(1).references().begin());
-        } else {
-            ASSERT(end->opcode() == ir::Opcode::jmp);
-            to_process.push_back(ir::analysis::Block::get_target(end->value(0)));
-        }
-    }
-
-    // Now we have a linear list of blocks.
+    // First get a linear list of blocks.
+    std::vector<ir::Node*> blocks = _block_analysis.blocks();
 
     // Generate epilogue.
     emit(push(Register::rbp));
@@ -857,8 +822,8 @@ void Backend::run(ir::Graph& graph) {
         if (end->opcode() == ir::Opcode::i_if) {
 
             // Extract targets
-            auto true_target = *end->value(0).references().begin();
-            target = *end->value(1).references().begin();
+            auto true_target = ir::analysis::Block::get_target(end->value(0));
+            target = ir::analysis::Block::get_target(end->value(1));
 
             auto op = end->operand(1);
             if (op.is_const()) {
