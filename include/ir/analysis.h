@@ -1,3 +1,6 @@
+#ifndef IR_ANALYSIS_H
+#define IR_ANALYSIS_H
+
 #include <unordered_map>
 #include <unordered_set>
 
@@ -31,6 +34,8 @@ private:
     void enumerate_blocks();
 
 public:
+    const std::vector<Node*>& blocks() { return _blocks; }
+
     void update_keepalive();
     void simplify_graph();
 
@@ -73,3 +78,5 @@ private:
 };
 
 }
+
+#endif

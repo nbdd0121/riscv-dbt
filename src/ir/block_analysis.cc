@@ -1,4 +1,3 @@
-#include <deque>
 #include <list>
 
 #include "ir/analysis.h"
@@ -52,10 +51,10 @@ Value Block::get_tail_jmp_pc(Value control, uint16_t pc_regnum) {
 }
 
 void Block::enumerate_blocks() {
-    std::deque<Node*> queue { *_graph.entry()->value(0).references().begin() };
-    while (!queue.empty()) {
-        auto node = queue.front();
-        queue.pop_front();
+    std::vector<Node*> stack { *_graph.entry()->value(0).references().begin() };
+    while (!stack.empty()) {
+        auto node = stack.back();
+        stack.pop_back();
 
         // Already visited.
         if (std::find(_blocks.begin(), _blocks.end(), node) != _blocks.end()) continue;
@@ -65,14 +64,14 @@ void Block::enumerate_blocks() {
         for (auto value: end->values()) {
             for (auto ref: value.references()) {
                 if (ref->opcode() == Opcode::exit) continue;
-                queue.push_back(ref);
+                stack.push_back(ref);
             }
         }
     }
 }
 
 void Block::update_keepalive() {
-    std::deque<Node*> queue;
+    std::vector<Node*> stack;
 
     bool trim_existing_keepalive = false;
     for (auto operand: _graph.exit()->operands()) {
@@ -84,7 +83,7 @@ void Block::update_keepalive() {
         }
 
         ASSERT(operand.opcode() != Opcode::entry);
-        queue.push_back(static_cast<Paired*>(operand.node())->mate());
+        stack.push_back(static_cast<Paired*>(operand.node())->mate());
     }
 
     // Remove existing keepalive edges if any.
@@ -104,9 +103,9 @@ void Block::update_keepalive() {
     std::list<Node*> unseen_blocks(_blocks.begin(), _blocks.end());
 
     while (true) {
-        while (!queue.empty()) {
-            auto node = queue.front();
-            queue.pop_front();
+        while (!stack.empty()) {
+            auto node = stack.back();
+            stack.pop_back();
 
             auto ptr = std::find(unseen_blocks.begin(), unseen_blocks.end(), node);
 
@@ -118,7 +117,7 @@ void Block::update_keepalive() {
 
             for (auto operand: node->operands()) {
                 if (operand.opcode() == Opcode::entry) continue;
-                queue.push_back(static_cast<Paired*>(operand.node())->mate());
+                stack.push_back(static_cast<Paired*>(operand.node())->mate());
             }
         }
 
@@ -134,12 +133,12 @@ void Block::update_keepalive() {
             auto end = static_cast<Paired*>(block)->mate();
             if (end->opcode() == Opcode::jmp) {
                 _graph.exit()->operand_add(end->value(0));
-                queue.push_back(block);
+                stack.push_back(block);
                 break;
             }
         }
 
-        ASSERT(!queue.empty());
+        ASSERT(!stack.empty());
     }
 }
 
