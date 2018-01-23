@@ -110,6 +110,9 @@ void Dot_printer::write_node_content(std::ostream& stream, Node* node) {
 
 void Dot_printer::after(Node* node) {
 
+    // Constant nodes are treated specially, we print out one node per each usage.
+    if (node->opcode() == Opcode::constant) return;
+
     // Draw the node with type, opcode
     util::log("\t\"{:x}\" [label=\"{{", reinterpret_cast<uintptr_t>(node));
 
@@ -185,11 +188,23 @@ void Dot_printer::after(Node* node) {
         // Color keepalive edges differently.
         if (node->opcode() == Opcode::exit && operand.references().size() == 2) color = "pink";
 
+        // Create a new node for a constant operand. This makes the graph more visible.
+        if (operand.is_const()) {
+            util::log("\t\"{:x}_{}\" [label=\"{} ", reinterpret_cast<uintptr_t>(node), i, type_name(operand.type()));
+            write_node_content(std::clog, operand.node());
+            std::clog << "\"]\n";
+        }
+
         util::log(need_label ? "\t\"{:x}\":i{} -> " : "\t\"{:x}\" -> ", reinterpret_cast<uintptr_t>(node), i);
-        util::log(
-            operand.node()->value_count() == 1 ? "\"{:x}\"" : "\"{:x}\":o{}",
-            reinterpret_cast<uintptr_t>(operand.node()), operand.index()
-        );
+
+        if (operand.is_const()) {
+            util::log("\"{:x}_{}\"", reinterpret_cast<uintptr_t>(node), i);
+        } else {
+            util::log(
+                operand.node()->value_count() == 1 ? "\"{:x}\"" : "\"{:x}\":o{}",
+                reinterpret_cast<uintptr_t>(operand.node()), operand.index()
+            );
+        }
 
         util::log(color ? " [color={}];\n" : ";\n", color);
     }
