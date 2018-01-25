@@ -227,6 +227,31 @@ reg_t syscall(
 
             return ret;
         }
+        case riscv::abi::Syscall_number::read: {
+            std::vector<std::byte> buffer(arg2);
+
+            // Handle standard IO specially, since it is shared between emulator and guest program.
+            sreg_t ret;
+            if (arg0 == 0) {
+                std::cin.read(reinterpret_cast<char*>(buffer.data()), arg2);
+                ret = arg2;
+            } else {
+                ret = return_errno(read(arg0, buffer.data(), arg2));
+            }
+
+            state->mmu->copy_from_host(arg1, buffer.data(), arg2);
+
+            if (strace) {
+                util::log("read({}, \"{}\", {}) = {}\n",
+                    arg0,
+                    escape((char*)buffer.data(), buffer.size()),
+                    arg2,
+                    ret
+                );
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::write: {
             std::vector<std::byte> buffer(arg2);
             state->mmu->copy_to_host(arg1, buffer.data(), arg2);
@@ -242,7 +267,7 @@ reg_t syscall(
                 std::cerr << std::flush;
                 ret = arg2;
             } else {
-                ret = return_errno(write(arg1, buffer.data(), arg2));
+                ret = return_errno(write(arg0, buffer.data(), arg2));
             }
 
             if (strace) {
