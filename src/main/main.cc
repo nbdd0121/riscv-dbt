@@ -64,9 +64,7 @@ int main(int argc, const char **argv) {
             break;
         }
 
-        if (strcmp(arg, "--mmu=paging") == 0) {
-            use_paging = true;
-        } else if (strcmp(arg, "--mmu=flat") == 0) {
+        if (strcmp(arg, "--mmu=flat") == 0) {
             use_flat = true;
         } else if (strcmp(arg, "--strace") == 0) {
             state.strace = true;
@@ -93,11 +91,6 @@ int main(int argc, const char **argv) {
         }
     }
 
-    if (use_paging && use_flat) {
-        util::error("{}: '--mmu=paging' and '--mmu=flat' cannot be used together\n", argv[0]);
-        return 1;
-    }
-
     // The next argument is the path to the executable.
     if (arg_index == argc) {
         util::error(usage_string, argv[0]);
@@ -106,9 +99,7 @@ int main(int argc, const char **argv) {
     const char *program_name = argv[arg_index];
 
     // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
-    if (use_paging) {
-        state.mmu = std::make_unique<emu::Paging_mmu>();
-    } else if (use_flat) {
+    if (use_flat) {
         state.mmu = std::make_unique<emu::Flat_mmu>(0x10000000);
     } else {
         state.mmu = std::make_unique<emu::Id_mmu>();

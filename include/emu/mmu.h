@@ -84,47 +84,6 @@ public:
     void zero_memory(reg_t address, size_t size);
 };
 
-class Paging_mmu final: public Mmu {
-public:
-
-    // These fields are exposed as public intentionally for now, since they are needed by the code generator.
-    mutable reg_t cached_query[32];
-    mutable std::byte* cached_result[32];
-    std::unordered_map<reg_t, std::byte*> map;
-
-    Paging_mmu();
-
-    // Free all the mappings. Placed in mmu.cc since it contains munmap.
-    ~Paging_mmu();
-
-private:
-    // Fetch the mapping of address and place it into TLB.
-    void tlb_fetch(reg_t address);
-
-public:
-    // Translating address of a page. The address must be page-aligned.
-    virtual std::byte* translate_page(reg_t address) override {
-
-        // The input must be page-aligned.
-        ASSERT((address & page_mask) == 0);
-
-        const ptrdiff_t tag = (address >> log_page_size) & 31;
-
-        if (UNLIKELY(cached_query[tag] != address)) tlb_fetch(address);
-
-        return cached_result[tag];
-    }
-
-    // Page is the basic unit in Paging_mmu.
-    virtual size_t get_block_size(reg_t address) override {
-        return page_size - (address & page_mask);
-    }
-
-    // Allocate memory at given virtual address and estabilish mapping.
-    // The address and size must be page-aligned.
-    virtual void allocate_page(reg_t address, reg_t size) override;
-};
-
 class Flat_mmu final: public Mmu {
 public:
 

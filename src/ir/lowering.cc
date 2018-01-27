@@ -32,16 +32,16 @@ void Lowering::after(Node* node) {
                 uintptr_t func;
                 switch (output.type()) {
                     case Type::i8: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint8_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint8_t>)
                     ); break;
                     case Type::i16: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint16_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint16_t>)
                     ); break;
                     case Type::i32: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint32_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint32_t>)
                     ); break;
                     case Type::i64: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint64_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint64_t>)
                     ); break;
                     default: ASSERT(0);
                 }
@@ -74,16 +74,16 @@ void Lowering::after(Node* node) {
                 uintptr_t func;
                 switch (value.type()) {
                     case Type::i8: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint8_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint8_t>)
                     ); break;
                     case Type::i16: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint16_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint16_t>)
                     ); break;
                     case Type::i32: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint32_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint32_t>)
                     ); break;
                     case Type::i64: func = reinterpret_cast<uintptr_t>(
-                        AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint64_t>)
+                        AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint64_t>)
                     ); break;
                     default: ASSERT(0);
                 }

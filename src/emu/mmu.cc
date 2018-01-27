@@ -88,62 +88,6 @@ void Mmu::zero_memory(reg_t address, size_t size) {
     });
 }
 
-Paging_mmu::Paging_mmu() {
-
-    // All valid entries stored in TLB will be page-aligned.
-    // Since the bit pattern of -1 is page-aligned, the TLB is effectively marked as invalid.
-    for (auto& query: cached_query) query = -1;
-}
-
-Paging_mmu::~Paging_mmu() {
-
-    // Free any mapped pages.
-    for (const auto& mapping: map) {
-        munmap(mapping.second, page_size);
-    }
-
-    // Map the first page of emulated address space to the first page of virtual address space, so all null reference
-    // can be catched.
-    map[0] = 0;
-}
-
-void Paging_mmu::tlb_fetch(reg_t address) {
-
-    // The input must be page-aligned.
-    ASSERT((address & page_mask) == 0);
-
-    const ptrdiff_t tag = (address >> log_page_size) & 31;
-
-    // Unlikely event of cache miss. Get the entry in the map.
-    const auto& mapping = map.find(address);
-
-    // If the mapping does not exist, it will be a page fault.
-    if (UNLIKELY(mapping == map.end())) {
-        throw std::runtime_error {"Page fault"};
-    }
-
-    cached_query[tag] = address;
-    cached_result[tag] = mapping->second;
-}
-
-void Paging_mmu::allocate_page(reg_t address, reg_t size) {
-
-    // The input must be page-aligned.
-    ASSERT((address & page_mask) == 0 && (size & page_mask) == 0);
-
-    std::byte *result = reinterpret_cast<std::byte*>(
-        mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0)
-    );
-
-    if (result == nullptr) {
-        throw std::bad_alloc {};
-    }
-
-    for (reg_t offset = 0; offset < size; offset += page_size) {
-        map[address + offset] = result + offset;
-    }
-}
-
 Flat_mmu::Flat_mmu(size_t size): size_(size) {
 
     // Ideally we want the page to be all PROT_NONE, then allocate when it is needed.

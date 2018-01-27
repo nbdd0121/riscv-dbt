@@ -636,7 +636,7 @@ void Dbt_compiler::emit_lb(riscv::Instruction inst, bool u) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint8_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint8_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -690,7 +690,7 @@ void Dbt_compiler::emit_lh(riscv::Instruction inst, bool u) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint16_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint16_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -744,7 +744,7 @@ void Dbt_compiler::emit_lw(riscv::Instruction inst, bool u) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint32_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint32_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -788,7 +788,7 @@ void Dbt_compiler::emit_ld(riscv::Instruction inst) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::load_memory<uint64_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::load_memory<uint64_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -832,7 +832,7 @@ void Dbt_compiler::emit_sb(riscv::Instruction inst) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint8_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint8_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -872,7 +872,7 @@ void Dbt_compiler::emit_sh(riscv::Instruction inst) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint16_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint16_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -912,7 +912,7 @@ void Dbt_compiler::emit_sw(riscv::Instruction inst) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint32_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint32_t>)
         ));
 
         *this << call(x86::Register::rax);
@@ -952,7 +952,7 @@ void Dbt_compiler::emit_sd(riscv::Instruction inst) {
 
         *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(mmu));
         *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(
-            AS_FUNCTION_POINTER(&emu::Paging_mmu::store_memory<uint64_t>)
+            AS_FUNCTION_POINTER(&emu::Mmu::store_memory<uint64_t>)
         ));
 
         *this << call(x86::Register::rax);
