@@ -216,7 +216,7 @@ void Disassembler::print_instruction(reg_t pc, uint32_t bits, Instruction inst) 
     if (inst.length() == 4) {
         util::log("{:08x}", bits);
     } else {
-        util::log("{:04x}    ", bits & 0xFF);
+        util::log("{:04x}    ", bits & 0xFFFF);
     }
 
     util::log("        {:-7} ", opcode_name);
