@@ -283,6 +283,9 @@ enum class Syscall_number {
     pkey_alloc = 289,
     pkey_free = 290,
     statx = 291,
+
+    open = 1024,
+    stat = 1038,
 };
 
 using ulong_t = uint64_t;

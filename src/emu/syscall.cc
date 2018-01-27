@@ -1,5 +1,6 @@
 #include <cerrno>
 #include <cstring>
+#include <fcntl.h>
 #include <iomanip>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -168,6 +169,19 @@ riscv::abi::Errno convert_errno_from_host(int number) {
     }
 }
 
+int convert_open_flags_to_host(int flags) {
+    int ret = 0;
+    if (flags & 01) ret |= O_WRONLY;
+    if (flags & 02) ret |= O_RDWR;
+    if (flags & 0100) ret |= O_CREAT;
+    if (flags & 0200) ret |= O_EXCL;
+    if (flags & 01000) ret |= O_TRUNC;
+    if (flags & 02000) ret |= O_APPEND;
+    if (flags & 04000) ret |= O_NONBLOCK;
+    if (flags & 04010000) ret |= O_SYNC;
+    return ret;
+}
+
 void convert_stat_from_host(riscv::abi::stat *guest_stat, struct stat *host_stat) {
     guest_stat->st_dev          = host_stat->st_dev;
     guest_stat->st_ino          = host_stat->st_ino;
@@ -228,23 +242,21 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::read: {
-            std::vector<std::byte> buffer(arg2);
+            auto buffer = reinterpret_cast<char*>(state->mmu->translate(arg1));
 
             // Handle standard IO specially, since it is shared between emulator and guest program.
             sreg_t ret;
             if (arg0 == 0) {
-                std::cin.read(reinterpret_cast<char*>(buffer.data()), arg2);
+                std::cin.read(buffer, arg2);
                 ret = arg2;
             } else {
-                ret = return_errno(read(arg0, buffer.data(), arg2));
+                ret = return_errno(read(arg0, buffer, arg2));
             }
-
-            state->mmu->copy_from_host(arg1, buffer.data(), arg2);
 
             if (strace) {
                 util::log("read({}, \"{}\", {}) = {}\n",
                     arg0,
-                    escape((char*)buffer.data(), buffer.size()),
+                    escape(buffer, arg2),
                     arg2,
                     ret
                 );
@@ -253,27 +265,26 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::write: {
-            std::vector<std::byte> buffer(arg2);
-            state->mmu->copy_to_host(arg1, buffer.data(), arg2);
+            auto buffer = reinterpret_cast<const char*>(state->mmu->translate(arg1));
 
             // Handle standard IO specially, since it is shared between emulator and guest program.
             sreg_t ret;
             if (arg0 == 1) {
-                std::cout.write(reinterpret_cast<char*>(buffer.data()), arg2);
+                std::cout.write(buffer, arg2);
                 std::cout << std::flush;
                 ret = arg2;
             } else if (arg0 == 2) {
-                std::cerr.write(reinterpret_cast<char*>(buffer.data()), arg2);
+                std::cerr.write(buffer, arg2);
                 std::cerr << std::flush;
                 ret = arg2;
             } else {
-                ret = return_errno(write(arg0, buffer.data(), arg2));
+                ret = return_errno(write(arg0, buffer, arg2));
             }
 
             if (strace) {
                 util::log("write({}, \"{}\", {}) = {}\n",
                     arg0,
-                    escape((char*)buffer.data(), buffer.size()),
+                    escape(buffer, arg2),
                     arg2,
                     ret
                 );
@@ -358,6 +369,41 @@ reg_t syscall(
             if (strace) {
                 util::log("brk({}) = {}\n", pointer(arg0), pointer(ret));
             }
+            return ret;
+        }
+        case riscv::abi::Syscall_number::open: {
+            auto pathname = state->mmu->translate(arg0);
+            auto flags = convert_open_flags_to_host(arg1);
+
+            sreg_t ret = return_errno(open(reinterpret_cast<char*>(pathname), flags, arg2));
+            if (strace) {
+                util::log("open({}, {}, {}) = {}\n", pathname, arg1, arg2, ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::stat: {
+            auto pathname = state->mmu->translate(arg0);
+
+            struct stat host_stat;
+            sreg_t ret = return_errno(stat(reinterpret_cast<char*>(pathname), &host_stat));
+
+            // When success, convert stat format to guest format.
+            if (ret == 0) {
+                struct riscv::abi::stat guest_stat;
+                memset(&guest_stat, 0, sizeof(riscv::abi::stat));
+                convert_stat_from_host(&guest_stat, &host_stat);
+                state->mmu->copy_from_host(arg1, &guest_stat, sizeof(riscv::abi::stat));
+            }
+
+            if (strace) {
+                if (ret == 0) {
+                    util::log("stat({}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n", pathname, host_stat.st_mode, host_stat.st_size);
+                } else {
+                    util::log("stat({}, {:#x}) = {}\n", pathname, arg1, ret);
+                }
+            }
+
             return ret;
         }
         default: {
