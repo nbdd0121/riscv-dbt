@@ -19,9 +19,7 @@
 
 static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
 Options:\n\
-  --mmu=paging          Use soft paging MMU. The emulated program will have\n\
-                        larger address space in expense of performance.\n\
-  --mmu=flat            Use a flat MMU, but do not use identical mapping.\n\
+  --mmu=flat            Use a flat MMU but not identical mapping.\n\
   --strace              Log system calls.\n\
   --disassemble         Log decoded instructions.\n\
   --engine=interpreter  Use interpreter instead of dynamic binary translator.\n\
