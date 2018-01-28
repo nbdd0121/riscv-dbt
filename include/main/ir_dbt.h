@@ -29,6 +29,9 @@ private:
     // The "slow" instruction cache that contains all code that are compiled previously.
     std::unordered_map<emu::reg_t, std::unique_ptr<Ir_block>> inst_cache_;
 
+    int64_t total_compilation_time = 0;
+    size_t total_block_compiled = 0;
+
     std::byte* _code_ptr_to_patch = nullptr;
 
 public:

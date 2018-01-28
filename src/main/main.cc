@@ -80,6 +80,8 @@ int main(int argc, const char **argv) {
             state.strict_exception = true;
         } else if (strncmp(arg, "--inline-limit=", strlen("--inline-limit=")) == 0) {
             state.inline_limit = atoi(arg + strlen("--inline-limit="));
+        } else if (strcmp(arg, "--monitor-performance") == 0) {
+            emu::monitor_performance = true;
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;

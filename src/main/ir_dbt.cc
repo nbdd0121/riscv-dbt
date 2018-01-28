@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cstring>
 
 #include "emu/state.h"
@@ -123,7 +124,17 @@ Ir_dbt::Ir_dbt(emu::State& state) noexcept: state_{state} {
     }
 }
 
-Ir_dbt::~Ir_dbt() {}
+Ir_dbt::~Ir_dbt() {
+    if (emu::monitor_performance) {
+        int64_t average_in_ns = (total_compilation_time + (total_block_compiled / 2)) / total_block_compiled;
+        int64_t average_in_us = (average_in_ns + 500) / 1000;
+        int64_t sum_in_us = (total_compilation_time + 500) / 1000;
+        util::log(
+            "{} blocks are compiled in {} microseconds. Time per block is {} microseconds.\n",
+            total_block_compiled, sum_in_us, average_in_us
+        );
+    }
+}
 
 void Ir_dbt::step(riscv::Context& context) {
     const emu::reg_t pc = context.pc;
@@ -131,7 +142,15 @@ void Ir_dbt::step(riscv::Context& context) {
 
     // If the cache misses, compile the current block.
     if (UNLIKELY(icache_tag_[tag] != pc)) {
-        compile(pc);
+        if (emu::monitor_performance) {
+            auto start = std::chrono::high_resolution_clock::now();
+            compile(pc);
+            auto end = std::chrono::high_resolution_clock::now();
+            total_compilation_time += (end - start).count();
+            total_block_compiled++;
+        } else {
+            compile(pc);
+        }
     }
 
     // The return value is the address to patch.

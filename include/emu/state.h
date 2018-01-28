@@ -44,6 +44,13 @@ struct State {
     int inline_limit;
 };
 
+// All parts of the emulator will share a global state. Originally global variable is avoided, but by doing so many
+// objects need to hold a reference to the state object, which incurs unnecessary overhead and complexity.
+// TODO: We will be shifting from the state struct to global variables gradually.
+
+// Whether compilation performance counters should be enabled.
+extern bool monitor_performance;
+
 // This is not really an error. However it shares some properties with an exception, as it needs to break out from
 // any nested controls and stop executing guest code.
 struct Exit_control: std::runtime_error {

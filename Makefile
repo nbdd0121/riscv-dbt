@@ -10,6 +10,7 @@ CXX_RELEASE_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 
 OBJS = \
 	emu/elf_loader.o \
 	emu/mmu.o \
+	emu/state.o \
 	emu/syscall.o \
 	ir/block_analysis.o \
 	ir/dominance.o \
