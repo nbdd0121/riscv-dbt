@@ -3,27 +3,7 @@
 
 #include "ir/analysis.h"
 
-namespace ir {
-
-void Dominance::compute_blocks() {
-    std::deque<Node*> queue { *_graph.entry()->value(0).references().begin() };
-    while (!queue.empty()) {
-        auto node = queue.front();
-        queue.pop_front();
-
-        // Already visited.
-        if (std::find(_blocks.begin(), _blocks.end(), node) != _blocks.end()) continue;
-
-        _blocks.push_back(node);
-        auto end = static_cast<Paired*>(node)->mate();
-        for (auto value: end->values()) {
-            for (auto ref: value.references()) {
-                if (ref->opcode() == Opcode::exit) continue;
-                queue.push_back(ref);
-            }
-        }
-    }
-}
+namespace ir::analysis {
 
 void Dominance::compute_idom() {
 
@@ -249,7 +229,7 @@ void Dominance::compute_ipdom() {
 }
 
 void Dominance::compute_df() {
-    for (auto node: _blocks) {
+    for (auto node: _block_analysis.blocks()) {
 
         // Nodes in dominance frontier must have multiple predecessor.
         if (node->operand_count() == 1) continue;
@@ -270,7 +250,7 @@ void Dominance::compute_df() {
 }
 
 void Dominance::compute_pdf() {
-    for (auto node: _blocks) {
+    for (auto node: _block_analysis.blocks()) {
 
         // Nodes in post-dominance frontier must have multiple successor.
         auto end = static_cast<Paired*>(node)->mate();
@@ -287,6 +267,48 @@ void Dominance::compute_pdf() {
             }
         }
     }
+}
+
+Node* Dominance::least_common_dominator(Node* a, Node* b) {
+
+    // First compute height of both blocks.
+    size_t a_height = 0;
+    {
+        Node* node = a;
+        while (node->opcode() != Opcode::entry) {
+            node = _idom[node];
+            a_height++;
+        }
+    }
+
+    size_t b_height = 0;
+    {
+        Node* node = b;
+        while (node->opcode() != Opcode::entry) {
+            node = _idom[node];
+            b_height++;
+        }
+    }
+
+    // Normalize so that a is closer to the root.
+    if (a_height > b_height) {
+        std::swap(a_height, b_height);
+        std::swap(a, b);
+    }
+
+    // Walking up the tree until a and b are on the same height.
+    while (a_height != b_height) {
+        b = _idom[b];
+        b_height--;
+    }
+
+    // Further walking up util the lowest common dominator is found.
+    while (a != b) {
+        a = _idom[a];
+        b = _idom[b];
+    }
+
+    return a;
 }
 
 }

@@ -6,9 +6,7 @@
 
 #include "ir/node.h"
 
-namespace ir {
-
-namespace analysis {
+namespace ir::analysis {
 
 // Helper function for control flow related analysis.
 class Block {
@@ -44,11 +42,9 @@ public:
 
 };
 
-}
-
 class Dominance {
     Graph& _graph;
-    std::vector<Node*> _blocks;
+    Block& _block_analysis;
 
     // Immediate dominators of nodes.
     std::unordered_map<Node*, Node*> _idom;
@@ -63,16 +59,16 @@ class Dominance {
     std::unordered_map<Node*, std::unordered_set<Node*>> _pdf;
 
 public:
-    Dominance(Graph& graph): _graph{graph} {
+    Dominance(Graph& graph, Block& block_analysis): _graph{graph}, _block_analysis{block_analysis} {
         compute_idom();
         compute_ipdom();
-        compute_blocks();
         compute_df();
         compute_pdf();
     }
 
+    Node* least_common_dominator(Node* a, Node* b);
+
 private:
-    void compute_blocks();
     void compute_idom();
     void compute_ipdom();
     void compute_df();
