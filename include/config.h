@@ -1,7 +1,9 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#ifndef ASSERT_STRATEGY
+#ifdef RELEASE
+#   define ASSERT_STRATEGY ASSERT_STRATEGY_ASSUME
+#else
 #   define ASSERT_STRATEGY ASSERT_STRATEGY_THROW
 #endif
 

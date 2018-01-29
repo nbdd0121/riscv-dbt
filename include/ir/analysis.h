@@ -66,6 +66,7 @@ public:
         compute_pdf();
     }
 
+    Node* immediate_dominator(Node* block) { return _idom[block]; }
     Node* least_common_dominator(Node* a, Node* b);
 
 private:

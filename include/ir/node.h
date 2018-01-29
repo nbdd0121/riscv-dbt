@@ -359,6 +359,8 @@ public:
         return node;
     }
 
+    const std::vector<Node*>& nodes() { return _heap; }
+
     // Free up dead nodes. Not necessary during compilation, but useful for reducing footprint when graph needs to be
     // cached.
     void garbage_collect();

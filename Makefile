@@ -5,7 +5,7 @@ LD_FLAGS = -g -pie -Wl,-Ttext-segment=0x30000000
 CXX_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
 
 LD_RELEASE_FLAGS = -g -flto -O2 -pie -Wl,-Ttext-segment=0x30000000
-CXX_RELEASE_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DASSERT_STRATEGY=ASSERT_STRATEGY_ASSUME -flto -fno-stack-protector
+CXX_RELEASE_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -DRELEASE=1 -flto -fno-stack-protector
 
 OBJS = \
 	emu/elf_loader.o \
@@ -66,6 +66,10 @@ bin/feature.o: src/feature.cc
 bin/util/safe_memory.o: src/util/safe_memory.cc
 	@mkdir -p $(dir $@)
 	$(CXX) -c -MMD -MP $(CXX_FLAGS) -fnon-call-exceptions $< -o $@
+
+bin/release/util/safe_memory.o: src/util/safe_memory.cc
+	@mkdir -p $(dir $@)
+	$(CXX) -c -MMD -MP $(CXX_FLAGS) -fno-lto -fnon-call-exceptions $< -o $@
 
 bin/%.o: src/%.cc bin/feature.o
 	@mkdir -p $(dir $@)

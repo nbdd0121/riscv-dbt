@@ -31,6 +31,7 @@ Options:\n\
                         case of segmentation fault.\n\
   --inline-limit=<n>    Number of basic blocks that can be inlined in single\n\
                         compilation by the IR-based binary translator.\n\
+  --monitor-performance Display metrics about performance in compilation phase.\n\
   --help                Display this help message.\n\
 ";
 
