@@ -112,7 +112,8 @@ void Dominance::compute_idom() {
         }
 
         // Turn DFN relation into relations between actual ir::Node's.
-        _idom[vertices[i]] = vertices[idoms[i]];
+        auto idom_node = vertices[idoms[i]];
+        _idom[vertices[i]] = {idom_node, idoms[i] == 0 ? 1 : _idom[idom_node].second + 1};
     }
 }
 
@@ -234,7 +235,7 @@ void Dominance::compute_df() {
         // Nodes in dominance frontier must have multiple predecessor.
         if (node->operand_count() == 1) continue;
 
-        auto idom = _idom[node];
+        auto idom = _idom[node].first;
         for (auto operand: node->operands()) {
             auto runner = operand.node();
             if (runner->opcode() != Opcode::entry) runner = static_cast<Paired*>(runner)->mate();
@@ -243,7 +244,7 @@ void Dominance::compute_df() {
             while (runner != idom) {
                 ASSERT(runner);
                 _df[runner].insert(node);
-                runner = _idom[runner];
+                runner = _idom[runner].first;
             }
         }
     }
@@ -271,41 +272,31 @@ void Dominance::compute_pdf() {
 
 Node* Dominance::least_common_dominator(Node* a, Node* b) {
 
-    // First compute height of both blocks.
-    size_t a_height = 0;
-    {
-        Node* node = a;
-        while (node->opcode() != Opcode::entry) {
-            node = _idom[node];
-            a_height++;
-        }
-    }
+    // Special cases.
+    if (a == nullptr) return b;
+    if (b == nullptr) return a;
+    if (a == b) return a;
 
-    size_t b_height = 0;
-    {
-        Node* node = b;
-        while (node->opcode() != Opcode::entry) {
-            node = _idom[node];
-            b_height++;
-        }
-    }
-
-    // Normalize so that a is closer to the root.
-    if (a_height > b_height) {
-        std::swap(a_height, b_height);
-        std::swap(a, b);
-    }
+    std::pair<Node*, size_t> adom = _idom[a];
+    std::pair<Node*, size_t> bdom = _idom[b];
 
     // Walking up the tree until a and b are on the same height.
-    while (a_height != b_height) {
-        b = _idom[b];
-        b_height--;
+    while (adom.second > bdom.second) {
+        a = adom.first;
+        adom = _idom[a];
+    }
+
+    while (bdom.second > adom.second) {
+        b = bdom.first;
+        bdom = _idom[b];
     }
 
     // Further walking up util the lowest common dominator is found.
     while (a != b) {
-        a = _idom[a];
-        b = _idom[b];
+        a = adom.first;
+        b = bdom.first;
+        adom = _idom[a];
+        bdom = _idom[b];
     }
 
     return a;

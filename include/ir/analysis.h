@@ -46,8 +46,8 @@ class Dominance {
     Graph& _graph;
     Block& _block_analysis;
 
-    // Immediate dominators of nodes.
-    std::unordered_map<Node*, Node*> _idom;
+    // Immediate dominators of nodes and their height.
+    std::unordered_map<Node*, std::pair<Node*, size_t>> _idom;
 
     // Immediate post-dominators of nodes.
     std::unordered_map<Node*, Node*> _ipdom;
@@ -66,7 +66,7 @@ public:
         compute_pdf();
     }
 
-    Node* immediate_dominator(Node* block) { return _idom[block]; }
+    Node* immediate_dominator(Node* block) { return _idom[block].first; }
     Node* least_common_dominator(Node* a, Node* b);
 
 private:
