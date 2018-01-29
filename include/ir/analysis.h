@@ -77,6 +77,39 @@ private:
 
 };
 
+class Scheduler {
+private:
+    Graph& _graph;
+    Block& _block_analysis;
+    Dominance& _dominance;
+
+    // Record how many inputs are yet to be satisified in schedule_node_early.
+    std::unordered_map<Node*, ssize_t> _unsatisified_input_count;
+    std::unordered_map<Node*, Node*> _late;
+    std::unordered_map<Node*, std::vector<Node*>> _nodelist;
+
+    // Record the all nodes scheduled to the current block in schedule_block.
+    std::vector<Node*>* _list;
+
+    Node* _block;
+
+public:
+    Scheduler(Graph& graph, Block& block_analysis, Dominance& dominance):
+        _graph{graph}, _block_analysis{block_analysis}, _dominance{dominance} {
+
+    }
+
+private:
+    void schedule_node_early(Node* node);
+    void schedule_node_late(Node* node);
+
+    void schedule_block(Node* block);
+
+public:
+    void schedule();
+    const std::vector<Node*>& get_node_list(Node* block) { return _nodelist[block]; }
+};
+
 }
 
 #endif

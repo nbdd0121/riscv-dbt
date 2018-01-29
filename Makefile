@@ -20,6 +20,7 @@ OBJS = \
 	ir/node.o \
 	ir/pass.o \
 	ir/register_access_elimination.o \
+	ir/scheduler.o \
 	main/dbt.o \
 	main/interpreter.o \
 	main/ir_dbt.o \
