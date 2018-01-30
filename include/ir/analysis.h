@@ -69,6 +69,9 @@ public:
     }
 
     Node* immediate_dominator(Node* block) { return _idom[block].first; }
+    Node* immediate_postdominator(Node* block) { return _ipdom[block]; }
+    const std::unordered_set<Node*>& dominance_frontier(Node* block) { return _df[block]; }
+    const std::unordered_set<Node*>& postdominance_frontier(Node* block) { return _pdf[block]; }
     Node* least_common_dominator(Node* a, Node* b);
 
 private:
