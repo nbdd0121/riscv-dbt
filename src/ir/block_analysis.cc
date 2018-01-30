@@ -188,7 +188,8 @@ void Block::simplify_graph() {
     }
 }
 
-void Block::reorder() {
+void Block::reorder(Dominance& dominance) {
+
     // A very simple algorithm that gives a heuristic penalty about a certain ordering of blocks.
     // We would like to reduce the number of jumps as much as possible. Therefore we assign a penalty of one if we need
     // to emit a jump. However if we use such heuristic, then there could be many plateaus, causing difficulties to
@@ -228,6 +229,12 @@ void Block::reorder() {
     // For each iteration in the loop, we will look at i-th and (i+1)th block, so upper bound is block_count - 1.
     // The entry block must always be at 0, so the lower bound is 1.
     for (size_t i = 1; i < block_count - 1; i++) {
+
+        // Do not move dominated blocks before their dominators. Doing so is harder for register allocation and code
+        // generation. Note that doing this check alone is sufficient to maintain the desired constraint. As we
+        // initially visit the blocks in DFS, the constraint is satisified by default, so the property will be kept as
+        // long as our modifications here are not violating the constraint.
+        if (dominance.immediate_dominator(_blocks[i + 1]) == _blocks[i]) continue;
 
         // Tentative change the order.
         std::swap(_blocks[i], _blocks[i + 1]);

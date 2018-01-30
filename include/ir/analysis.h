@@ -8,6 +8,8 @@
 
 namespace ir::analysis {
 
+class Dominance;
+
 // Helper function for control flow related analysis.
 class Block {
 public:
@@ -37,9 +39,9 @@ public:
     void update_keepalive();
     void simplify_graph();
 
-    // Reorder basic blocks so that number of jumps emitted by backend is reduced.
-    void reorder();
-
+    // Reorder basic blocks so that number of jumps emitted by backend is reduced. It relies on dominance calculation
+    // to avoid keeping dominator before dominated blocks (which is simpler for code generator).
+    void reorder(Dominance& dominance);
 };
 
 class Dominance {

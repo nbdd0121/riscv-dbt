@@ -280,8 +280,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
         // This garbage collection is required for Value::references to correctly reflect number of users.
         graph_for_codegen.garbage_collect();
 
+        ir::analysis::Dominance dom{graph_for_codegen, block_analysis};
+
         // Reorder basic blocks before feeding it to the backend.
-        block_analysis.reorder();
+        block_analysis.reorder(dom);
         x86::Backend{state_, block_ptr->code, block_analysis}.run(graph_for_codegen);
         generate_eh_frame(*block_ptr);
     }
