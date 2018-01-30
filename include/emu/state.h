@@ -37,9 +37,6 @@ struct State {
     // A flag to determine whether instret should be updated precisely in binary translated code.
     bool no_instret;
 
-    // A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
-    bool strict_exception;
-
     // Upper limit of number of blocks that can be inlined by IR DBT.
     int inline_limit;
 };
@@ -47,6 +44,9 @@ struct State {
 // All parts of the emulator will share a global state. Originally global variable is avoided, but by doing so many
 // objects need to hold a reference to the state object, which incurs unnecessary overhead and complexity.
 // TODO: We will be shifting from the state struct to global variables gradually.
+
+// A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
+extern bool strict_exception;
 
 // Whether compilation performance counters should be enabled.
 extern bool monitor_performance;

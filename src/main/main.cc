@@ -50,7 +50,6 @@ int main(int argc, const char **argv) {
     state.strace = false;
     state.disassemble = false;
     state.no_instret = true;
-    state.strict_exception = false;
     state.inline_limit = 16;
 
     // Parsing arguments
@@ -78,7 +77,7 @@ int main(int argc, const char **argv) {
         } else if (strcmp(arg, "--with-instret") == 0) {
             state.no_instret = false;
         } else if (strcmp(arg, "--strict-exception") == 0) {
-            state.strict_exception = true;
+            emu::strict_exception = true;
         } else if (strncmp(arg, "--inline-limit=", strlen("--inline-limit=")) == 0) {
             state.inline_limit = atoi(arg + strlen("--inline-limit="));
         } else if (strcmp(arg, "--monitor-performance") == 0) {

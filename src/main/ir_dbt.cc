@@ -183,7 +183,7 @@ void Ir_dbt::decode(emu::reg_t pc) {
         graph = riscv::compile(state_, basic_block);
 
         // Optimisation passes.
-        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph);
+        ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
         // Clean up memory.
@@ -262,7 +262,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
         ir::analysis::Block block_analysis{graph_for_codegen};
         block_analysis.update_keepalive();
         block_analysis.simplify_graph();
-        ir::pass::Register_access_elimination{66, state_.strict_exception}.run(graph_for_codegen);
+        ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph_for_codegen);
         ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.
