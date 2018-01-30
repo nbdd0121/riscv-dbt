@@ -284,7 +284,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         // Reorder basic blocks before feeding it to the backend.
         block_analysis.reorder(dom);
-        x86::Backend{state_, block_ptr->code, block_analysis}.run(graph_for_codegen);
+
+        ir::analysis::Scheduler scheduler{graph_for_codegen, block_analysis, dom};
+        scheduler.schedule();
+        x86::Backend{state_, block_ptr->code, graph_for_codegen, block_analysis, scheduler}.run();
         generate_eh_frame(*block_ptr);
     }
 

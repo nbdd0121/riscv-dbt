@@ -534,15 +534,16 @@ Memory Backend::emit_address(ir::Value value) {
     return qword(base_reg + index_reg * node->operand(2).const_value() + node->operand(3).const_value());
 }
 
-void Backend::after(ir::Node* node) {
+void Backend::visit(ir::Node* node) {
     switch (node->opcode()) {
         case ir::Opcode::block:
+        case ir::Opcode::constant:
+            // Schedulers shouldn't place them in the list, so we shouldn't expect these.
+            ASSERT(0);
+            break;
         case ir::Opcode::jmp:
         case ir::Opcode::i_if:
             // These are not handled here.
-            break;
-        case ir::Opcode::constant:
-            // constants are handled specially with in generation of each node that takes a value.
             break;
         case ir::Opcode::fence:
             // fence are only for ordering.
@@ -787,7 +788,7 @@ void Backend::clear() {
     for (auto& loc: pinned) loc = false;
 }
 
-void Backend::run(ir::Graph& graph) {
+void Backend::run() {
     // First get a linear list of blocks.
     std::vector<ir::Node*> blocks = _block_analysis.blocks();
 
@@ -796,14 +797,14 @@ void Backend::run(ir::Graph& graph) {
     emit(mov(Register::rbp, Register::rdi));
 
     // Push exit to the block list to ease processing.
-    blocks.push_back(graph.exit());
+    blocks.push_back(_graph.exit());
 
     // These are used for relocation
     std::unordered_map<ir::Node*, size_t> label_def;
     std::unordered_map<ir::Node*, std::vector<size_t>> label_use;
     std::vector<size_t> trampoline_loc;
 
-    size_t exit_refcount = graph.exit()->operand_count();
+    size_t exit_refcount = _graph.exit()->operand_count();
 
     for (size_t i = 0; i < blocks.size() - 1; i++) {
         auto block = blocks[i];
@@ -814,7 +815,9 @@ void Backend::run(ir::Graph& graph) {
         label_def[block] = _encoder.buffer().size();
 
         // Generate code for the block.
-        run_on(graph, end);
+        for (auto node: _scheduler.get_node_list(block)) {
+            visit(node);
+        }
 
         // This records the fallthrough target.
         ir::Node* target = nullptr;
@@ -871,7 +874,7 @@ void Backend::run(ir::Graph& graph) {
         clear();
     }
 
-    label_def[graph.exit()] = _encoder.buffer().size();
+    label_def[_graph.exit()] = _encoder.buffer().size();
 
     // Patching labels
     for (const auto& pair: label_def) {

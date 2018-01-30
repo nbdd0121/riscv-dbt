@@ -40,10 +40,12 @@ protected:
 
 namespace x86 {
 
-class Backend: public ir::pass::Pass {
+class Backend {
 private:
     emu::State& _state;
+    ir::Graph& _graph;
     ir::analysis::Block& _block_analysis;
+    ir::analysis::Scheduler& _scheduler;
     x86::Encoder _encoder;
 
     int stack_size = 0;
@@ -63,8 +65,13 @@ private:
     std::array<bool, 16> pinned {};
 
 public:
-    Backend(emu::State& state, util::Code_buffer& buffer, ir::analysis::Block& block_analysis):
-        _state {state}, _block_analysis{block_analysis}, _encoder{buffer} {}
+    Backend(
+        emu::State& state,
+        util::Code_buffer& buffer,
+        ir::Graph& graph,
+        ir::analysis::Block& block_analysis,
+        ir::analysis::Scheduler& scheduler
+    ): _state {state}, _graph{graph}, _block_analysis{block_analysis}, _scheduler{scheduler}, _encoder{buffer} {}
 
     void emit(const Instruction& inst);
     void emit_move(ir::Type type, const Operand& dst, const Operand& src);
@@ -112,12 +119,10 @@ public:
 
     void clear();
 
-protected:
-    virtual bool before(ir::Node* node) override { return node->opcode() == ir::Opcode::block; }
-    virtual void after(ir::Node* node) override;
+    void visit(ir::Node* node);
 
 public:
-    void run(ir::Graph& graph);
+    void run();
 };
 
 }
