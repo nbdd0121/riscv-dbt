@@ -44,6 +44,245 @@ void Load_store_elimination::visit_memops(Node* node) {
     }
 }
 
+// First renaming pass. Fill operands of PHI nodes only.
+void Load_store_elimination::fill_load_phi(Node* block) {
+
+    // Populate value stack.
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+
+        // Rename PHI nodes first.
+        auto phi_node = _phis[regnum].find(block);
+        if (phi_node != _phis[regnum].end()) {
+            _value_stack[regnum].push_back(phi_node->second->value(0));
+        }
+    }
+
+    for (auto item: _memops[block]) {
+        if (item->opcode() == Opcode::load_register) {
+            uint16_t regnum = static_cast<Register_access*>(item)->regnum();
+            _value_stack[regnum].push_back(item->value(1));
+
+        } else if (item->opcode() == Opcode::store_register) {
+            uint16_t regnum = static_cast<Register_access*>(item)->regnum();
+            _value_stack[regnum].push_back(item->operand(1));
+
+        } else if (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context()) {
+            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                _value_stack[regnum].push_back({});
+            }
+        }
+    }
+
+    // Fill in phi nodes operands.
+    for (auto value: static_cast<Paired*>(block)->mate()->values()) {
+        for (auto ref: value.references()) {
+            if (ref->opcode() == Opcode::exit) continue;
+
+            // TODO: What if two edges to the same node?
+            size_t op_index = ref->operand_find(value);
+
+            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                auto phi_node = _phis[regnum].find(ref);
+                if (phi_node != _phis[regnum].end()) {
+                    auto value_stack_top =_value_stack[regnum].back();
+                    if (value_stack_top) {
+                        phi_node->second->operand_set(op_index + 1, value_stack_top);
+                    }
+                }
+            }
+        }
+    }
+
+    // Recursively rename other blocks in the dominator tree.
+    for (auto succ: _block_analysis.blocks()) {
+        if (_dom.immediate_dominator(succ) == block) {
+            fill_load_phi(succ);
+        }
+    }
+
+    // Pop values out from value stack.
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        auto phi_node = _phis[regnum].find(block);
+        if (phi_node != _phis[regnum].end()) {
+            _value_stack[regnum].pop_back();
+        }
+    }
+
+    for (auto node: _memops[block]) {
+        if (node->opcode() == Opcode::load_register || node->opcode() == Opcode::store_register) {
+            uint16_t regnum = static_cast<Register_access*>(node)->regnum();
+            _value_stack[regnum].pop_back();
+
+        } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
+            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                _value_stack[regnum].pop_back();
+            }
+        }
+    }
+}
+
+// Second renaming pass. This is where loads are actually eliminated.
+void Load_store_elimination::rename_load(Node* block) {
+
+    // Indicate whether the value will be first in the basic block.
+    std::vector<uint8_t> not_first(66);
+
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        auto phi_node = _phis[regnum].find(block);
+        if (phi_node != _phis[regnum].end()) {
+
+            _value_stack[regnum].push_back(
+                phi_node->second->operand_count() != 0 ? phi_node->second->value(0) : Value{}
+            );
+        }
+    }
+
+    // Use the erase-remove pattern to eliminate loads. By using the pattern, we will preserve the correctness of
+    // memops, so we can perform a store elimination without re-iterating.
+    auto& memops = _memops[block];
+    memops.erase(std::remove_if(memops.begin(), memops.end(), [&](Node* item){
+        if (item->opcode() == Opcode::load_register) {
+            uint16_t regnum = static_cast<Register_access*>(item)->regnum();
+            auto value = _value_stack[regnum].back();
+
+            // For now, do not actually add PHI nodes into the graph (as the code generator is not prepared for it
+            // yet), and also do not replace a load with a value from other blocks (controlled by not_first) for now as
+            // as they also need special support in the code generator. An exception here is constant. We can always
+            // propagate constants across multiple blocks.
+            if (value && value.opcode() != Opcode::phi && (not_first[regnum] || value.is_const())) {
+                ir::pass::Pass::replace(item->value(0), item->operand(0));
+                ir::pass::Pass::replace(item->value(1), value);
+
+                // Remove from memops.
+                return true;
+
+            }
+
+            _value_stack[regnum].push_back(item->value(1));
+            not_first[regnum] = 1;
+
+        } else if (item->opcode() == Opcode::store_register) {
+            uint16_t regnum = static_cast<Register_access*>(item)->regnum();
+            _value_stack[regnum].push_back(item->operand(1));
+            not_first[regnum] = 1;
+
+        } else if (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context()) {
+            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                _value_stack[regnum].push_back({});
+                not_first[regnum] = 1;
+            }
+        }
+
+        return false;
+    }), memops.end());
+
+    for (auto succ: _block_analysis.blocks()) {
+        if (_dom.immediate_dominator(succ) == block) {
+            rename_load(succ);
+        }
+    }
+
+    // Pop values out from value stack.
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        auto phi_node = _phis[regnum].find(block);
+        if (phi_node != _phis[regnum].end()) {
+            _value_stack[regnum].pop_back();
+        }
+    }
+
+    for (auto node: memops) {
+        if (node->opcode() == Opcode::load_register || node->opcode() == Opcode::store_register) {
+            uint16_t regnum = static_cast<Register_access*>(node)->regnum();
+            _value_stack[regnum].pop_back();
+
+        } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
+            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                _value_stack[regnum].pop_back();
+            }
+        }
+    }
+}
+
+void Load_store_elimination::eliminate_load() {
+
+    // This, along with fill_load_phi and rename_load, will perform SSA-based load elimination. It is similar to
+    // standard SSA construction techniques, but tweaked a little bit such that it can also handle maydef nodes. This
+    // is achieved by pushing an invalid value into the value stack when encountering these nodes, and then invalidate
+    // all PHI nodes directly or indirectly referencing the node.
+
+    // Just a dummy node to use as placeholder.
+    Node dummy {Opcode::entry, {Type::none}, {}};
+
+    // Build a working list for PHI node insertion.
+    std::vector<std::vector<Node*>> worklist(66);
+    for (auto& pair: _memops) {
+        auto block = pair.first;
+        std::vector<uint8_t> should_add(66);
+
+        for (auto node: pair.second) {
+            if (node->opcode() == Opcode::load_register || node->opcode() == Opcode::store_register) {
+                auto regnum = static_cast<Register_access*>(node)->regnum();
+                should_add[regnum] = 1;
+
+            } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
+                for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                    should_add[regnum] = 1;
+                }
+            }
+        }
+
+        for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            if (should_add[regnum]) worklist[regnum].push_back(block);
+        }
+    }
+
+    // Create PHI nodes based on dominance frontier. Do not let the graph to manage them right now, as they might be
+    // invalidated.
+    _phis.resize(66);
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        auto& phi_map = _phis[regnum];
+        auto list = std::move(worklist[regnum]);
+        while (!list.empty()) {
+            auto block = list.back();
+            list.pop_back();
+
+            for (auto frontier: _dom.dominance_frontier(block)) {
+                auto& phi_node = phi_map[frontier];
+                if (!phi_node) {
+
+                    // The first operand of PHI should be the block node, and we fill the rest with placeholders now.
+                    std::vector<Value> operands(frontier->operand_count() + 1, dummy.value(0));
+                    operands[0] = frontier->value(0);
+                    phi_node = new Node(Opcode::phi, {Type::i64}, std::move(operands));
+                    list.push_back(frontier);
+                }
+            }
+        }
+    }
+
+    fill_load_phi(Block::get_target(_graph.entry()->value(0)));
+
+    // Now all PHI nodes referencing (directly or indirectly) the dummy node (i.e. invalid) would be invalidated.
+    while (!dummy.value(0).references().empty()) {
+        auto to_kill = *dummy.value(0).references().rbegin();
+        to_kill->operands({});
+        ir::pass::Pass::replace(to_kill->value(0), dummy.value(0));
+    }
+
+    rename_load(Block::get_target(_graph.entry()->value(0)));
+
+    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        for (auto& pair: _phis[regnum]) {
+            pair.second->operands({});
+        }
+        for (auto& pair: _phis[regnum]) {
+            delete pair.second;
+        }
+    }
+
+    _phis = std::vector<std::unordered_map<Node*, Node*>>();
+}
+
 // First renaming pass. Fill operands of PHI nodes but no not touch the graph.
 void Load_store_elimination::fill_store_phi(Node* block) {
 

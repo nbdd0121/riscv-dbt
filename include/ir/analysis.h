@@ -146,10 +146,14 @@ private:
     void populate_memops();
     void visit_memops(Node* node);
 
+    void fill_load_phi(Node* block);
+    void rename_load(Node* block);
+
     void fill_store_phi(Node* block);
     void rename_store(Node* block);
 
 public:
+    void eliminate_load();
     void eliminate_store();
 
 };
