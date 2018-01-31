@@ -115,6 +115,45 @@ public:
     const std::vector<Node*>& get_node_list(Node* block) { return _nodelist[block]; }
 };
 
+class Load_store_elimination {
+private:
+    Graph& _graph;
+    Block& _block_analysis;
+    Dominance& _dom;
+
+    // Tracks all memory operations with containing basic blocks.
+    std::unordered_map<Node*, std::vector<Node*>> _memops;
+
+    // Tracks all PHI nodes created.
+    std::vector<std::unordered_map<Node*, Node*>> _phis;
+
+    // The value stack used in the standard renaming algorithm. nullptr here indicates that the value is unavailable.
+    std::vector<std::vector<Value>> _value_stack;
+
+    // Used for walking through each block to get all memory related nodes.
+    std::unordered_set<Node*> _visited;
+    std::vector<Node*>* _oplist;
+
+public:
+    Load_store_elimination(Graph& graph, Block& block_analysis, Dominance& dom):
+        _graph{graph}, _block_analysis{block_analysis}, _dom{dom},
+        _memops(66), _value_stack(66, std::vector<Value>{{}}) {
+
+        populate_memops();
+    }
+
+private:
+    void populate_memops();
+    void visit_memops(Node* node);
+
+    void fill_store_phi(Node* block);
+    void rename_store(Node* block);
+
+public:
+    void eliminate_store();
+
+};
+
 }
 
 #endif
