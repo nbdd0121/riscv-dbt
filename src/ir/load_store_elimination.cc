@@ -27,6 +27,9 @@ void Load_store_elimination::visit_memops(Node* node) {
     _visited.insert(node);
 
     // Visit memory predecessors first. This is a reverse post-order visit.
+    // TODO: This does not work well with existing Register_access_elimination, as it fails to extract data
+    // dependencies (not memory dependencies) between load/store register nodes. Maybe if we do something similar
+    // to what we have done in scheduler, we can get this issue resolved.
     for (auto op: node->operands()) {
         if (op.type() == Type::memory) {
             visit_memops(op.node());
@@ -48,7 +51,8 @@ void Load_store_elimination::visit_memops(Node* node) {
 void Load_store_elimination::fill_load_phi(Node* block) {
 
     // Populate value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    size_t regcount = _value_stack.size();
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
 
         // Rename PHI nodes first.
         auto phi_node = _phis[regnum].find(block);
@@ -67,7 +71,7 @@ void Load_store_elimination::fill_load_phi(Node* block) {
             _value_stack[regnum].push_back(item->operand(1));
 
         } else if (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context()) {
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].push_back({});
             }
         }
@@ -81,7 +85,7 @@ void Load_store_elimination::fill_load_phi(Node* block) {
             // TODO: What if two edges to the same node?
             size_t op_index = ref->operand_find(value);
 
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 auto phi_node = _phis[regnum].find(ref);
                 if (phi_node != _phis[regnum].end()) {
                     auto value_stack_top =_value_stack[regnum].back();
@@ -101,7 +105,7 @@ void Load_store_elimination::fill_load_phi(Node* block) {
     }
 
     // Pop values out from value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
             _value_stack[regnum].pop_back();
@@ -114,7 +118,7 @@ void Load_store_elimination::fill_load_phi(Node* block) {
             _value_stack[regnum].pop_back();
 
         } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].pop_back();
             }
         }
@@ -125,9 +129,10 @@ void Load_store_elimination::fill_load_phi(Node* block) {
 void Load_store_elimination::rename_load(Node* block) {
 
     // Indicate whether the value will be first in the basic block.
-    std::vector<uint8_t> not_first(66);
+    size_t regcount = _value_stack.size();
+    std::vector<uint8_t> not_first(regcount);
 
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
 
@@ -155,7 +160,6 @@ void Load_store_elimination::rename_load(Node* block) {
 
                 // Remove from memops.
                 return true;
-
             }
 
             _value_stack[regnum].push_back(item->value(1));
@@ -167,7 +171,7 @@ void Load_store_elimination::rename_load(Node* block) {
             not_first[regnum] = 1;
 
         } else if (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context()) {
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].push_back({});
                 not_first[regnum] = 1;
             }
@@ -183,7 +187,7 @@ void Load_store_elimination::rename_load(Node* block) {
     }
 
     // Pop values out from value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
             _value_stack[regnum].pop_back();
@@ -196,7 +200,7 @@ void Load_store_elimination::rename_load(Node* block) {
             _value_stack[regnum].pop_back();
 
         } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].pop_back();
             }
         }
@@ -214,10 +218,11 @@ void Load_store_elimination::eliminate_load() {
     Node dummy {Opcode::entry, {Type::none}, {}};
 
     // Build a working list for PHI node insertion.
-    std::vector<std::vector<Node*>> worklist(66);
+    size_t regcount = _value_stack.size();
+    std::vector<std::vector<Node*>> worklist(regcount);
     for (auto& pair: _memops) {
         auto block = pair.first;
-        std::vector<uint8_t> should_add(66);
+        std::vector<uint8_t> should_add(regcount);
 
         for (auto node: pair.second) {
             if (node->opcode() == Opcode::load_register || node->opcode() == Opcode::store_register) {
@@ -225,21 +230,21 @@ void Load_store_elimination::eliminate_load() {
                 should_add[regnum] = 1;
 
             } else if (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context()) {
-                for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                     should_add[regnum] = 1;
                 }
             }
         }
 
-        for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        for (uint16_t regnum = 0; regnum < regcount; regnum++) {
             if (should_add[regnum]) worklist[regnum].push_back(block);
         }
     }
 
     // Create PHI nodes based on dominance frontier. Do not let the graph to manage them right now, as they might be
     // invalidated.
-    _phis.resize(66);
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    _phis.resize(regcount);
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto& phi_map = _phis[regnum];
         auto list = std::move(worklist[regnum]);
         while (!list.empty()) {
@@ -271,7 +276,7 @@ void Load_store_elimination::eliminate_load() {
 
     rename_load(Block::get_target(_graph.entry()->value(0)));
 
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         for (auto& pair: _phis[regnum]) {
             pair.second->operands({});
         }
@@ -287,7 +292,8 @@ void Load_store_elimination::eliminate_load() {
 void Load_store_elimination::fill_store_phi(Node* block) {
 
     // Populate value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    size_t regcount = _value_stack.size();
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
 
         // Rename PHI nodes first.
         auto phi_node = _phis[regnum].find(block);
@@ -308,7 +314,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
         } else if (emu::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].push_back({});
             }
         }
@@ -319,7 +325,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
         if (value.opcode() == Opcode::entry) continue;
 
         auto node = static_cast<Paired*>(value.node())->mate();
-        for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        for (uint16_t regnum = 0; regnum < regcount; regnum++) {
             auto phi_node = _phis[regnum].find(node);
             if (phi_node != _phis[regnum].end()) {
                 auto value_stack_top = _value_stack[regnum].back();
@@ -338,7 +344,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
     }
 
     // Pop values out from value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
             _value_stack[regnum].pop_back();
@@ -353,7 +359,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
         } else if (emu::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].pop_back();
             }
         }
@@ -364,7 +370,8 @@ void Load_store_elimination::fill_store_phi(Node* block) {
 void Load_store_elimination::rename_store(Node* block) {
 
     // Populate value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    size_t regcount = _value_stack.size();
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
 
@@ -392,7 +399,7 @@ void Load_store_elimination::rename_store(Node* block) {
         } else if (emu::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].push_back({});
             }
         }
@@ -406,7 +413,7 @@ void Load_store_elimination::rename_store(Node* block) {
     }
 
     // Pop values out from value stack.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto phi_node = _phis[regnum].find(block);
         if (phi_node != _phis[regnum].end()) {
             _value_stack[regnum].pop_back();
@@ -421,7 +428,7 @@ void Load_store_elimination::rename_store(Node* block) {
         } else if (emu::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
-            for (uint16_t regnum = 0; regnum < 66; regnum++) {
+            for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                 _value_stack[regnum].pop_back();
             }
         }
@@ -442,10 +449,11 @@ void Load_store_elimination::eliminate_store() {
     Node dummy {Opcode::entry, {Type::none}, {}};
 
     // Build a working list for PHI node insertion.
-    std::vector<std::vector<Node*>> worklist(66);
+    size_t regcount = _value_stack.size();
+    std::vector<std::vector<Node*>> worklist(regcount);
     for (auto& pair: _memops) {
         auto block = pair.first;
-        std::vector<uint8_t> should_add(66);
+        std::vector<uint8_t> should_add(regcount);
 
         for (auto node: pair.second) {
             if (node->opcode() == Opcode::load_register || node->opcode() == Opcode::store_register) {
@@ -459,21 +467,21 @@ void Load_store_elimination::eliminate_store() {
                 // as an operation that can potentially clobber the registers. We assume CPU contexts cannot be
                 // retrieved elsewhere in the called function.
 
-                for (uint16_t regnum = 0; regnum < 66; regnum++) {
+                for (uint16_t regnum = 0; regnum < regcount; regnum++) {
                     should_add[regnum] = 1;
                 }
             }
         }
 
-        for (uint16_t regnum = 0; regnum < 66; regnum++) {
+        for (uint16_t regnum = 0; regnum < regcount; regnum++) {
             if (should_add[regnum]) worklist[regnum].push_back(block);
         }
     }
 
     // Create PHI nodes based on post-dominance frontier. They are used for track-keeping purposes only in this
     // pass. There usage will not escape this pass, so we will not let them to be managed by the graph.
-    _phis.resize(66);
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    _phis.resize(regcount);
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         auto& phi_map = _phis[regnum];
         auto list = std::move(worklist[regnum]);
         while (!list.empty()) {
@@ -517,7 +525,7 @@ void Load_store_elimination::eliminate_store() {
     }
 
     // Destory all temporary PHI nodes.
-    for (uint16_t regnum = 0; regnum < 66; regnum++) {
+    for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         for (auto& pair: _phis[regnum]) {
             pair.second->operands({});
         }

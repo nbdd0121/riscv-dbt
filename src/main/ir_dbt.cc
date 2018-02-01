@@ -183,7 +183,10 @@ void Ir_dbt::decode(emu::reg_t pc) {
         graph = riscv::compile(state_, basic_block);
 
         // Optimisation passes.
-        ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
+
+        // Cannot turn on this right now as more advance load/store elimination pass does not work well with the
+        // register acccess elimination pass.
+        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
         // Clean up memory.
@@ -262,7 +265,20 @@ void Ir_dbt::compile(emu::reg_t pc) {
         ir::analysis::Block block_analysis{graph_for_codegen};
         block_analysis.update_keepalive();
         block_analysis.simplify_graph();
-        ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph_for_codegen);
+
+        {
+            // We are making this regional, as simplify graph will break the dominance tree, so we need to reconstruct.
+            // TODO: Maybe find a way to incrementally update the tree when the control is simplified?
+            ir::analysis::Dominance dom(graph_for_codegen, block_analysis);
+            ir::analysis::Load_store_elimination elim{graph_for_codegen, block_analysis, dom, 66};
+            elim.eliminate_load();
+            elim.eliminate_store();
+            block_analysis.simplify_graph();
+        }
+
+        // Cannot turn this on - actually this is already quite useless as its eliminations are subset of load/store
+        // elimination. However it is sad that we cannot have nice parititioning of register accesses.
+        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph_for_codegen);
         ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.

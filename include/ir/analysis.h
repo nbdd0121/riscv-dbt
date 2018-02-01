@@ -135,9 +135,9 @@ private:
     std::vector<Node*>* _oplist;
 
 public:
-    Load_store_elimination(Graph& graph, Block& block_analysis, Dominance& dom):
+    Load_store_elimination(Graph& graph, Block& block_analysis, Dominance& dom, size_t regcount):
         _graph{graph}, _block_analysis{block_analysis}, _dom{dom},
-        _memops(66), _value_stack(66, std::vector<Value>{{}}) {
+        _memops(regcount), _value_stack(regcount, std::vector<Value>{{}}) {
 
         populate_memops();
     }
