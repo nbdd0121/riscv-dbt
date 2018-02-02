@@ -20,6 +20,7 @@ void Scheduler::schedule_node_early(Node* node) {
                 // Ignore block-ending nodes.
                 case Opcode::i_if:
                 case Opcode::jmp:
+                case Opcode::phi:
                     break;
                 default: {
                     ssize_t remaining = --_unsatisified_input_count[ref];
@@ -41,8 +42,20 @@ void Scheduler::schedule_node_late(Node* node) {
     Node* block = nullptr;
     for (auto value: node->values()) {
         for (auto ref: value.references()) {
-            ASSERT(_late[ref]);
-            block = _dominance.least_common_dominator(block, _late[ref]);
+            if (ref->opcode() != Opcode::phi) {
+                ASSERT(_late[ref]);
+                block = _dominance.least_common_dominator(block, _late[ref]);
+                continue;
+            }
+
+            for (size_t i = 1; i < ref->operand_count(); i++) {
+                if (ref->operand(i) == value) {
+                    block = _dominance.least_common_dominator(
+                        block,
+                        static_cast<Paired*>(ref->operand(0).node()->operand(i - 1).node())->mate()
+                    );
+                }
+            }
         }
     }
 
@@ -59,6 +72,13 @@ void Scheduler::schedule_block(Node* block) {
     _block = block;
     _list = &nodes;
     schedule_node_early(block);
+
+    // Also schedule all PHI nodes attached to the block.
+    for (auto ref: block->value(0).references()) {
+        if (ref->opcode() == Opcode::phi) {
+            schedule_node_early(ref);
+        }
+    }
 
     // Schedule rest of blocks in dominator tree order.
     for (auto next: _block_analysis.blocks()) {
@@ -94,6 +114,7 @@ void Scheduler::schedule() {
                 break;
             // We need to handle constant specially as they are satisfied by default.
             case Opcode::constant:
+            case Opcode::phi:
                 break;
             default:
                 ASSERT(node->operand_count());
@@ -139,6 +160,7 @@ void Scheduler::schedule() {
             case Opcode::exit:
             case Opcode::block:
             case Opcode::constant:
+            case Opcode::phi:
                 ASSERT(_late.find(node) == _late.end());
                 break;
             default:
