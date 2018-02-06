@@ -41,7 +41,6 @@ int main(int argc, const char **argv) {
 
     /* Arguments to be parsed */
     // By default we use id mmu since it is faster.
-    bool use_paging = false;
     bool use_flat = false;
     bool use_dbt = false;
     bool use_ir = true;
@@ -108,7 +107,7 @@ int main(int argc, const char **argv) {
     emu::Mmu *mmu = state.mmu.get();
 
     // Set sp to be the highest possible address.
-    emu::reg_t sp = use_paging ? 0x800000000000 : 0x10000000;
+    emu::reg_t sp = use_flat ? 0x10000000 : 0x30000000;
     mmu->allocate_page(sp - 0x800000, 0x800000);
 
     // This contains (guest) pointers to all argument strings.
