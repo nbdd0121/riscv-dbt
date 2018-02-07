@@ -14,8 +14,6 @@ using namespace x86::builder;
 
 static constexpr int volatile_register[] = {0, 1, 2, 6, 7, 8, 9, 10, 11};
 
-static uint64_t spill_area[128];
-
 static int register_id(x86::Register reg) {
     ASSERT(reg != x86::Register::none);
     return static_cast<uint8_t>(reg) & 0xF;
@@ -160,7 +158,7 @@ void Backend::spill_register(Register reg) {
     if (ptr == memory_location.end()) {
         Memory mem;
         stack_size -= 8;
-        mem = qword(Register::none + ((uintptr_t)spill_area - stack_size));
+        mem = qword(Register::rsp - (stack_size + 8));
         mem.size = get_type_size(value.type()) / 8;
         memory_location[value] = mem;
         move_location(value, mem);
@@ -795,6 +793,7 @@ void Backend::run() {
     // Generate epilogue.
     emit(push(Register::rbp));
     emit(mov(Register::rbp, Register::rdi));
+    emit(sub(Register::rsp, 8192));
 
     // Push exit to the block list to ease processing.
     blocks.push_back(_graph.exit());
@@ -857,6 +856,7 @@ void Backend::run() {
                 trampoline_loc.push_back(_encoder.buffer().size());
 
                 // Trampoline. It will be patched later.
+                emit(add(Register::rsp, 8192));
                 emit(pop(Register::rbp));
                 emit(mov(Register::rax, 0xCCCCCCCCC));
                 emit(ret());
@@ -887,10 +887,11 @@ void Backend::run() {
     // Patching trampolines.
     for (auto loc: trampoline_loc) {
         uintptr_t rip = reinterpret_cast<uintptr_t>(_encoder.buffer().data()) + loc;
-        util::write_as<uint64_t>(reinterpret_cast<void*>(rip + 3), rip);
+        util::write_as<uint64_t>(reinterpret_cast<void*>(rip + 10), rip);
     }
 
     if (exit_refcount) {
+        emit(add(Register::rsp, 8192));
         emit(pop(Register::rbp));
 
         // Return 0, meaning that nothing needs to be patched.

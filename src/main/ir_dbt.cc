@@ -83,7 +83,7 @@ static void generate_eh_frame(Ir_block& block) {
 
         // FDE
         // Length
-        0x24, 0x00, 0x00, 0x00,
+        0x28, 0x00, 0x00, 0x00,
         // CIE Pointer
         0x24, 0x00, 0x00, 0x00,
         // Initial location
@@ -98,8 +98,10 @@ static void generate_eh_frame(Ir_block& block) {
         0x0E, 0x10,
         // offset(rbp, cfa-16)
         0x86, 0x02,
+        // def_cfa_offset(8192+16)
+        0x0E, 0x90, 0x40,
         // Padding
-        0x00, 0x00,
+        0x00, 0x00, 0x00,
 
         0x00, 0x00, 0x00, 0x00
     };
@@ -161,8 +163,9 @@ void Ir_dbt::step(riscv::Context& context) {
         // Patch the trampoline.
         // mov rax, i64 => 48 B8 i64
         // jmp rax => FF E0
+        // 11 here indicates the length of the prologue.
         util::write_as<uint16_t>(_code_ptr_to_patch, 0xB848);
-        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
+        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 11);
         util::write_as<uint16_t>(_code_ptr_to_patch + 10, 0xE0FF);
     }
 
