@@ -25,11 +25,16 @@ Escape_formatter escape(const char *pointer, size_t length) {
     return { pointer, length };
 }
 
+Escape_formatter escape(const char *pointer) {
+    return { pointer, strlen(pointer) };
+}
+
 std::ostream& operator <<(std::ostream& stream, Escape_formatter helper) {
     // State_saver saver {stream};
 
     const char *start = helper.pointer;
-    const char *end = start + helper.length;
+    const char *end = start + (helper.length > 32 ? 32 : helper.length);
+    stream.put('"');
 
     // These are for escaped characters
     for (const char *pointer = helper.pointer; pointer != end; pointer++) {
@@ -55,6 +60,9 @@ std::ostream& operator <<(std::ostream& stream, Escape_formatter helper) {
     }
 
     if (end != start) stream.write(start, end - start);
+
+    stream.put('"');
+    if (helper.length > 32) stream << "...";
 
     return stream;
 }
@@ -226,6 +234,31 @@ reg_t syscall(
     bool strace = state->strace;
 
     switch (nr) {
+        case riscv::abi::Syscall_number::getcwd: {
+            char *buffer = reinterpret_cast<char*>(state->mmu->translate(arg0));
+            size_t size = arg1;
+            sreg_t ret = getcwd(buffer, size) ? 0 : -static_cast<sreg_t>(riscv::abi::Errno::einval);
+            if (strace) {
+                if (ret == 0) {
+                    util::log("getcwd({}, {}) = 0\n", escape(buffer), size);
+                } else {
+                    util::log("getcwd({}, {}) = {}\n", buffer, size, ret);
+                }
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::openat: {
+            auto pathname = reinterpret_cast<char*>(state->mmu->translate(arg1));
+            auto flags = convert_open_flags_to_host(arg2);
+
+            sreg_t ret = return_errno(openat(arg0, pathname, flags, arg3));
+            if (strace) {
+                util::log("openat({}, {}, {}, {}) = {}\n", (sreg_t)arg0, escape(pathname), arg2, arg3, ret);
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::close: {
             // Handle standard IO specially, pretending close is sucessful.
             sreg_t ret;
@@ -254,7 +287,7 @@ reg_t syscall(
             }
 
             if (strace) {
-                util::log("read({}, \"{}\", {}) = {}\n",
+                util::log("read({}, {}, {}) = {}\n",
                     arg0,
                     escape(buffer, arg2),
                     arg2,
@@ -282,7 +315,7 @@ reg_t syscall(
             }
 
             if (strace) {
-                util::log("write({}, \"{}\", {}) = {}\n",
+                util::log("write({}, {}, {}) = {}\n",
                     arg0,
                     escape(buffer, arg2),
                     arg2,
@@ -317,6 +350,14 @@ reg_t syscall(
         case riscv::abi::Syscall_number::exit: {
             if (strace) {
                 util::log("exit({}) = ?\n", arg0);
+            }
+
+            // Record the exit_code so that the emulator can correctly return it.
+            throw emu::Exit_control { static_cast<uint8_t>(arg0) };
+        }
+        case riscv::abi::Syscall_number::exit_group: {
+            if (strace) {
+                util::log("exit_group({}) = ?\n", arg0);
             }
 
             // Record the exit_code so that the emulator can correctly return it.
@@ -407,7 +448,7 @@ reg_t syscall(
             return ret;
         }
         default: {
-            std::cerr << "illegal syscall " << static_cast<int>(nr) << std::endl;
+            util::error("illegal syscall {}({}, {})\n", static_cast<int>(nr), arg0, arg1);
             return -static_cast<sreg_t>(riscv::abi::Errno::enosys);
         }
     }
