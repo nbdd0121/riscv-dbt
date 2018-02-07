@@ -107,7 +107,7 @@ int main(int argc, const char **argv) {
     emu::Mmu *mmu = state.mmu.get();
 
     // Set sp to be the highest possible address.
-    emu::reg_t sp = use_flat ? 0x10000000 : 0x30000000;
+    emu::reg_t sp = use_flat ? 0x10000000 : 0x7fff00000000;
     mmu->allocate_page(sp - 0x800000, 0x800000);
 
     // This contains (guest) pointers to all argument strings.

@@ -1,10 +1,10 @@
 LD = g++-7
 CXX = g++-7
 
-LD_FLAGS = -g -pie -Wl,-Ttext-segment=0x30000000
+LD_FLAGS = -g -pie -Wl,-Ttext-segment=0x7fff00000000
 CXX_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -Og -fno-stack-protector
 
-LD_RELEASE_FLAGS = -g -flto -O2 -pie -Wl,-Ttext-segment=0x30000000
+LD_RELEASE_FLAGS = -g -flto -O2 -pie -Wl,-Ttext-segment=0x7fff00000000
 CXX_RELEASE_FLAGS = -g -fPIE -std=c++17 -fconcepts -Wall -Wextra -Iinclude/ -O2 -march=native -DRELEASE=1 -flto -fno-stack-protector
 
 OBJS = \
