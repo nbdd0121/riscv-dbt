@@ -15,40 +15,55 @@
 
 namespace emu {
 
-reg_t load_elf(const char *filename, State& state) {
+struct Elf_file {
+    int fd = -1;
+    long file_size;
+    std::byte *memory = nullptr;
 
-    Mmu& mmu = *state.mmu;
+    ~Elf_file();
+
+    void load(const char* filename);
+    void validate();
+    std::string find_interpreter();
+};
+
+Elf_file::~Elf_file() {
+    if (fd != -1) {
+        close(fd);
+    }
+
+    if (memory == nullptr) {
+        munmap(memory, file_size);
+    }
+}
+
+void Elf_file::load(const char *filename) {
 
     // Open the file first
-    int fd = open(filename, O_RDONLY);
+    fd = open(filename, O_RDONLY);
     if (fd == -1) {
         throw std::runtime_error { "cannot open file" };
     }
 
-    // Make sure the file descriptor does not leak when this function returns.
-    SCOPE_EXIT {
-        close(fd);
-    };
-
     // Get the size of the file.
-    struct stat s;
-    int status = fstat(fd, &s);
-    if (status == -1) {
-        throw std::runtime_error { "cannot fstat file" };
+    {
+        struct stat s;
+        int status = fstat(fd, &s);
+        if (status == -1) {
+            throw std::runtime_error { "cannot fstat file" };
+        }
+
+        file_size = s.st_size;
     }
-    
+
     // Map the file to memory.
-    std::byte *memory = reinterpret_cast<std::byte*>(mmap(nullptr, s.st_size, PROT_READ, MAP_PRIVATE, fd, 0));
+    memory = reinterpret_cast<std::byte*>(mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0));
     if (memory == nullptr) {
         throw std::runtime_error { "cannot mmap file" };
     }
+}
 
-    // Make sure mmap does not leak.
-    SCOPE_EXIT {
-        munmap(memory, s.st_size);
-    };
-
-    // Parse the ELF header and load the binary into memory.
+void Elf_file::validate() {
     elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
 
     // Check the ELF magic numbers
@@ -57,7 +72,7 @@ reg_t load_elf(const char *filename, State& state) {
     }
 
     // We can only proceed with executable or dynamic binary.
-    if (header->e_type != elf::ET_EXEC || header->e_type == elf::ET_DYN) {
+    if (header->e_type != elf::ET_EXEC && header->e_type != elf::ET_DYN) {
         throw std::runtime_error { "the binary is not executable." };
     }
 
@@ -67,14 +82,35 @@ reg_t load_elf(const char *filename, State& state) {
     }
 
     // TODO: Also check for flags about ISA extensions
+}
 
-    // Look for interpreters (dynamically linked executable)
+std::string Elf_file::find_interpreter() {
+    elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
     for (int i = 0; i < header->e_phnum; i++) {
         elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
         if (h->p_type == elf::PT_INTERP) {
-            throw std::runtime_error { "sad. dynamic binaries are not yet supported." };
+            if (*reinterpret_cast<char*>(memory + h->p_offset + h->p_filesz - 1) != 0) {
+                throw std::runtime_error { "interpreter name should be null-terminated." };
+            }
+
+            return reinterpret_cast<char*>(memory + h->p_offset);
         }
     }
+
+    return {};
+}
+
+reg_t load_elf(const char *filename, State& state) {
+
+    Elf_file file;
+    file.load(filename);
+    file.validate();
+
+    Mmu& mmu = *state.mmu;
+
+    // Parse the ELF header and load the binary into memory.
+    auto memory = file.memory;
+    elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
 
     reg_t brk = 0;
     for (int i = 0; i < header->e_phnum; i++) {
@@ -107,6 +143,11 @@ reg_t load_elf(const char *filename, State& state) {
     state.brk = brk;
     state.heap_start = (brk + page_mask) &~ page_mask;
     state.heap_end = state.heap_start;
+
+    std::string interpreter = file.find_interpreter();
+    if (!interpreter.empty()) {
+        throw std::runtime_error { "sad. dynamic binaries are not yet supported." };
+    }
 
     return header->e_entry;
 }
