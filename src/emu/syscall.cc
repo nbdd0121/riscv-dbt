@@ -274,6 +274,13 @@ reg_t syscall(
 
             return ret;
         }
+        case riscv::abi::Syscall_number::lseek: {
+            sreg_t ret = return_errno(lseek(arg0, arg1, arg2));
+            if (strace) {
+                util::log("lseek({}, {}, {}) = {}\n", arg0, arg1, arg2, ret);
+            }
+            return ret;
+        }
         case riscv::abi::Syscall_number::read: {
             auto buffer = reinterpret_cast<char*>(state->mmu->translate(arg1));
 
@@ -421,6 +428,14 @@ reg_t syscall(
                 util::log("open({}, {}, {}) = {}\n", pathname, arg1, arg2, ret);
             }
 
+            return ret;
+        }
+        case riscv::abi::Syscall_number::unlink: {
+            auto pathname = reinterpret_cast<char*>(state->mmu->translate(arg0));
+            sreg_t ret = return_errno(unlink(pathname));
+            if (strace) {
+                util::log("unlink({}) = {}\n", escape(pathname), ret);
+            }
             return ret;
         }
         case riscv::abi::Syscall_number::stat: {

@@ -285,6 +285,7 @@ enum class Syscall_number {
     statx = 291,
 
     open = 1024,
+    unlink = 1026,
     stat = 1038,
 };
 
