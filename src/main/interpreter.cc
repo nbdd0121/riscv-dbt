@@ -17,13 +17,11 @@ void Interpreter::step(riscv::Context& context) {
         riscv::Decoder decoder {&state_, pc};
         basic_block = decoder.decode_basic_block();
 
-        // Post-processing by replacing auipc with lui.
-        // This is a little bit trick: we rely on the fact that handling of immediate format is done in the decoder
-        // instead of in the interpreter, so lui is implemented as write_rd(imm)
+        // Function step will assume the pc is pre-incremented, but this is clearly not the case for auipc. Therfore we
+        // preprocess all auipc instructions to compensate this.
         for (auto& inst: basic_block.instructions) {
             if (inst.opcode() == riscv::Opcode::auipc) {
-                inst.opcode(riscv::Opcode::lui);
-                inst.imm(inst.imm() + pc);
+                inst.imm(inst.imm() + (pc - basic_block.start_pc) + inst.length());
             }
             pc += inst.length();
         }
