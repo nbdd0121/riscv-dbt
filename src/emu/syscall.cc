@@ -235,7 +235,7 @@ reg_t syscall(
 
     switch (nr) {
         case riscv::abi::Syscall_number::getcwd: {
-            char *buffer = reinterpret_cast<char*>(state->mmu->translate(arg0));
+            char *buffer = reinterpret_cast<char*>(translate_address(arg0));
             size_t size = arg1;
             sreg_t ret = getcwd(buffer, size) ? 0 : -static_cast<sreg_t>(riscv::abi::Errno::einval);
             if (strace) {
@@ -249,7 +249,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::openat: {
-            auto pathname = reinterpret_cast<char*>(state->mmu->translate(arg1));
+            auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             auto flags = convert_open_flags_to_host(arg2);
 
             sreg_t ret = return_errno(openat(arg0, pathname, flags, arg3));
@@ -282,7 +282,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::read: {
-            auto buffer = reinterpret_cast<char*>(state->mmu->translate(arg1));
+            auto buffer = reinterpret_cast<char*>(translate_address(arg1));
 
             // Handle standard IO specially, since it is shared between emulator and guest program.
             sreg_t ret;
@@ -305,7 +305,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::write: {
-            auto buffer = reinterpret_cast<const char*>(state->mmu->translate(arg1));
+            auto buffer = reinterpret_cast<const char*>(translate_address(arg1));
 
             // Handle standard IO specially, since it is shared between emulator and guest program.
             sreg_t ret;
@@ -338,10 +338,8 @@ reg_t syscall(
 
             // When success, convert stat format to guest format.
             if (ret == 0) {
-                struct riscv::abi::stat guest_stat;
-                memset(&guest_stat, 0, sizeof(riscv::abi::stat));
-                convert_stat_from_host(&guest_stat, &host_stat);
-                state->mmu->copy_from_host(arg1, &guest_stat, sizeof(riscv::abi::stat));
+                struct riscv::abi::stat *guest_stat = reinterpret_cast<riscv::abi::stat*>(translate_address(arg1));
+                convert_stat_from_host(guest_stat, &host_stat);
             }
 
             if (strace) {
@@ -378,10 +376,8 @@ reg_t syscall(
             sreg_t ret = return_errno(gettimeofday(&host_tv, nullptr));
 
             if (ret == 0) {
-                struct riscv::abi::timeval guest_tv;
-                memset(&guest_tv, 0, sizeof(riscv::abi::timeval));
-                convert_timeval_from_host(&guest_tv, &host_tv);
-                state->mmu->copy_from_host(arg0, &guest_tv, sizeof(riscv::abi::timeval));
+                struct riscv::abi::timeval *guest_tv = reinterpret_cast<riscv::abi::timeval*>(translate_address(arg0));
+                convert_timeval_from_host(guest_tv, &host_tv);
             }
 
             if (strace) {
@@ -403,7 +399,7 @@ reg_t syscall(
                 if (new_heap_end > state->heap_end) {
 
                     // The heap needs to be expanded
-                    state->mmu->allocate_page(state->heap_end, new_heap_end - state->heap_end);
+                    allocate_page(state->heap_end, new_heap_end - state->heap_end);
                     state->heap_end = new_heap_end;
 
                 } else if (new_heap_end < state->heap_end) {
@@ -420,7 +416,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::open: {
-            auto pathname = state->mmu->translate(arg0);
+            auto pathname = translate_address(arg0);
             auto flags = convert_open_flags_to_host(arg1);
 
             sreg_t ret = return_errno(open(reinterpret_cast<char*>(pathname), flags, arg2));
@@ -431,7 +427,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::unlink: {
-            auto pathname = reinterpret_cast<char*>(state->mmu->translate(arg0));
+            auto pathname = reinterpret_cast<char*>(translate_address(arg0));
             sreg_t ret = return_errno(unlink(pathname));
             if (strace) {
                 util::log("unlink({}) = {}\n", escape(pathname), ret);
@@ -439,17 +435,15 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::stat: {
-            auto pathname = state->mmu->translate(arg0);
+            auto pathname = translate_address(arg0);
 
             struct stat host_stat;
             sreg_t ret = return_errno(stat(reinterpret_cast<char*>(pathname), &host_stat));
 
             // When success, convert stat format to guest format.
             if (ret == 0) {
-                struct riscv::abi::stat guest_stat;
-                memset(&guest_stat, 0, sizeof(riscv::abi::stat));
-                convert_stat_from_host(&guest_stat, &host_stat);
-                state->mmu->copy_from_host(arg1, &guest_stat, sizeof(riscv::abi::stat));
+                struct riscv::abi::stat *guest_stat = reinterpret_cast<riscv::abi::stat*>(translate_address(arg1));
+                convert_stat_from_host(guest_stat, &host_stat);
             }
 
             if (strace) {

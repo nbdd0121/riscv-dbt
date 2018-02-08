@@ -17,70 +17,33 @@ static constexpr reg_t page_size = 0x1000;
 static constexpr reg_t page_mask = page_size - 1;
 static constexpr reg_t log_page_size = 12;
 
-class Mmu {
-public:
-    virtual ~Mmu() {}
+inline std::byte* translate_address(reg_t address) {
+    return reinterpret_cast<std::byte*>(address);
+}
 
-public:
-    virtual std::byte* translate(reg_t address) = 0;
+void allocate_page(reg_t address, reg_t size);
 
-    virtual void allocate_page(reg_t address, reg_t size) = 0;
+template<typename T>
+inline T load_memory(reg_t address) {
+    return util::safe_read<T>(translate_address(address));
+}
 
-    template<typename T>
-    T load_memory(reg_t address) {
-        return util::safe_read<T>(translate(address));
-    }
+template<typename T>
+inline void store_memory(reg_t address, T value) {
+    util::safe_write<T>(translate_address(address), value);
+}
 
-    template<typename T>
-    void store_memory(reg_t address, T value) {
-        util::safe_write<T>(translate(address), value);
-    }
+inline void copy_from_host(reg_t address, const void* target, size_t size) {
+    util::safe_memcpy(translate_address(address), target, size);
+}
 
-    void copy_from_host(reg_t address, const void* target, size_t size) {
-        util::safe_memcpy(translate(address), target, size);
-    }
+inline void copy_to_host(reg_t address, void* target, size_t size) {
+    util::safe_memcpy(target, translate_address(address), size);
+}
 
-    void copy_to_host(reg_t address, void* target, size_t size) {
-        util::safe_memcpy(target, translate(address), size);
-    }
-
-    void zero_memory(reg_t address, size_t size) {
-        util::safe_memset(translate(address), 0, size);
-    }
-};
-
-class Flat_mmu final: public Mmu {
-public:
-
-    // These fields are exposed as public intentionally for now, since they are needed by the code generator.
-    std::byte *memory_;
-    size_t size_;
-
-    // Similarly, placed in mmu.cc since it contains mmap/munmap.
-    Flat_mmu(size_t size);
-    ~Flat_mmu();
-
-public:
-    virtual std::byte* translate(reg_t address) override {
-        return memory_ + address;
-    }
-
-    // Allocate memory at given virtual address and estabilish mapping.
-    // The address and size must be page-aligned.
-    virtual void allocate_page(reg_t address, reg_t size) override;
-};
-
-// This MMU performs identity mapping. The address space of the program and the emulator must not overlap.
-class Id_mmu final: public Mmu {
-public:
-    virtual std::byte* translate(reg_t address) override {
-        return reinterpret_cast<std::byte*>(address);
-    }
-
-    // Allocate memory at given virtual address and estabilish mapping.
-    // The address and size must be page-aligned.
-    virtual void allocate_page(reg_t address, reg_t size) override;
-};
+inline void zero_memory(reg_t address, size_t size) {
+    util::safe_memset(translate_address(address), 0, size);
+}
 
 }
 

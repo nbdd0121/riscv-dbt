@@ -151,25 +151,25 @@ void step(Context *context, Instruction inst) {
     switch (inst.opcode()) {
         /* LOAD */
         case Opcode::lb:
-            write_rd(sign_ext8(context->mmu->load_memory<uint8_t>(read_rs1() + inst.imm())));
+            write_rd(sign_ext8(emu::load_memory<uint8_t>(read_rs1() + inst.imm())));
             break;
         case Opcode::lh:
-            write_rd(sign_ext16(context->mmu->load_memory<uint16_t>(read_rs1() + inst.imm())));
+            write_rd(sign_ext16(emu::load_memory<uint16_t>(read_rs1() + inst.imm())));
             break;
         case Opcode::lw:
-            write_rd(sign_ext(context->mmu->load_memory<uint32_t>(read_rs1() + inst.imm())));
+            write_rd(sign_ext(emu::load_memory<uint32_t>(read_rs1() + inst.imm())));
             break;
         case Opcode::ld:
-            write_rd(context->mmu->load_memory<uint64_t>(read_rs1() + inst.imm()));
+            write_rd(emu::load_memory<uint64_t>(read_rs1() + inst.imm()));
             break;
         case Opcode::lbu:
-            write_rd(zero_ext8(context->mmu->load_memory<uint8_t>(read_rs1() + inst.imm())));
+            write_rd(zero_ext8(emu::load_memory<uint8_t>(read_rs1() + inst.imm())));
             break;
         case Opcode::lhu:
-            write_rd(zero_ext16(context->mmu->load_memory<uint16_t>(read_rs1() + inst.imm())));
+            write_rd(zero_ext16(emu::load_memory<uint16_t>(read_rs1() + inst.imm())));
             break;
         case Opcode::lwu:
-            write_rd(zero_ext(context->mmu->load_memory<uint32_t>(read_rs1() + inst.imm())));
+            write_rd(zero_ext(emu::load_memory<uint32_t>(read_rs1() + inst.imm())));
             break;
         /* MISC-MEM */
         case Opcode::fence:
@@ -223,16 +223,16 @@ void step(Context *context, Instruction inst) {
             break;
         /* STORE */
         case Opcode::sb:
-            context->mmu->store_memory<uint8_t>(read_rs1() + inst.imm(), read_rs2());
+            emu::store_memory<uint8_t>(read_rs1() + inst.imm(), read_rs2());
             break;
         case Opcode::sh:
-            context->mmu->store_memory<uint16_t>(read_rs1() + inst.imm(), read_rs2());
+            emu::store_memory<uint16_t>(read_rs1() + inst.imm(), read_rs2());
             break;
         case Opcode::sw:
-            context->mmu->store_memory<uint32_t>(read_rs1() + inst.imm(), read_rs2());
+            emu::store_memory<uint32_t>(read_rs1() + inst.imm(), read_rs2());
             break;
         case Opcode::sd:
-            context->mmu->store_memory<uint64_t>(read_rs1() + inst.imm(), read_rs2());
+            emu::store_memory<uint64_t>(read_rs1() + inst.imm(), read_rs2());
             break;
         /* OP */
         case Opcode::add:
@@ -516,13 +516,13 @@ void step(Context *context, Instruction inst) {
         // Stub implementations. Single thread only.
         case Opcode::lr_w: {
             reg_t addr = read_rs1();
-            write_rd(sign_ext(context->mmu->load_memory<uint32_t>(addr)));
+            write_rd(sign_ext(emu::load_memory<uint32_t>(addr)));
             context->lr = addr;
             break;
         }
         case Opcode::lr_d: {
             reg_t addr = read_rs1();
-            write_rd(context->mmu->load_memory<uint64_t>(addr));
+            write_rd(emu::load_memory<uint64_t>(addr));
             context->lr = addr;
             break;
         }
@@ -532,7 +532,7 @@ void step(Context *context, Instruction inst) {
                 write_rd(1);
                 return;
             }
-            context->mmu->store_memory<uint32_t>(addr, read_rs2());
+            emu::store_memory<uint32_t>(addr, read_rs2());
             write_rd(0);
             break;
         }
@@ -542,7 +542,7 @@ void step(Context *context, Instruction inst) {
                 write_rd(1);
                 return;
             }
-            context->mmu->store_memory<uint64_t>(addr, read_rs2());
+            emu::store_memory<uint64_t>(addr, read_rs2());
             write_rd(0);
             break;
         }
@@ -550,158 +550,158 @@ void step(Context *context, Instruction inst) {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
             if (inst.rd() != 0) {
-                write_rd(sign_ext(context->mmu->load_memory<uint32_t>(addr)));
+                write_rd(sign_ext(emu::load_memory<uint32_t>(addr)));
             }
-            context->mmu->store_memory<uint32_t>(addr, src);
+            emu::store_memory<uint32_t>(addr, src);
             break;
         }
         case Opcode::amoswap_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
             if (inst.rd() != 0) {
-                write_rd(context->mmu->load_memory<uint64_t>(addr));
+                write_rd(emu::load_memory<uint64_t>(addr));
             }
-            context->mmu->store_memory<uint64_t>(addr, src);
+            emu::store_memory<uint64_t>(addr, src);
             break;
         }
         case Opcode::amoadd_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, src + mem);
+            emu::store_memory<uint32_t>(addr, src + mem);
             break;
         }
         case Opcode::amoadd_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, src + mem);
+            emu::store_memory<uint64_t>(addr, src + mem);
             break;
         }
         case Opcode::amoand_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, src & mem);
+            emu::store_memory<uint32_t>(addr, src & mem);
             break;
         }
         case Opcode::amoand_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, src & mem);
+            emu::store_memory<uint64_t>(addr, src & mem);
             break;
         }
         case Opcode::amoor_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, src | mem);
+            emu::store_memory<uint32_t>(addr, src | mem);
             break;
         }
         case Opcode::amoor_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, src | mem);
+            emu::store_memory<uint64_t>(addr, src | mem);
             break;
         }
         case Opcode::amoxor_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, src ^ mem);
+            emu::store_memory<uint32_t>(addr, src ^ mem);
             break;
         }
         case Opcode::amoxor_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, src ^ mem);
+            emu::store_memory<uint64_t>(addr, src ^ mem);
             break;
         }
         case Opcode::amomin_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, std::min<int32_t>(src, mem));
+            emu::store_memory<uint32_t>(addr, std::min<int32_t>(src, mem));
             break;
         }
         case Opcode::amomin_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, std::min<int64_t>(src, mem));
+            emu::store_memory<uint64_t>(addr, std::min<int64_t>(src, mem));
             break;
         }
         case Opcode::amomax_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, std::max<int32_t>(src, mem));
+            emu::store_memory<uint32_t>(addr, std::max<int32_t>(src, mem));
             break;
         }
         case Opcode::amomax_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, std::max<int64_t>(src, mem));
+            emu::store_memory<uint64_t>(addr, std::max<int64_t>(src, mem));
             break;
         }
         case Opcode::amominu_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, std::min<uint32_t>(src, mem));
+            emu::store_memory<uint32_t>(addr, std::min<uint32_t>(src, mem));
             break;
         }
         case Opcode::amominu_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, std::min<uint64_t>(src, mem));
+            emu::store_memory<uint64_t>(addr, std::min<uint64_t>(src, mem));
             break;
         }
         case Opcode::amomaxu_w: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint32_t mem = context->mmu->load_memory<uint32_t>(addr);
+            uint32_t mem = emu::load_memory<uint32_t>(addr);
             write_rd(sign_ext(mem));
-            context->mmu->store_memory<uint32_t>(addr, std::max<uint32_t>(src, mem));
+            emu::store_memory<uint32_t>(addr, std::max<uint32_t>(src, mem));
             break;
         }
         case Opcode::amomaxu_d: {
             reg_t addr = read_rs1();
             reg_t src = read_rs2();
-            uint64_t mem = context->mmu->load_memory<uint64_t>(addr);
+            uint64_t mem = emu::load_memory<uint64_t>(addr);
             write_rd(mem);
-            context->mmu->store_memory<uint64_t>(addr, std::max<uint64_t>(src, mem));
+            emu::store_memory<uint64_t>(addr, std::max<uint64_t>(src, mem));
             break;
         }
 
         /* F-extension */
         case Opcode::flw: {
-            uint32_t value = context->mmu->load_memory<uint32_t>(read_rs1() + inst.imm());
+            uint32_t value = emu::load_memory<uint32_t>(read_rs1() + inst.imm());
             write_frd_s(util::read_as<softfp::Single>(&value));
             break;
         }
         case Opcode::fsw: {
             softfp::Single value = read_frs2_s();
-            context->mmu->store_memory<uint32_t>(read_rs1() + inst.imm(), util::read_as<uint32_t>(&value));
+            emu::store_memory<uint32_t>(read_rs1() + inst.imm(), util::read_as<uint32_t>(&value));
             break;
         }
         case Opcode::fadd_s:
@@ -858,13 +858,13 @@ void step(Context *context, Instruction inst) {
 
         /* D-extension */
         case Opcode::fld: {
-            uint64_t value = context->mmu->load_memory<uint64_t>(read_rs1() + inst.imm());
+            uint64_t value = emu::load_memory<uint64_t>(read_rs1() + inst.imm());
             write_frd_d(util::read_as<softfp::Double>(&value));
             break;
         }
         case Opcode::fsd: {
             softfp::Double value = read_frs2_d();
-            context->mmu->store_memory<uint64_t>(read_rs1() + inst.imm(), util::read_as<uint64_t>(&value));
+            emu::store_memory<uint64_t>(read_rs1() + inst.imm(), util::read_as<uint64_t>(&value));
             break;
         }
         case Opcode::fadd_d:

@@ -19,7 +19,8 @@
 
 static const char *usage_string = "Usage: {} [options] program [arguments...]\n\
 Options:\n\
-  --mmu=flat            Use a flat MMU but not identical mapping.\n\
+  --no-direct-memory    Disable generation of memory access instruction, use\n\
+                        call to helper function instead.\n\
   --strace              Log system calls.\n\
   --disassemble         Log decoded instructions.\n\
   --engine=interpreter  Use interpreter instead of dynamic binary translator.\n\
@@ -40,8 +41,6 @@ int main(int argc, const char **argv) {
     setup_fault_handler();
 
     /* Arguments to be parsed */
-    // By default we use id mmu since it is faster.
-    bool use_flat = false;
     bool use_dbt = false;
     bool use_ir = true;
 
@@ -61,8 +60,8 @@ int main(int argc, const char **argv) {
             break;
         }
 
-        if (strcmp(arg, "--mmu=flat") == 0) {
-            use_flat = true;
+        if (strcmp(arg, "--no-direct-memory") == 0) {
+            emu::no_direct_memory_access = true;
         } else if (strcmp(arg, "--strace") == 0) {
             state.strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
@@ -97,18 +96,9 @@ int main(int argc, const char **argv) {
     }
     const char *program_name = argv[arg_index];
 
-    // Before we setup argv and envp passed to the emulated program, we need to get the MMU functional first.
-    if (use_flat) {
-        state.mmu = std::make_unique<emu::Flat_mmu>(0x10000000);
-    } else {
-        state.mmu = std::make_unique<emu::Id_mmu>();
-    }
-
-    emu::Mmu *mmu = state.mmu.get();
-
     // Set sp to be the highest possible address.
-    emu::reg_t sp = use_flat ? 0x10000000 : 0x7fff00000000;
-    mmu->allocate_page(sp - 0x800000, 0x800000);
+    emu::reg_t sp = 0x7fff00000000;
+    emu::allocate_page(sp - 0x800000, 0x800000);
 
     // This contains (guest) pointers to all argument strings.
     std::vector<emu::reg_t> arg_pointers(argc - arg_index);
@@ -119,7 +109,7 @@ int main(int argc, const char **argv) {
 
         // Allocate memory from stack and copy to that region.
         sp -= arg_length;
-        mmu->copy_from_host(sp, argv[i], arg_length);
+        emu::copy_from_host(sp, argv[i], arg_length);
         arg_pointers[i - arg_index] = sp;
     }
 
@@ -137,11 +127,11 @@ int main(int argc, const char **argv) {
 
     // fill in argv
     sp -= (argc - arg_index) * sizeof(emu::reg_t);
-    mmu->copy_from_host(sp, arg_pointers.data(), (argc - arg_index) * sizeof(emu::reg_t));
+    emu::copy_from_host(sp, arg_pointers.data(), (argc - arg_index) * sizeof(emu::reg_t));
 
     // set argc
     sp -= sizeof(emu::reg_t);
-    mmu->store_memory<emu::reg_t>(sp, argc - arg_index);
+    emu::store_memory<emu::reg_t>(sp, argc - arg_index);
 
     state.context = std::make_unique<riscv::Context>();
     riscv::Context *context = state.context.get();
@@ -155,7 +145,6 @@ int main(int argc, const char **argv) {
         context->fp_registers[i] = 0xFFFFFFFFFFFFFFFF;
     }
 
-    context->mmu = mmu;
     context->state = &state;
 
     // x0 must always be 0

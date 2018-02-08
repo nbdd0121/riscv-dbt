@@ -25,7 +25,6 @@ struct Context {
 
     // These are not part of hart state, but reference to the global system states. Technically shared memory is also
     // global system state, but a pointer to MMU is placed here since it is frequently accessed.
-    emu::Mmu* mmu;
     emu::State *state;
 };
 

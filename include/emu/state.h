@@ -14,11 +14,8 @@ struct Context;
 
 namespace emu {
 
-class Mmu;
-
 struct State {
     std::unique_ptr<riscv::Context> context;
-    std::unique_ptr<Mmu> mmu;
 
     // The program/data break of the address space. original_brk represents the initial brk from information gathered
     // in elf. Both values are set initially to original_brk by elf_loader, and original_brk should not be be changed.
@@ -51,6 +48,9 @@ extern bool strict_exception;
 // Whether compilation performance counters should be enabled.
 extern bool monitor_performance;
 
+// Whether direct memory access or call to helper should be generated for guest memory access.
+extern bool no_direct_memory_access;
+
 // This is not really an error. However it shares some properties with an exception, as it needs to break out from
 // any nested controls and stop executing guest code.
 struct Exit_control: std::runtime_error {
@@ -58,7 +58,7 @@ struct Exit_control: std::runtime_error {
     Exit_control(uint8_t exit_code): std::runtime_error { "exit" }, exit_code {exit_code} {}
 };
 
-reg_t load_elf(const char *filename, State& mmu);
+reg_t load_elf(const char *filename, State& state);
 
 }
 

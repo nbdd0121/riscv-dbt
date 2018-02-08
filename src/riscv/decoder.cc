@@ -1060,7 +1060,7 @@ Instruction Decoder::decode(uint32_t bits) {
 }
 
 Instruction Decoder::decode_instruction() {
-    uint32_t bits = state_->mmu->load_memory<uint32_t>(pc_);
+    uint32_t bits = emu::load_memory<uint32_t>(pc_);
     Instruction inst = decode(bits);
     if (state_->disassemble) {
         Disassembler::print_instruction(pc_, bits, inst);

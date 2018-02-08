@@ -106,7 +106,6 @@ reg_t load_elf(const char *filename, State& state) {
     file.load(filename);
     file.validate();
 
-    Mmu& mmu = *state.mmu;
 
     // Parse the ELF header and load the binary into memory.
     auto memory = file.memory;
@@ -125,12 +124,12 @@ reg_t load_elf(const char *filename, State& state) {
             reg_t vaddr_end = h->p_vaddr + h->p_memsz;
             reg_t page_start = h->p_vaddr &~ page_mask;
             reg_t page_end = (vaddr_end + page_mask) &~ page_mask;
-            mmu.allocate_page(page_start, page_end - page_start);
+            allocate_page(page_start, page_end - page_start);
 
             // MMU should have memory zeroes at startup
-            mmu.zero_memory(h->p_vaddr + h->p_filesz, h->p_memsz - h->p_filesz);
+            zero_memory(h->p_vaddr + h->p_filesz, h->p_memsz - h->p_filesz);
             // TODO: This should be be mmapped instead of copied
-            mmu.copy_from_host(h->p_vaddr, memory + h->p_offset, h->p_filesz);
+            copy_from_host(h->p_vaddr, memory + h->p_offset, h->p_filesz);
 
             // Set brk to the address past the last program segment.
             if (vaddr_end > brk) {
