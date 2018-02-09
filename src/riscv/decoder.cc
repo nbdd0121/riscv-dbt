@@ -76,7 +76,7 @@ Instruction Decoder::decode(uint32_t bits) {
         using Ci_addi16sp_imm_field = util::Bitfield<int64_t, 12, 12, 4, 3, 5, 5, 2, 2, 6, 6, -1, 4>;
         using Css_swsp_imm_field = util::Bitfield<uint32_t, 8, 7, 12, 9, -1, 2>;
         using Css_sdsp_imm_field = util::Bitfield<uint32_t, 9, 7, 12, 10, -1, 3>;
-        using Ciw_imm_field = util::Bitfield<int64_t, 10, 7, 12, 11, 5, 5, 6, 6, -1, 2>;
+        using Ciw_imm_field = util::Bitfield<uint32_t, 10, 7, 12, 11, 5, 5, 6, 6, -1, 2>;
         using Cl_lw_imm_field = util::Bitfield<uint32_t, 5, 5, 12, 10, 6, 6, -1, 2>;
         using Cl_ld_imm_field = util::Bitfield<uint32_t, 6, 5, 12, 10, -1, 3>;
         using Cs_sw_imm_field = Cl_lw_imm_field;
