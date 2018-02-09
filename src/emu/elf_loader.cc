@@ -138,9 +138,12 @@ reg_t load_elf(const char *filename, State& state) {
         }
     }
 
+    // Align brk to page boundary.
+    brk = ((brk + page_mask) &~ page_mask);
+
     state.original_brk = brk;
     state.brk = brk;
-    state.heap_start = (brk + page_mask) &~ page_mask;
+    state.heap_start = brk;
     state.heap_end = state.heap_start;
 
     std::string interpreter = file.find_interpreter();
