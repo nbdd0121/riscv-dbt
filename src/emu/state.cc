@@ -2,6 +2,10 @@
 
 namespace emu {
 
+std::string sysroot = "/opt/riscv/sysroot";
+
+bool strace = false;
+
 bool strict_exception = false;
 
 bool monitor_performance = false;

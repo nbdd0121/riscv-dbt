@@ -25,9 +25,6 @@ struct State {
     reg_t heap_start;
     reg_t heap_end;
 
-    // A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
-    bool strace;
-
     // A flag to determine whether to print instruction out when it is decoded.
     bool disassemble;
 
@@ -41,6 +38,11 @@ struct State {
 // All parts of the emulator will share a global state. Originally global variable is avoided, but by doing so many
 // objects need to hold a reference to the state object, which incurs unnecessary overhead and complexity.
 // TODO: We will be shifting from the state struct to global variables gradually.
+
+extern std::string sysroot;
+
+// A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
+extern bool strace;
 
 // A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
 extern bool strict_exception;

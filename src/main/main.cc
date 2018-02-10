@@ -34,6 +34,7 @@ Options:\n\
   --inline-limit=<n>    Number of basic blocks that can be inlined in single\n\
                         compilation by the IR-based binary translator.\n\
   --monitor-performance Display metrics about performance in compilation phase.\n\
+  --sysroot             Change the sysroot to a non-default value.\n\
   --help                Display this help message.\n\
 ";
 
@@ -46,7 +47,6 @@ int main(int argc, const char **argv) {
     bool use_ir = true;
 
     emu::State state;
-    state.strace = false;
     state.disassemble = false;
     state.no_instret = true;
     state.inline_limit = 16;
@@ -64,7 +64,7 @@ int main(int argc, const char **argv) {
         if (strcmp(arg, "--no-direct-memory") == 0) {
             emu::no_direct_memory_access = true;
         } else if (strcmp(arg, "--strace") == 0) {
-            state.strace = true;
+            emu::strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
             state.disassemble = true;
         } else if (strcmp(arg, "--engine=dbt") == 0) {
@@ -81,6 +81,8 @@ int main(int argc, const char **argv) {
             state.inline_limit = atoi(arg + strlen("--inline-limit="));
         } else if (strcmp(arg, "--monitor-performance") == 0) {
             emu::monitor_performance = true;
+        } else if (strncmp(arg, "--sysroot=", strlen("--sysroot=")) == 0) {
+            emu::sysroot = arg + strlen("--sysroot=");
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;

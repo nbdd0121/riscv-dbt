@@ -280,6 +280,22 @@ int convert_mmap_flags_from_host(typename Abi::int_t flags) {
     return ret;
 }
 
+std::string path_buffer;
+const char* translate_path(const char* pathname) {
+    if (pathname[0] != '/' || emu::sysroot.empty()) return pathname;
+
+    // The file exists in sysroot, then use it.
+    path_buffer = emu::sysroot + pathname;
+    if (access(path_buffer.c_str(), F_OK) == 0) {
+        if (emu::strace) {
+            util::log("Translate {} to {}\n", pathname, path_buffer);
+        }
+        return path_buffer.c_str();
+    }
+
+    return pathname;
+}
+
 }
 
 namespace emu {
@@ -289,8 +305,6 @@ reg_t syscall(
     reg_t arg0, reg_t arg1, reg_t arg2, [[maybe_unused]] reg_t arg3, [[maybe_unused]] reg_t arg4, [[maybe_unused]] reg_t arg5
 ) {
     using Abi = riscv::abi::Abi;
-
-    bool strace = state->strace;
 
     switch (nr) {
         case riscv::abi::Syscall_number::getcwd: {
@@ -311,7 +325,7 @@ reg_t syscall(
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             auto flags = convert_open_flags_to_host(arg2);
 
-            sreg_t ret = return_errno(openat(arg0, pathname, flags, arg3));
+            sreg_t ret = return_errno(openat(arg0, translate_path(pathname), flags, arg3));
             if (strace) {
                 util::log("openat({}, {}, {}, {}) = {}\n", (sreg_t)arg0, escape(pathname), arg2, arg3, ret);
             }
@@ -392,6 +406,31 @@ reg_t syscall(
                     arg2,
                     ret
                 );
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::fstatat: {
+            auto pathname = reinterpret_cast<char*>(translate_address(arg1));
+
+            struct stat host_stat;
+            sreg_t ret = return_errno(fstatat(arg0, translate_path(pathname), &host_stat, arg3));
+
+            // When success, convert stat format to guest format.
+            if (ret == 0) {
+                struct riscv::abi::stat *guest_stat = reinterpret_cast<riscv::abi::stat*>(translate_address(arg2));
+                convert_stat_from_host(guest_stat, &host_stat);
+            }
+
+            if (strace) {
+                if (ret == 0) {
+                    util::log(
+                        "fstatat({}, {}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n",
+                        arg0, escape(pathname), host_stat.st_mode, host_stat.st_size, arg3
+                    );
+                } else {
+                    util::log("fstatat({}, {}, {:#x}, {}) = {}\n", arg0, escape(pathname), arg2, arg3, ret);
+                }
             }
 
             return ret;
@@ -533,10 +572,10 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::open: {
-            auto pathname = translate_address(arg0);
+            auto pathname = reinterpret_cast<char*>(translate_address(arg0));
             auto flags = convert_open_flags_to_host(arg1);
 
-            sreg_t ret = return_errno(open(reinterpret_cast<char*>(pathname), flags, arg2));
+            sreg_t ret = return_errno(open(translate_path(pathname), flags, arg2));
             if (strace) {
                 util::log("open({}, {}, {}) = {}\n", pathname, arg1, arg2, ret);
             }
@@ -545,17 +584,17 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::unlink: {
             auto pathname = reinterpret_cast<char*>(translate_address(arg0));
-            sreg_t ret = return_errno(unlink(pathname));
+            sreg_t ret = return_errno(unlink(translate_path(pathname)));
             if (strace) {
                 util::log("unlink({}) = {}\n", escape(pathname), ret);
             }
             return ret;
         }
         case riscv::abi::Syscall_number::stat: {
-            auto pathname = translate_address(arg0);
+            auto pathname = reinterpret_cast<char*>(translate_address(arg0));
 
             struct stat host_stat;
-            sreg_t ret = return_errno(stat(reinterpret_cast<char*>(pathname), &host_stat));
+            sreg_t ret = return_errno(stat(translate_path(pathname), &host_stat));
 
             // When success, convert stat format to guest format.
             if (ret == 0) {
