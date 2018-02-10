@@ -1,6 +1,7 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
+#include <random>
 #include <vector>
 
 #include "emu/mmu.h"
@@ -116,22 +117,42 @@ int main(int argc, const char **argv) {
     // Align the stack to 8-byte boundary.
     sp &= ~7;
 
+    auto push = [&sp](emu::reg_t value) {
+        sp -= sizeof(emu::reg_t);
+        emu::store_memory<emu::reg_t>(sp, value);
+    };
+
+    // Random data
+    {
+        std::random_device rd;
+        push(rd());
+        push(rd());
+        push(rd());
+        push(rd());
+    }
+
+    emu::reg_t random_data = sp;
+
     // AT_NULL = 0
-    sp -= 2 * sizeof(emu::reg_t);
+    push(0);
+    push(0);
+
+    // AT_RANDOM = random_data
+    push(random_data);
+    push(25);
 
     // envp = 0
-    sp -= sizeof(emu::reg_t);
+    push(0);
 
     // argv[argc] = 0
-    sp -= sizeof(emu::reg_t);
+    push(0);
 
     // fill in argv
     sp -= (argc - arg_index) * sizeof(emu::reg_t);
     emu::copy_from_host(sp, arg_pointers.data(), (argc - arg_index) * sizeof(emu::reg_t));
 
     // set argc
-    sp -= sizeof(emu::reg_t);
-    emu::store_memory<emu::reg_t>(sp, argc - arg_index);
+    push(argc - arg_index);
 
     state.context = std::make_unique<riscv::Context>();
     riscv::Context *context = state.context.get();
