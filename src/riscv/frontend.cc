@@ -275,6 +275,7 @@ void Frontend::compile(const Basic_block& block) {
                 last_memory = builder.store_register(last_memory, inst.rd(), imm_value);
                 break;
             }
+            case Opcode::fence: break;
             case Opcode::lb: emit_load(inst, ir::Type::i8, true); break;
             case Opcode::lh: emit_load(inst, ir::Type::i16, true); break;
             case Opcode::lw: emit_load(inst, ir::Type::i32, true); break;

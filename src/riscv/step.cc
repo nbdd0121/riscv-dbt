@@ -173,7 +173,9 @@ void step(Context *context, Instruction inst) {
             break;
         /* MISC-MEM */
         case Opcode::fence:
+            break;
         case Opcode::fence_i:
+            context->executor->flush_cache();
             break;
         /* OP-IMM */
         case Opcode::addi:

@@ -6,6 +6,7 @@
 
 #include "emu/typedef.h"
 #include "ir/node.h"
+#include "main/executor.h"
 #include "util/code_buffer.h"
 
 namespace emu {
@@ -18,7 +19,7 @@ struct Context;
 
 struct Ir_block;
 
-class Ir_dbt {
+class Ir_dbt final: public Executor {
 private:
     emu::State& state_;
 
@@ -33,6 +34,7 @@ private:
     size_t total_block_compiled = 0;
 
     std::byte* _code_ptr_to_patch = nullptr;
+    bool _need_cache_flush = false;
 
 public:
     Ir_dbt(emu::State& state) noexcept;
@@ -40,6 +42,7 @@ public:
     void step(riscv::Context& context);
     void decode(emu::reg_t pc);
     void compile(emu::reg_t pc);
+    virtual void flush_cache() override;
 };
 
 #endif

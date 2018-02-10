@@ -158,16 +158,19 @@ int main(int argc, const char **argv) {
     try {
         if (use_ir) {
             Ir_dbt executor { state };
+            context->executor = &executor;
             while (true) {
                 executor.step(*context);
             }
         } else if (use_dbt) {
             Dbt_runtime executor { state };
+            context->executor = &executor;
             while (true) {
                 executor.step(*context);
             }
         } else {
             Interpreter executor { state };
+            context->executor = &executor;
             while (true) {
                 executor.step(*context);
             }

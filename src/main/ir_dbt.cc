@@ -200,6 +200,13 @@ void Ir_dbt::decode(emu::reg_t pc) {
 void Ir_dbt::compile(emu::reg_t pc) {
     const ptrdiff_t tag = (pc >> 1) & 4095;
 
+    // Check the flush flag here, if it is true then we need to flush cache entries.
+    if (_need_cache_flush) {
+        inst_cache_.clear();
+        _need_cache_flush = false;
+    }
+
+
     decode(pc);
     auto& block_ptr = inst_cache_[pc];
     ASSERT(block_ptr);
@@ -313,4 +320,12 @@ void Ir_dbt::compile(emu::reg_t pc) {
     // Update tag to reflect newly compiled code.
     icache_[tag] = block_ptr->code.data();
     icache_tag_[tag] = pc;
+}
+
+void Ir_dbt::flush_cache() {
+    for (int i = 0; i < 4096; i++)
+        icache_tag_[i] = 0;
+
+    // As all cache tags are cleared, next time method compile will be called. We can check the flag there.
+    _need_cache_flush = true;
 }

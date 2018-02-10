@@ -1,6 +1,7 @@
 #ifndef RISCV_STATE_H
 #define RISCV_STATE_H
 
+#include "main/executor.h"
 #include "riscv/typedef.h"
 
 namespace emu {
@@ -26,6 +27,7 @@ struct Context {
     // These are not part of hart state, but reference to the global system states. Technically shared memory is also
     // global system state, but a pointer to MMU is placed here since it is frequently accessed.
     emu::State *state;
+    Executor *executor;
 };
 
 class Instruction;

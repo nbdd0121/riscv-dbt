@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "emu/typedef.h"
+#include "main/executor.h"
 #include "util/code_buffer.h"
 
 namespace emu {
@@ -23,7 +24,7 @@ class Code_buffer;
 
 struct Dbt_block;
 
-class Dbt_runtime {
+class Dbt_runtime final: public Executor {
 private:
     emu::State& state_;
 
@@ -41,6 +42,7 @@ public:
     ~Dbt_runtime();
 
     void step(riscv::Context& context);
+    virtual void flush_cache() override;
 
     friend class Dbt_compiler;
 };

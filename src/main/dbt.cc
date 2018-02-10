@@ -381,14 +381,9 @@ void Dbt_compiler::compile(emu::reg_t pc) {
         case riscv::Opcode::bltu: emit_branch(inst, pc_diff, x86::Condition_code::below); break;
         case riscv::Opcode::bgeu: emit_branch(inst, pc_diff, x86::Condition_code::above_equal); break;
         case riscv::Opcode::fence_i: {
-            void (*callback)(Dbt_runtime&) = [](Dbt_runtime& runtime) {
-                for (int i = 0; i < 4096; i++)
-                    runtime.icache_tag_[i] = 0;
-                runtime.inst_cache_.clear();
-            };
             *this << add(qword(memory_of(pc)), pc_diff);
             *this << mov(x86::Register::rdi, reinterpret_cast<uintptr_t>(&runtime_));
-            *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(callback));
+            *this << mov(x86::Register::rax, reinterpret_cast<uintptr_t>(AS_FUNCTION_POINTER(&Dbt_runtime::flush_cache)));
             *this << pop(x86::Register::rbp);
             *this << jmp(x86::Register::rax);
             break;
@@ -468,6 +463,12 @@ void Dbt_compiler::generate_eh_frame() {
     util::write_as<uint64_t>(cie + 0x39, reinterpret_cast<uint64_t>(&block_));
 
     __register_frame(cie);
+}
+
+void Dbt_runtime::flush_cache() {
+    for (int i = 0; i < 4096; i++)
+        icache_tag_[i] = 0;
+    inst_cache_.clear();
 }
 
 void Dbt_compiler::emit_move(int rd, int rs) {
