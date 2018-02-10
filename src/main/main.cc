@@ -174,6 +174,8 @@ int main(int argc, const char **argv) {
     context->registers[0] = 0;
     // sp
     context->registers[2] = sp;
+    // libc adds this value into exit hook, so we need to make sure it is zero.
+    context->registers[10] = 0;
     context->fcsr = 0;
     context->instret = 0;
     context->lr = 0;
