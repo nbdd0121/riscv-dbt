@@ -461,6 +461,35 @@ struct timeval {
     long_t tv_usec;
 };
 
+struct Abi {
+    using int_t = int32_t;
+
+    enum {
+        guest_UTSNAME_LENGTH = 65,
+        guest_PROT_READ = 1,
+        guest_PROT_WRITE = 2,
+        guest_PROT_EXEC = 4,
+        guest_MAP_SHARED = 1,
+        guest_MAP_PRIVATE = 2,
+        guest_MAP_FIXED = 0x10,
+        guest_MAP_ANON = 0x20,
+    };
+
+    struct iovec {
+        ulong_t iov_base;
+        ulong_t iov_len;
+    };
+
+    struct utsname {
+        char sysname[guest_UTSNAME_LENGTH];
+        char nodename[guest_UTSNAME_LENGTH];
+        char release[guest_UTSNAME_LENGTH];
+        char version[guest_UTSNAME_LENGTH];
+        char machine[guest_UTSNAME_LENGTH];
+        char domainname[guest_UTSNAME_LENGTH];
+    };
+};
+
 }
 
 #endif

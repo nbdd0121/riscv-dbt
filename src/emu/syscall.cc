@@ -2,8 +2,11 @@
 #include <cstring>
 #include <fcntl.h>
 #include <iomanip>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/uio.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 #include <vector>
 
@@ -214,6 +217,41 @@ void convert_timeval_from_host(riscv::abi::timeval *guest_tv, struct timeval *ho
     guest_tv->tv_usec  = host_tv->tv_usec;
 }
 
+template<typename Abi>
+constexpr bool need_iovec_conversion() {
+    return sizeof(struct iovec) != sizeof(typename Abi::iovec) ||
+           alignof(struct iovec) != alignof(typename Abi::iovec) ||
+           offsetof(struct iovec, iov_base) != offsetof(typename Abi::iovec, iov_base) ||
+           offsetof(struct iovec, iov_len) != offsetof(typename Abi::iovec, iov_len);
+}
+
+template<typename Abi>
+void convert_iovec_to_host(struct iovec *host_iov, const typename Abi::iovec* guest_iov) {
+    host_iov->iov_base = emu::translate_address(guest_iov->iov_base);
+    host_iov->iov_len = guest_iov->iov_len;
+}
+
+template<typename Abi>
+constexpr bool need_utsname_conversion() {
+
+    // Assume all fields have the same length, so if the total size is equal, no conversion would be needed.
+    return sizeof(struct utsname) != sizeof(typename Abi::utsname) ||
+           offsetof(struct iovec, iov_base) != offsetof(typename Abi::iovec, iov_base) ||
+           offsetof(struct iovec, iov_len) != offsetof(typename Abi::iovec, iov_len);
+}
+
+template<typename Abi>
+void convert_utsname_from_host(typename Abi::utsname *guest_utsname, const struct utsname *host_utsname) {
+    strncpy(guest_utsname->sysname, host_utsname->sysname, Abi::guest_UTSNAME_LENGTH - 1);
+    strncpy(guest_utsname->nodename, host_utsname->nodename, Abi::guest_UTSNAME_LENGTH - 1);
+    strncpy(guest_utsname->release, host_utsname->release, Abi::guest_UTSNAME_LENGTH - 1);
+    strncpy(guest_utsname->version, host_utsname->version, Abi::guest_UTSNAME_LENGTH - 1);
+    strncpy(guest_utsname->machine, host_utsname->machine, Abi::guest_UTSNAME_LENGTH - 1);
+#ifdef _GNU_SOURCE
+    strncpy(guest_utsname->domainname, host_utsname->domainname, Abi::guest_UTSNAME_LENGTH - 1);
+#endif
+}
+
 // When an error occurs during a system call, Linux will return the negated value of the error number. Library
 // functions, on the other hand, usually return -1 and set errno instead.
 // Helper for converting library functions which use global variable `errno` to carry error information to a linux
@@ -221,6 +259,25 @@ void convert_timeval_from_host(riscv::abi::timeval *guest_tv, struct timeval *ho
 emu::sreg_t return_errno(emu::sreg_t val) {
     if (val != -1) return val;
     return -static_cast<emu::sreg_t>(convert_errno_from_host(errno));
+}
+
+template<typename Abi>
+int convert_mmap_prot_from_host(typename Abi::int_t prot) {
+    int ret = 0;
+    if (prot & Abi::guest_PROT_READ) ret |= PROT_READ;
+    if (prot & Abi::guest_PROT_WRITE) ret |= PROT_WRITE;
+    if (prot & Abi::guest_PROT_EXEC) ret |= PROT_EXEC;
+    return ret;
+}
+
+template<typename Abi>
+int convert_mmap_flags_from_host(typename Abi::int_t flags) {
+    int ret = 0;
+    if (flags & Abi::guest_MAP_SHARED) ret |= MAP_SHARED;
+    if (flags & Abi::guest_MAP_PRIVATE) ret |= MAP_PRIVATE;
+    if (flags & Abi::guest_MAP_FIXED) ret |= MAP_FIXED;
+    if (flags & Abi::guest_MAP_ANON) ret |= MAP_ANON;
+    return ret;
 }
 
 }
@@ -231,6 +288,8 @@ reg_t syscall(
     State *state, riscv::abi::Syscall_number nr,
     reg_t arg0, reg_t arg1, reg_t arg2, [[maybe_unused]] reg_t arg3, [[maybe_unused]] reg_t arg4, [[maybe_unused]] reg_t arg5
 ) {
+    using Abi = riscv::abi::Abi;
+
     bool strace = state->strace;
 
     switch (nr) {
@@ -285,13 +344,7 @@ reg_t syscall(
             auto buffer = reinterpret_cast<char*>(translate_address(arg1));
 
             // Handle standard IO specially, since it is shared between emulator and guest program.
-            sreg_t ret;
-            if (arg0 == 0) {
-                std::cin.read(buffer, arg2);
-                ret = arg2;
-            } else {
-                ret = return_errno(read(arg0, buffer, arg2));
-            }
+            sreg_t ret = return_errno(read(arg0, buffer, arg2));
 
             if (strace) {
                 util::log("read({}, {}, {}) = {}\n",
@@ -307,24 +360,35 @@ reg_t syscall(
         case riscv::abi::Syscall_number::write: {
             auto buffer = reinterpret_cast<const char*>(translate_address(arg1));
 
-            // Handle standard IO specially, since it is shared between emulator and guest program.
-            sreg_t ret;
-            if (arg0 == 1) {
-                std::cout.write(buffer, arg2);
-                std::cout << std::flush;
-                ret = arg2;
-            } else if (arg0 == 2) {
-                std::cerr.write(buffer, arg2);
-                std::cerr << std::flush;
-                ret = arg2;
-            } else {
-                ret = return_errno(write(arg0, buffer, arg2));
-            }
+            sreg_t ret = return_errno(write(arg0, buffer, arg2));
 
             if (strace) {
                 util::log("write({}, {}, {}) = {}\n",
                     arg0,
                     escape(buffer, arg2),
+                    arg2,
+                    ret
+                );
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::writev: {
+            sreg_t ret;
+            if constexpr (need_iovec_conversion<Abi>()) {
+                std::vector<struct iovec> host_iov(arg2);
+                Abi::iovec *guest_iov = reinterpret_cast<Abi::iovec*>(translate_address(arg1));
+                for (unsigned i = 0; i < arg2; i++) convert_iovec_to_host<Abi>(&host_iov[i], &guest_iov[i]);
+                ret = return_errno(writev(arg0, host_iov.data(), arg2));
+
+            } else {
+                ret = return_errno(writev(arg0, reinterpret_cast<struct iovec*>(translate_address(arg1)), arg2));
+            }
+
+            if (strace) {
+                util::log("writev({}, {}, {}) = {}\n",
+                    arg0,
+                    arg1,
                     arg2,
                     ret
                 );
@@ -367,6 +431,25 @@ reg_t syscall(
 
             // Record the exit_code so that the emulator can correctly return it.
             throw emu::Exit_control { static_cast<uint8_t>(arg0) };
+        }
+        case riscv::abi::Syscall_number::uname: {
+            sreg_t ret;
+            if constexpr (need_utsname_conversion<Abi>()) {
+                struct utsname host_utsname;
+                ret = return_errno(uname(&host_utsname));
+                convert_utsname_from_host<Abi>(
+                    reinterpret_cast<Abi::utsname*>(translate_address(arg0)), &host_utsname
+                );
+
+            } else {
+                ret = return_errno(uname(reinterpret_cast<struct utsname*>(translate_address(arg0))));
+            }
+
+            if (strace) {
+                util::log("uname({:#x}) = {}\n", arg0, ret);
+            }
+
+            return ret;
         }
         case riscv::abi::Syscall_number::gettimeofday: {
             struct timeval host_tv;
@@ -413,6 +496,40 @@ reg_t syscall(
             if (strace) {
                 util::log("brk({}) = {}\n", pointer(arg0), pointer(ret));
             }
+            return ret;
+        }
+        case riscv::abi::Syscall_number::mmap: {
+            int prot = convert_mmap_prot_from_host<Abi>(arg2);
+
+            // For PROT_EXEC request we translate it into PROT_READ, as we need to interpret it.
+            if (prot & PROT_EXEC) {
+                prot = (prot &~ PROT_EXEC) | PROT_READ;
+            }
+
+            int flags = convert_mmap_flags_from_host<Abi>(arg3);
+            reg_t ret = reinterpret_cast<reg_t>(
+                mmap(reinterpret_cast<void*>(arg0), arg1, prot, flags, arg4, arg5)
+            );
+
+            if (strace) {
+                util::error("mmap({:#x}, {}, {}, {}, {}, {}) = {:#x}\n", arg0, arg1, arg2, arg3, arg4, arg5, ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::mprotect: {
+            int prot = convert_mmap_prot_from_host<Abi>(arg2);
+
+            // For PROT_EXEC request we translate it into PROT_READ, as we need to interpret it.
+            if (prot & PROT_EXEC) {
+                prot = (prot &~ PROT_EXEC) | PROT_READ;
+            }
+
+            sreg_t ret = return_errno(mprotect(translate_address(arg0), arg1, prot));
+            if (strace) {
+                util::error("mprotect({:#x}, {}, {}) = {:#x}\n", arg0, arg1, arg2, ret);
+            }
+
             return ret;
         }
         case riscv::abi::Syscall_number::open: {
