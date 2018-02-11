@@ -321,6 +321,16 @@ reg_t syscall(
 
             return ret;
         }
+        case riscv::abi::Syscall_number::faccessat: {
+            auto pathname = reinterpret_cast<char*>(translate_address(arg1));
+            sreg_t ret = return_errno(faccessat(arg0, translate_path(pathname), arg2, arg3));
+
+            if (strace) {
+                util::log("faccessat({}, {}, {}, {}) = {}\n", arg0, escape(pathname), arg2, arg3, ret);
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::openat: {
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             auto flags = convert_open_flags_to_host(arg2);
@@ -512,6 +522,38 @@ reg_t syscall(
 
             return ret;
         }
+        case riscv::abi::Syscall_number::getuid: {
+            reg_t ret = getuid();
+            if (strace) {
+                util::log("getuid() = {}\n", ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::geteuid: {
+            reg_t ret = geteuid();
+            if (strace) {
+                util::log("geteuid() = {}\n", ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::getgid: {
+            reg_t ret = getgid();
+            if (strace) {
+                util::log("getgid() = {}\n", ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::getegid: {
+            reg_t ret = getegid();
+            if (strace) {
+                util::log("getegid() = {}\n", ret);
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::brk: {
             if (arg0 < state->original_brk) {
                 // Cannot reduce beyond original_brk
@@ -537,6 +579,14 @@ reg_t syscall(
             }
             return ret;
         }
+        case riscv::abi::Syscall_number::munmap: {
+            reg_t ret = return_errno(munmap(translate_address(arg0), arg1));
+            if (strace) {
+                util::error("munmap({:#x}, {}) = {}\n", arg0, arg1, ret);
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::mmap: {
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
 
@@ -546,10 +596,7 @@ reg_t syscall(
             }
 
             int flags = convert_mmap_flags_from_host<Abi>(arg3);
-            reg_t ret = reinterpret_cast<reg_t>(
-                mmap(reinterpret_cast<void*>(arg0), arg1, prot, flags, arg4, arg5)
-            );
-
+            reg_t ret = reinterpret_cast<reg_t>(mmap(translate_address(arg0), arg1, prot, flags, arg4, arg5));
             if (strace) {
                 util::error("mmap({:#x}, {}, {}, {}, {}, {}) = {:#x}\n", arg0, arg1, arg2, arg3, arg4, arg5, ret);
             }
