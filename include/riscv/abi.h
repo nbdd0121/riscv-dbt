@@ -465,6 +465,7 @@ struct Abi {
     using int_t = int32_t;
 
     enum {
+        guest_AT_FDCWD = -100,
         guest_UTSNAME_LENGTH = 65,
         guest_PROT_READ = 1,
         guest_PROT_WRITE = 2,

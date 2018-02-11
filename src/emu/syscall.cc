@@ -53,7 +53,7 @@ std::ostream& operator <<(std::ostream& stream, Escape_formatter helper) {
             case '\\': stream << "\\\\"; break;
             case '\n': stream << "\\n"; break;
             case '\t': stream << "\\t"; break;
-            default: 
+            default:
                 stream << "\\x" << std::setfill('0') << std::setw(2) << std::hex
                        << static_cast<int>(static_cast<unsigned char>(*pointer));
                 break;
@@ -321,23 +321,42 @@ reg_t syscall(
 
             return ret;
         }
-        case riscv::abi::Syscall_number::faccessat: {
+        case riscv::abi::Syscall_number::unlinkat: {
+            int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
-            sreg_t ret = return_errno(faccessat(arg0, translate_path(pathname), arg2, arg3));
+            sreg_t ret = return_errno(unlinkat(dirfd, translate_path(pathname), arg2));
 
             if (strace) {
-                util::log("faccessat({}, {}, {}, {}) = {}\n", arg0, escape(pathname), arg2, arg3, ret);
+                util::log(
+                    "unlinkat({}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, ret
+                );
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::faccessat: {
+            int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
+            auto pathname = reinterpret_cast<char*>(translate_address(arg1));
+            sreg_t ret = return_errno(faccessat(dirfd, translate_path(pathname), arg2, arg3));
+
+            if (strace) {
+                util::log(
+                    "faccessat({}, {}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, arg3, ret
+                );
             }
 
             return ret;
         }
         case riscv::abi::Syscall_number::openat: {
+            int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             auto flags = convert_open_flags_to_host(arg2);
 
-            sreg_t ret = return_errno(openat(arg0, translate_path(pathname), flags, arg3));
+            sreg_t ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
             if (strace) {
-                util::log("openat({}, {}, {}, {}) = {}\n", (sreg_t)arg0, escape(pathname), arg2, arg3, ret);
+                util::log(
+                    "openat({}, {}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, arg3, ret
+                );
             }
 
             return ret;
@@ -421,10 +440,11 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::fstatat: {
+            int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
 
             struct stat host_stat;
-            sreg_t ret = return_errno(fstatat(arg0, translate_path(pathname), &host_stat, arg3));
+            sreg_t ret = return_errno(fstatat(dirfd, translate_path(pathname), &host_stat, arg3));
 
             // When success, convert stat format to guest format.
             if (ret == 0) {
@@ -436,7 +456,7 @@ reg_t syscall(
                 if (ret == 0) {
                     util::log(
                         "fstatat({}, {}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n",
-                        arg0, escape(pathname), host_stat.st_mode, host_stat.st_size, arg3
+                        static_cast<sreg_t>(arg0), escape(pathname), host_stat.st_mode, host_stat.st_size, arg3
                     );
                 } else {
                     util::log("fstatat({}, {}, {:#x}, {}) = {}\n", arg0, escape(pathname), arg2, arg3, ret);
@@ -522,6 +542,22 @@ reg_t syscall(
 
             return ret;
         }
+        case riscv::abi::Syscall_number::getpid: {
+            reg_t ret = getpid();
+            if (strace) {
+                util::log("getpid() = {}\n", ret);
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::getppid: {
+            reg_t ret = getppid();
+            if (strace) {
+                util::log("getppid() = {}\n", ret);
+            }
+
+            return ret;
+        }
         case riscv::abi::Syscall_number::getuid: {
             reg_t ret = getuid();
             if (strace) {
@@ -587,6 +623,13 @@ reg_t syscall(
 
             return ret;
         }
+        // This is linux specific call, we will just return ENOSYS.
+        case riscv::abi::Syscall_number::mremap: {
+            if (strace) {
+                util::error("mremap({:#x}, {}, {}, {}, {:#x}) = -ENOSYS\n", arg0, arg1, arg2, arg3, arg4);
+            }
+            return -static_cast<sreg_t>(riscv::abi::Errno::enosys);;
+        }
         case riscv::abi::Syscall_number::mmap: {
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
 
@@ -624,7 +667,7 @@ reg_t syscall(
 
             sreg_t ret = return_errno(open(translate_path(pathname), flags, arg2));
             if (strace) {
-                util::log("open({}, {}, {}) = {}\n", pathname, arg1, arg2, ret);
+                util::log("open({}, {}, {}) = {}\n", escape(pathname), arg1, arg2, ret);
             }
 
             return ret;
