@@ -371,8 +371,19 @@ reg_t syscall(
             int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             auto flags = convert_open_flags_to_host(arg2);
+            auto proc_self = is_proc_self(pathname);
+            sreg_t ret;
+            if (proc_self != nullptr) {
+                if (strcmp(proc_self, "exe") == 0) {
+                    ret = return_errno(openat(dirfd, exec_path.c_str(), flags, arg3));
+                } else {
+                    // Auto handle cmdline, stat, auxv, cmdline here!"
+                    ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
+                }
+            } else {
+                ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
+            }
 
-            sreg_t ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
             if (strace) {
                 util::log(
                     "openat({}, {}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, arg3, ret
