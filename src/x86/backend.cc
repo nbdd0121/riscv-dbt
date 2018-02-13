@@ -158,6 +158,7 @@ void Backend::spill_register(Register reg) {
     if (ptr == memory_location.end()) {
         Memory mem;
         stack_size -= 8;
+        ASSERT(stack_size >= -8192);
         mem = qword(Register::rsp - (stack_size + 8));
         mem.size = get_type_size(value.type()) / 8;
         memory_location[value] = mem;
@@ -368,7 +369,7 @@ void Backend::emit_shift(ir::Node* node, Opcode opcode) {
         }
 
         if (op1.is_const()) {
-            emit(binary(opcode, reg, op1.const_value()));
+            emit(binary(opcode, reg, op1.const_value() & (ir::get_type_size(output.type()) - 1)));
         } else {
             emit(binary(opcode, reg, Register::cl));
         }
