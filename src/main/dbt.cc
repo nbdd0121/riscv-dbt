@@ -1603,14 +1603,12 @@ void Dbt_compiler::emit_mulhsu(riscv::Instruction inst) {
     *this << mov(x86::Register::rax, x86::Register::rcx);
     *this << mul(x86::Register::rsi);
 
-    // rax = result, rdx = result - rs2
-    *this << mov(x86::Register::rax, x86::Register::rdx);
-    *this << sub(x86::Register::rdx, x86::Register::rsi);
-
-    // if (rs1 < 0) rax = rdx
-    *this << test(x86::Register::rcx, x86::Register::rcx);
-    *this << cmovcc(x86::Condition_code::sign, x86::Register::rax, x86::Register::rdx);
-    *this << mov(qword(memory_of_register(rd)), x86::Register::rax);
+    // Fix up negative by: if (rs1 < 0) rd = rd - rs2
+    // Note that this is identical to rd = rd -(rs1 >>> 63) & rs2
+    *this << sar(x86::Register::rcx, 63);
+    *this << i_and(x86::Register::rcx, x86::Register::rsi);
+    *this << sub(x86::Register::rdx, x86::Register::rcx);
+    *this << mov(qword(memory_of_register(rd)), x86::Register::rdx);
 }
 
 void Dbt_compiler::emit_mulw(riscv::Instruction inst) {

@@ -179,13 +179,10 @@ void Frontend::emit_mul(Instruction inst) {
         emit_store_register(inst.rd(), mul_node->value(1), true);
     } else {
         // For mulhsu, we translate to the following:
-        // First do unsigned multiplication first.
-        // If rs1 < 0, then the result is high bits - rs2.
-        // Otherwise, the result is high bits.
-        auto cmp = builder.compare(ir::Opcode::lt, rs1_value, builder.constant(type, 0));
-        auto result = builder.mux(
-            cmp, builder.arithmetic(ir::Opcode::sub, mul_node->value(1), rs2_value), mul_node->value(1)
-        );
+        // First do unsigned multiplication first, then apply fix up. How to fix up is described in dbt.cc and step.cc.
+        auto rs1_shift = builder.shift(ir::Opcode::sar, rs1_value, builder.constant(ir::Type::i8, 63));
+        auto rs2_masked = builder.arithmetic(ir::Opcode::i_and, rs1_shift, rs2_value);
+        auto result = builder.arithmetic(ir::Opcode::sub, mul_node->value(1), rs2_masked);
         emit_store_register(inst.rd(), result);
     }
 }
