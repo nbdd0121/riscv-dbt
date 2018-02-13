@@ -36,7 +36,7 @@ std::ostream& operator <<(std::ostream& stream, Escape_formatter helper) {
     // State_saver saver {stream};
 
     const char *start = helper.pointer;
-    const char *end = start + (helper.length > 32 ? 32 : helper.length);
+    const char *end = start + (helper.length > 64 ? 64 : helper.length);
     stream.put('"');
 
     // These are for escaped characters
@@ -65,7 +65,7 @@ std::ostream& operator <<(std::ostream& stream, Escape_formatter helper) {
     if (end != start) stream.write(start, end - start);
 
     stream.put('"');
-    if (helper.length > 32) stream << "...";
+    if (helper.length > 64) stream << "...";
 
     return stream;
 }
@@ -280,6 +280,26 @@ int convert_mmap_flags_from_host(typename Abi::int_t flags) {
     return ret;
 }
 
+// Detect whether the path is referencing /proc/self/.
+// returns null if the path does not match /proc/self/, and return the remaining part if it matches.
+const char* is_proc_self(const char* pathname) {
+    if (strncmp(pathname, "/proc/", strlen("/proc/")) != 0) return nullptr;
+    pathname += strlen("/proc/");
+    if (strncmp(pathname, "self/", strlen("self/")) == 0) return pathname + strlen("self/");
+
+    // We still need to check /proc/pid/
+    char* end;
+    long pid = strtol(pathname, &end, 10);
+
+    // Not in form /proc/pid/
+    if (end == pathname || end[0] != '/') return nullptr;
+
+    // Not this process
+    if (pid != getpid()) return nullptr;
+
+    return end + 1;
+}
+
 std::string path_buffer;
 const char* translate_path(const char* pathname) {
     if (pathname[0] != '/' || emu::sysroot.empty()) return pathname;
@@ -435,6 +455,38 @@ reg_t syscall(
                     arg2,
                     ret
                 );
+            }
+
+            return ret;
+        }
+        case riscv::abi::Syscall_number::readlinkat: {
+            int dirfd = static_cast<sreg_t>(arg0) == Abi::guest_AT_FDCWD ? AT_FDCWD : arg0;
+            auto pathname = reinterpret_cast<char*>(translate_address(arg1));
+            auto buffer = reinterpret_cast<char*>(translate_address(arg2));
+            auto proc_self = is_proc_self(pathname);
+            sreg_t ret;
+            if (proc_self != nullptr && strcmp(proc_self, "exe") == 0) {
+                char* path = realpath(exec_path.c_str(), NULL);
+                if (path != nullptr) {
+                    strncpy(buffer, path, arg3);
+                    ret = strlen(path);
+                    free(path);
+                } else {
+                    ret = return_errno(-1);
+                }
+            } else {
+                ret = return_errno(readlinkat(dirfd, translate_path(pathname), buffer, arg3));
+            }
+
+            if (strace) {
+                if (ret > 0) {
+                    util::log(
+                        "readlinkat({}, {}, {}, {}) = {}\n",
+                        static_cast<sreg_t>(arg0), escape(pathname), escape(buffer), arg3, ret
+                    );
+                } else {
+                    util::log("readlinkat({}, {}, {:#x}, {}) = {}\n", arg0, escape(pathname), arg2, arg3, ret);
+                }
             }
 
             return ret;

@@ -160,6 +160,7 @@ int main(int argc, const char **argv) {
     riscv::Context *context = state.context.get();
 
     // Initialize context
+    emu::exec_path = program_name;
     context->pc = load_elf(program_name, state);
 
     for (int i = 1; i < 32; i++) {

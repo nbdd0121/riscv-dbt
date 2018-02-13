@@ -2,6 +2,8 @@
 
 namespace emu {
 
+std::string exec_path;
+
 std::string sysroot = "/opt/riscv/sysroot";
 
 bool strace = false;

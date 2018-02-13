@@ -39,6 +39,11 @@ struct State {
 // objects need to hold a reference to the state object, which incurs unnecessary overhead and complexity.
 // TODO: We will be shifting from the state struct to global variables gradually.
 
+// The actual path of the executable. Needed to redirect /proc/self/*
+extern std::string exec_path;
+
+// Path of sysroot. When the guest application tries to open a file, and the corresponding file exists in sysroot,
+// it will be redirected.
 extern std::string sysroot;
 
 // A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
