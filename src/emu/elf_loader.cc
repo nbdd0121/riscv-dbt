@@ -1,17 +1,18 @@
+#include <elf.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fcntl.h>
 #include <unistd.h>
 
 #include <cstring>
 #include <stdexcept>
 
-#include "emu/elf64.h"
 #include "emu/mmu.h"
 #include "emu/state.h"
-
 #include "util/scope_exit.h"
+
+#define EM_RISCV 243
 
 namespace emu {
 
@@ -71,7 +72,7 @@ void Elf_file::load(const char *filename) {
 }
 
 void Elf_file::validate() {
-    elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
+    Elf64_Ehdr *header = reinterpret_cast<Elf64_Ehdr*>(memory);
 
     // Check the ELF magic numbers
     if (memcmp(header->e_ident, "\177ELF", 4) != 0) {
@@ -79,12 +80,12 @@ void Elf_file::validate() {
     }
 
     // We can only proceed with executable or dynamic binary.
-    if (header->e_type != elf::ET_EXEC && header->e_type != elf::ET_DYN) {
+    if (header->e_type != ET_EXEC && header->e_type != ET_DYN) {
         throw std::runtime_error { "the binary is not executable." };
     }
 
     // Check that the ELF is for RISC-V
-    if (header->e_machine != elf::EM_RISCV) {
+    if (header->e_machine != EM_RISCV) {
         throw std::runtime_error { "the binary is not for RISC-V." };
     }
 
@@ -92,10 +93,10 @@ void Elf_file::validate() {
 }
 
 std::string Elf_file::find_interpreter() {
-    elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
+    Elf64_Ehdr *header = reinterpret_cast<Elf64_Ehdr*>(memory);
     for (int i = 0; i < header->e_phnum; i++) {
-        elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
-        if (h->p_type == elf::PT_INTERP) {
+        Elf64_Phdr *h = reinterpret_cast<Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
+        if (h->p_type == PT_INTERP) {
             if (*reinterpret_cast<char*>(memory + h->p_offset + h->p_filesz - 1) != 0) {
                 throw std::runtime_error { "interpreter name should be null-terminated." };
             }
@@ -107,18 +108,18 @@ std::string Elf_file::find_interpreter() {
     return {};
 }
 
-reg_t load_elf_image(Elf_file& file, State& state) {
+reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
 
     // Parse the ELF header and load the binary into memory.
     auto memory = file.memory;
-    elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
+    Elf64_Ehdr *header = reinterpret_cast<Elf64_Ehdr*>(memory);
 
     // Scan the bounds of the image.
     reg_t loaddr = -1;
     reg_t hiaddr = 0;
     for (int i = 0; i < header->e_phnum; i++) {
-        elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
-        if (h->p_type == elf::PT_LOAD) {
+        Elf64_Phdr *h = reinterpret_cast<Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
+        if (h->p_type == PT_LOAD) {
             if (h->p_vaddr < loaddr) loaddr = h->p_vaddr;
             if (h->p_vaddr + h->p_memsz > hiaddr) hiaddr = h->p_vaddr + h->p_memsz;
         }
@@ -127,9 +128,9 @@ reg_t load_elf_image(Elf_file& file, State& state) {
     loaddr &=~ page_mask;
     hiaddr = (hiaddr + page_mask) &~ page_mask;
 
-    reg_t bias = 0;
+    bias = 0;
     // For dynamic binaries, we need to allocate a location for it.
-    if (header->e_type == elf::ET_DYN) {
+    if (header->e_type == ET_DYN) {
         bias = reinterpret_cast<reg_t>(mmap(
             reinterpret_cast<void*>(0x4000000000),
             hiaddr - loaddr,
@@ -149,10 +150,10 @@ reg_t load_elf_image(Elf_file& file, State& state) {
         }
     }
 
-    reg_t brk = 0;
+    brk = 0;
     for (int i = 0; i < header->e_phnum; i++) {
-        elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
-        if (h->p_type == elf::PT_LOAD) {
+        Elf64_Phdr *h = reinterpret_cast<Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
+        if (h->p_type == PT_LOAD) {
 
             // size in memory cannot be smaller than size in file
             if (h->p_filesz > h->p_memsz) {
@@ -167,9 +168,9 @@ reg_t load_elf_image(Elf_file& file, State& state) {
             reg_t page_end = (vaddr_end + page_mask) &~ page_mask;
 
             int prot = 0;
-            if (h->p_flags & elf::PF_R) prot |= PROT_READ;
-            if (h->p_flags & elf::PF_W) prot |= PROT_WRITE;
-            if (h->p_flags & elf::PF_X) prot |= PROT_READ;
+            if (h->p_flags & PF_R) prot |= PROT_READ;
+            if (h->p_flags & PF_W) prot |= PROT_WRITE;
+            if (h->p_flags & PF_X) prot |= PROT_READ;
 
             // First page is not aligned, we need t adjust it so that it is aligned.
             if (h->p_vaddr != page_start) {
@@ -206,6 +207,8 @@ reg_t load_elf_image(Elf_file& file, State& state) {
     }
 
     brk = ((brk + page_mask) &~ page_mask);
+    return header->e_entry;
+}
 
     state.original_brk = bias + brk;
     state.brk = bias + brk;
@@ -226,7 +229,16 @@ reg_t load_elf(const char *filename, State& state) {
         throw std::runtime_error { "sad. dynamic binaries are not yet supported." };
     }
 
-    return load_elf_image(file, state);
+    reg_t bias;
+    reg_t brk;
+    reg_t entry = load_elf_image(file, bias, brk);
+
+    brk = (brk + page_mask) &~ page_mask;
+    state.original_brk = bias + brk;
+    state.brk = bias + brk;
+    state.heap_start = bias + brk;
+    state.heap_end = state.heap_start;
+    return entry + bias;
 }
 
 }
