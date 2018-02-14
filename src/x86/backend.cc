@@ -64,7 +64,7 @@ static x86::Operand modify_size(ir::Type type, const x86::Operand& loc) {
 namespace x86 {
 
 void Backend::emit(const Instruction& inst) {
-    bool disassemble = _state.disassemble;
+    bool disassemble = emu::state::disassemble;
     size_t size_before_emit;
     if (disassemble) {
         size_before_emit = _encoder.buffer().size();

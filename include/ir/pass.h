@@ -6,10 +6,6 @@
 
 #include "ir/node.h"
 
-namespace emu {
-    struct State;
-};
-
 namespace ir::pass {
 
 class Pass {
@@ -102,12 +98,6 @@ protected:
 
 // Target-independent lowering pass.
 class Lowering: public Pass {
-private:
-    emu::State& _state;
-
-public:
-    Lowering(emu::State& state): _state{state} {}
-
 protected:
     virtual void after(Node* node) override;
 };

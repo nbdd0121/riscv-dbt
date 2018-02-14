@@ -47,11 +47,6 @@ int main(int argc, const char **argv) {
     bool use_dbt = false;
     bool use_ir = true;
 
-    emu::State state;
-    state.disassemble = false;
-    state.no_instret = true;
-    state.inline_limit = 16;
-
     // Parsing arguments
     int arg_index;
     for (arg_index = 1; arg_index < argc; arg_index++) {
@@ -63,11 +58,11 @@ int main(int argc, const char **argv) {
         }
 
         if (strcmp(arg, "--no-direct-memory") == 0) {
-            emu::no_direct_memory_access = true;
+            emu::state::no_direct_memory_access = true;
         } else if (strcmp(arg, "--strace") == 0) {
-            emu::strace = true;
+            emu::state::strace = true;
         } else if (strcmp(arg, "--disassemble") == 0) {
-            state.disassemble = true;
+            emu::state::disassemble = true;
         } else if (strcmp(arg, "--engine=dbt") == 0) {
             use_ir = false;
             use_dbt = true;
@@ -75,15 +70,15 @@ int main(int argc, const char **argv) {
             use_ir = false;
             use_dbt = false;
         } else if (strcmp(arg, "--with-instret") == 0) {
-            state.no_instret = false;
+            emu::state::no_instret = false;
         } else if (strcmp(arg, "--strict-exception") == 0) {
-            emu::strict_exception = true;
+            emu::state::strict_exception = true;
         } else if (strncmp(arg, "--inline-limit=", strlen("--inline-limit=")) == 0) {
-            state.inline_limit = atoi(arg + strlen("--inline-limit="));
+            emu::state::inline_limit = atoi(arg + strlen("--inline-limit="));
         } else if (strcmp(arg, "--monitor-performance") == 0) {
-            emu::monitor_performance = true;
+            emu::state::monitor_performance = true;
         } else if (strncmp(arg, "--sysroot=", strlen("--sysroot=")) == 0) {
-            emu::sysroot = arg + strlen("--sysroot=");
+            emu::state::sysroot = arg + strlen("--sysroot=");
         } else if (strcmp(arg, "--help") == 0) {
             util::error(usage_string, argv[0]);
             return 0;
@@ -157,60 +152,57 @@ int main(int argc, const char **argv) {
     // set argc
     push(argc - arg_index);
 
-    state.context = std::make_unique<riscv::Context>();
-    riscv::Context *context = state.context.get();
+    riscv::Context context;
 
     // Initialize context
-    emu::exec_path = program_name;
-    context->pc = load_elf(program_name, state);
+    emu::state::exec_path = program_name;
+    context.pc = emu::load_elf(program_name);
 
     for (int i = 1; i < 32; i++) {
         // Reset to some easily debuggable value.
-        context->registers[i] = 0xCCCCCCCCCCCCCCCC;
-        context->fp_registers[i] = 0xFFFFFFFFFFFFFFFF;
+        context.registers[i] = 0xCCCCCCCCCCCCCCCC;
+        context.fp_registers[i] = 0xFFFFFFFFFFFFFFFF;
     }
 
-    context->state = &state;
-
     // x0 must always be 0
-    context->registers[0] = 0;
+    context.registers[0] = 0;
     // sp
-    context->registers[2] = sp;
+    context.registers[2] = sp;
     // libc adds this value into exit hook, so we need to make sure it is zero.
-    context->registers[10] = 0;
-    context->fcsr = 0;
-    context->instret = 0;
-    context->lr = 0;
+    context.registers[10] = 0;
+    context.fcsr = 0;
+    context.instret = 0;
+    context.lr = 0;
 
     try {
         if (use_ir) {
-            Ir_dbt executor { state };
-            context->executor = &executor;
+            Ir_dbt executor;
+            context.executor = &executor;
             while (true) {
-                executor.step(*context);
+                executor.step(context);
             }
         } else if (use_dbt) {
-            Dbt_runtime executor { state };
-            context->executor = &executor;
+            Dbt_runtime executor;
+            context.executor = &executor;
             while (true) {
-                executor.step(*context);
+                executor.step(context);
             }
         } else {
-            Interpreter executor { state };
-            context->executor = &executor;
+            Interpreter executor;
+            context.executor = &executor;
             while (true) {
-                executor.step(*context);
+                executor.step(context);
             }
         }
     } catch (emu::Exit_control& ex) {
         return ex.exit_code;
     } catch (std::exception& ex) {
-        util::print("{}\npc  = {:16x}  ra  = {:16x}\n", ex.what(), context->pc, context->registers[1]);
+        util::print("{}\npc  = {:16x}  ra  = {:16x}\n", ex.what(), context.pc, context.registers[1]);
         for (int i = 2; i < 32; i += 2) {
             util::print(
                 "{:-3} = {:16x}  {:-3} = {:16x}\n",
-                riscv::Disassembler::register_name(i), context->registers[i],
-                riscv::Disassembler::register_name(i + 1), context->registers[i + 1]
+                riscv::Disassembler::register_name(i), context.registers[i],
+                riscv::Disassembler::register_name(i + 1), context.registers[i + 1]
             );
         }
         return 1;

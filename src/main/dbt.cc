@@ -186,7 +186,7 @@ _Unwind_Reason_Code dbt_personality(
     }
 }
 
-Dbt_runtime::Dbt_runtime(emu::State& state): state_ {state} {
+Dbt_runtime::Dbt_runtime() {
     icache_tag_ = std::unique_ptr<emu::reg_t[]> { new emu::reg_t[4096] };
     icache_ = std::unique_ptr<std::byte*[]> { new std::byte*[4096] };
     for (size_t i = 0; i < 4096; i++) {
@@ -232,7 +232,7 @@ void Dbt_runtime::compile(emu::reg_t pc) {
 }
 
 Dbt_compiler& Dbt_compiler::operator <<(const x86::Instruction& inst) {
-    bool disassemble = runtime_.state_.disassemble;
+    bool disassemble = emu::state::disassemble;
     std::byte *pc;
     if (disassemble) {
         pc = encoder_.buffer().data() + encoder_.buffer().size();
@@ -250,11 +250,11 @@ Dbt_compiler& Dbt_compiler::operator <<(const x86::Instruction& inst) {
 #define memory_of(name) (x86::Register::rbp + (offsetof(riscv::Context, name) - 0x80))
 
 void Dbt_compiler::compile(emu::reg_t pc) {
-    riscv::Decoder decoder { &runtime_.state_, pc };
+    riscv::Decoder decoder { pc };
     block_.block = decoder.decode_basic_block();
     riscv::Basic_block& block = block_.block;
 
-    if (runtime_.state_.disassemble) {
+    if (emu::state::disassemble) {
         util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(encoder_.buffer().data()));
     }
 
@@ -367,7 +367,7 @@ void Dbt_compiler::compile(emu::reg_t pc) {
     pc_diff += inst.length();
     instret_diff += 1;
 
-    if (!runtime_.state_.no_instret) {
+    if (!emu::state::no_instret) {
         *this << add(qword(memory_of(instret)), instret_diff);
     }
 
@@ -605,7 +605,7 @@ void Dbt_compiler::emit_lb(riscv::Instruction inst, bool u) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (u) {
@@ -643,7 +643,7 @@ void Dbt_compiler::emit_lh(riscv::Instruction inst, bool u) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (u) {
@@ -681,7 +681,7 @@ void Dbt_compiler::emit_lw(riscv::Instruction inst, bool u) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (u) {
@@ -719,7 +719,7 @@ void Dbt_compiler::emit_ld(riscv::Instruction inst) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
         *this << mov(x86::Register::rax, qword(x86::Register::rax + imm));
 
@@ -744,7 +744,7 @@ void Dbt_compiler::emit_sb(riscv::Instruction inst) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is id.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (rs2 == 0) {
@@ -777,7 +777,7 @@ void Dbt_compiler::emit_sh(riscv::Instruction inst) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (rs2 == 0) {
@@ -810,7 +810,7 @@ void Dbt_compiler::emit_sw(riscv::Instruction inst) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (rs2 == 0) {
@@ -843,7 +843,7 @@ void Dbt_compiler::emit_sd(riscv::Instruction inst) {
     riscv::reg_t imm = inst.imm();
 
     // We can generate better code if the MMU is flat.
-    if (!emu::no_direct_memory_access) {
+    if (!emu::state::no_direct_memory_access) {
         *this << mov(x86::Register::rax, qword(memory_of_register(rs1)));
 
         if (rs2 == 0) {

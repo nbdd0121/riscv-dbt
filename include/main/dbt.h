@@ -10,10 +10,6 @@
 #include "main/executor.h"
 #include "util/code_buffer.h"
 
-namespace emu {
-struct State;
-};
-
 namespace riscv {
     struct Context;
 }
@@ -26,8 +22,6 @@ struct Dbt_block;
 
 class Dbt_runtime final: public Executor {
 private:
-    emu::State& state_;
-
     // The following two fields are for hot direct-mapped instruction cache that contains recently executed code.
     std::unique_ptr<emu::reg_t[]> icache_tag_;
     std::unique_ptr<std::byte*[]> icache_;
@@ -38,7 +32,7 @@ private:
     void compile(emu::reg_t);
 
 public:
-    Dbt_runtime(emu::State& state);
+    Dbt_runtime();
     ~Dbt_runtime();
 
     void step(riscv::Context& context);

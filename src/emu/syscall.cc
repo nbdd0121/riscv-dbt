@@ -13,7 +13,6 @@
 #include "emu/mmu.h"
 #include "emu/state.h"
 #include "riscv/abi.h"
-#include "riscv/context.h"
 #include "util/format.h"
 
 namespace {
@@ -254,7 +253,7 @@ void convert_utsname_from_host(typename Abi::utsname *guest_utsname, const struc
 
 // When an error occurs during a system call, Linux will return the negated value of the error number. Library
 // functions, on the other hand, usually return -1 and set errno instead.
-// Helper for converting library functions which use global variable `errno` to carry error information to a linux
+// Helper for converting library functions which use state variable `errno` to carry error information to a linux
 // syscall style which returns a negative value representing the errno.
 emu::sreg_t return_errno(emu::sreg_t val) {
     if (val != -1) return val;
@@ -302,12 +301,12 @@ const char* is_proc_self(const char* pathname) {
 
 std::string path_buffer;
 const char* translate_path(const char* pathname) {
-    if (pathname[0] != '/' || emu::sysroot.empty()) return pathname;
+    if (pathname[0] != '/' || emu::state::sysroot.empty()) return pathname;
 
     // The file exists in sysroot, then use it.
-    path_buffer = emu::sysroot + pathname;
+    path_buffer = emu::state::sysroot + pathname;
     if (access(path_buffer.c_str(), F_OK) == 0) {
-        if (emu::strace) {
+        if (emu::state::strace) {
             util::log("Translate {} to {}\n", pathname, path_buffer);
         }
         return path_buffer.c_str();
@@ -321,7 +320,7 @@ const char* translate_path(const char* pathname) {
 namespace emu {
 
 reg_t syscall(
-    State *state, riscv::abi::Syscall_number nr,
+    riscv::abi::Syscall_number nr,
     reg_t arg0, reg_t arg1, reg_t arg2, [[maybe_unused]] reg_t arg3, [[maybe_unused]] reg_t arg4, [[maybe_unused]] reg_t arg5
 ) {
     using Abi = riscv::abi::Abi;
@@ -331,7 +330,7 @@ reg_t syscall(
             char *buffer = reinterpret_cast<char*>(translate_address(arg0));
             size_t size = arg1;
             sreg_t ret = getcwd(buffer, size) ? 0 : -static_cast<sreg_t>(riscv::abi::Errno::einval);
-            if (strace) {
+            if (state::strace) {
                 if (ret == 0) {
                     util::log("getcwd({}, {}) = 0\n", escape(buffer), size);
                 } else {
@@ -346,7 +345,7 @@ reg_t syscall(
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             sreg_t ret = return_errno(unlinkat(dirfd, translate_path(pathname), arg2));
 
-            if (strace) {
+            if (state::strace) {
                 util::log(
                     "unlinkat({}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, ret
                 );
@@ -359,7 +358,7 @@ reg_t syscall(
             auto pathname = reinterpret_cast<char*>(translate_address(arg1));
             sreg_t ret = return_errno(faccessat(dirfd, translate_path(pathname), arg2, arg3));
 
-            if (strace) {
+            if (state::strace) {
                 util::log(
                     "faccessat({}, {}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, arg3, ret
                 );
@@ -375,7 +374,7 @@ reg_t syscall(
             sreg_t ret;
             if (proc_self != nullptr) {
                 if (strcmp(proc_self, "exe") == 0) {
-                    ret = return_errno(openat(dirfd, exec_path.c_str(), flags, arg3));
+                    ret = return_errno(openat(dirfd, state::exec_path.c_str(), flags, arg3));
                 } else {
                     // Auto handle cmdline, stat, auxv, cmdline here!"
                     ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
@@ -384,7 +383,7 @@ reg_t syscall(
                 ret = return_errno(openat(dirfd, translate_path(pathname), flags, arg3));
             }
 
-            if (strace) {
+            if (state::strace) {
                 util::log(
                     "openat({}, {}, {}, {}) = {}\n", static_cast<sreg_t>(arg0), escape(pathname), arg2, arg3, ret
                 );
@@ -401,7 +400,7 @@ reg_t syscall(
                 ret = return_errno(close(arg0));
             }
 
-            if (strace) {
+            if (state::strace) {
                 util::log("close({}) = {}\n", arg0, ret);
             }
 
@@ -409,7 +408,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::lseek: {
             sreg_t ret = return_errno(lseek(arg0, arg1, arg2));
-            if (strace) {
+            if (state::strace) {
                 util::log("lseek({}, {}, {}) = {}\n", arg0, arg1, arg2, ret);
             }
             return ret;
@@ -420,7 +419,7 @@ reg_t syscall(
             // Handle standard IO specially, since it is shared between emulator and guest program.
             sreg_t ret = return_errno(read(arg0, buffer, arg2));
 
-            if (strace) {
+            if (state::strace) {
                 util::log("read({}, {}, {}) = {}\n",
                     arg0,
                     escape(buffer, arg2),
@@ -436,7 +435,7 @@ reg_t syscall(
 
             sreg_t ret = return_errno(write(arg0, buffer, arg2));
 
-            if (strace) {
+            if (state::strace) {
                 util::log("write({}, {}, {}) = {}\n",
                     arg0,
                     escape(buffer, arg2),
@@ -459,7 +458,7 @@ reg_t syscall(
                 ret = return_errno(writev(arg0, reinterpret_cast<struct iovec*>(translate_address(arg1)), arg2));
             }
 
-            if (strace) {
+            if (state::strace) {
                 util::log("writev({}, {}, {}) = {}\n",
                     arg0,
                     arg1,
@@ -477,7 +476,7 @@ reg_t syscall(
             auto proc_self = is_proc_self(pathname);
             sreg_t ret;
             if (proc_self != nullptr && strcmp(proc_self, "exe") == 0) {
-                char* path = realpath(exec_path.c_str(), NULL);
+                char* path = realpath(state::exec_path.c_str(), NULL);
                 if (path != nullptr) {
                     strncpy(buffer, path, arg3);
                     ret = strlen(path);
@@ -489,7 +488,7 @@ reg_t syscall(
                 ret = return_errno(readlinkat(dirfd, translate_path(pathname), buffer, arg3));
             }
 
-            if (strace) {
+            if (state::strace) {
                 if (ret > 0) {
                     util::log(
                         "readlinkat({}, {}, {}, {}) = {}\n",
@@ -515,7 +514,7 @@ reg_t syscall(
                 convert_stat_from_host(guest_stat, &host_stat);
             }
 
-            if (strace) {
+            if (state::strace) {
                 if (ret == 0) {
                     util::log(
                         "fstatat({}, {}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n",
@@ -538,7 +537,7 @@ reg_t syscall(
                 convert_stat_from_host(guest_stat, &host_stat);
             }
 
-            if (strace) {
+            if (state::strace) {
                 if (ret == 0) {
                     util::log("fstat({}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n", arg0, host_stat.st_mode, host_stat.st_size);
                 } else {
@@ -549,7 +548,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::exit: {
-            if (strace) {
+            if (state::strace) {
                 util::log("exit({}) = ?\n", arg0);
             }
 
@@ -557,7 +556,7 @@ reg_t syscall(
             throw emu::Exit_control { static_cast<uint8_t>(arg0) };
         }
         case riscv::abi::Syscall_number::exit_group: {
-            if (strace) {
+            if (state::strace) {
                 util::log("exit_group({}) = ?\n", arg0);
             }
 
@@ -577,7 +576,7 @@ reg_t syscall(
                 ret = return_errno(uname(reinterpret_cast<struct utsname*>(translate_address(arg0))));
             }
 
-            if (strace) {
+            if (state::strace) {
                 util::log("uname({:#x}) = {}\n", arg0, ret);
             }
 
@@ -595,7 +594,7 @@ reg_t syscall(
                 convert_timeval_from_host(guest_tv, &host_tv);
             }
 
-            if (strace) {
+            if (state::strace) {
                 if (ret == 0) {
                     util::log("gettimeofday({{{}, {}}}, NULL) = 0\n", host_tv.tv_sec, host_tv.tv_usec);
                 } else {
@@ -607,7 +606,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::getpid: {
             reg_t ret = getpid();
-            if (strace) {
+            if (state::strace) {
                 util::log("getpid() = {}\n", ret);
             }
 
@@ -615,7 +614,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::getppid: {
             reg_t ret = getppid();
-            if (strace) {
+            if (state::strace) {
                 util::log("getppid() = {}\n", ret);
             }
 
@@ -623,7 +622,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::getuid: {
             reg_t ret = getuid();
-            if (strace) {
+            if (state::strace) {
                 util::log("getuid() = {}\n", ret);
             }
 
@@ -631,7 +630,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::geteuid: {
             reg_t ret = geteuid();
-            if (strace) {
+            if (state::strace) {
                 util::log("geteuid() = {}\n", ret);
             }
 
@@ -639,7 +638,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::getgid: {
             reg_t ret = getgid();
-            if (strace) {
+            if (state::strace) {
                 util::log("getgid() = {}\n", ret);
             }
 
@@ -647,44 +646,44 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::getegid: {
             reg_t ret = getegid();
-            if (strace) {
+            if (state::strace) {
                 util::log("getegid() = {}\n", ret);
             }
 
             return ret;
         }
         case riscv::abi::Syscall_number::brk: {
-            if (arg0 < state->original_brk) {
+            if (arg0 < state::original_brk) {
                 // Cannot reduce beyond original_brk
             } else {
-                reg_t new_heap_end = std::max(state->heap_start, (arg0 + page_mask) &~ page_mask);
+                reg_t new_heap_end = std::max(state::heap_start, (arg0 + page_mask) &~ page_mask);
 
-                if (new_heap_end > state->heap_end) {
+                if (new_heap_end > state::heap_end) {
 
                     // The heap needs to be expanded
                     guest_mmap(
-                        state->heap_end, new_heap_end - state->heap_end,
+                        state::heap_end, new_heap_end - state::heap_end,
                         PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0
                     );
 
-                    state->heap_end = new_heap_end;
+                    state::heap_end = new_heap_end;
 
-                } else if (new_heap_end < state->heap_end) {
+                } else if (new_heap_end < state::heap_end) {
 
                     // TODO: Also shrink when brk is reduced.
                 }
 
-                state->brk = arg0;
+                state::brk = arg0;
             }
-            reg_t ret = state->brk;
-            if (strace) {
+            reg_t ret = state::brk;
+            if (state::strace) {
                 util::log("brk({}) = {}\n", pointer(arg0), pointer(ret));
             }
             return ret;
         }
         case riscv::abi::Syscall_number::munmap: {
             reg_t ret = return_errno(guest_munmap(arg0, arg1));
-            if (strace) {
+            if (state::strace) {
                 util::error("munmap({:#x}, {}) = {}\n", arg0, arg1, ret);
             }
 
@@ -692,7 +691,7 @@ reg_t syscall(
         }
         // This is linux specific call, we will just return ENOSYS.
         case riscv::abi::Syscall_number::mremap: {
-            if (strace) {
+            if (state::strace) {
                 util::error("mremap({:#x}, {}, {}, {}, {:#x}) = -ENOSYS\n", arg0, arg1, arg2, arg3, arg4);
             }
             return -static_cast<sreg_t>(riscv::abi::Errno::enosys);;
@@ -701,7 +700,7 @@ reg_t syscall(
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
             int flags = convert_mmap_flags_from_host<Abi>(arg3);
             reg_t ret = reinterpret_cast<reg_t>(guest_mmap(arg0, arg1, prot, flags, arg4, arg5));
-            if (strace) {
+            if (state::strace) {
                 util::error("mmap({:#x}, {}, {}, {}, {}, {}) = {:#x}\n", arg0, arg1, arg2, arg3, arg4, arg5, ret);
             }
 
@@ -710,7 +709,7 @@ reg_t syscall(
         case riscv::abi::Syscall_number::mprotect: {
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
             sreg_t ret = return_errno(guest_mprotect(arg0, arg1, prot));
-            if (strace) {
+            if (state::strace) {
                 util::error("mprotect({:#x}, {}, {}) = {:#x}\n", arg0, arg1, arg2, ret);
             }
 
@@ -721,7 +720,7 @@ reg_t syscall(
             auto flags = convert_open_flags_to_host(arg1);
 
             sreg_t ret = return_errno(open(translate_path(pathname), flags, arg2));
-            if (strace) {
+            if (state::strace) {
                 util::log("open({}, {}, {}) = {}\n", escape(pathname), arg1, arg2, ret);
             }
 
@@ -730,7 +729,7 @@ reg_t syscall(
         case riscv::abi::Syscall_number::unlink: {
             auto pathname = reinterpret_cast<char*>(translate_address(arg0));
             sreg_t ret = return_errno(unlink(translate_path(pathname)));
-            if (strace) {
+            if (state::strace) {
                 util::log("unlink({}) = {}\n", escape(pathname), ret);
             }
             return ret;
@@ -747,7 +746,7 @@ reg_t syscall(
                 convert_stat_from_host(guest_stat, &host_stat);
             }
 
-            if (strace) {
+            if (state::strace) {
                 if (ret == 0) {
                     util::log("stat({}, {{st_mode={:#o}, st_size={}, ...}}) = 0\n", pathname, host_stat.st_mode, host_stat.st_size);
                 } else {

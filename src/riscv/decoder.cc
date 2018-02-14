@@ -1062,7 +1062,7 @@ Instruction Decoder::decode(uint32_t bits) {
 Instruction Decoder::decode_instruction() {
     uint32_t bits = emu::load_memory<uint32_t>(pc_);
     Instruction inst = decode(bits);
-    if (state_->disassemble) {
+    if (emu::state::disassemble) {
         Disassembler::print_instruction(pc_, bits, inst);
     }
     pc_ += inst.length();
@@ -1072,7 +1072,7 @@ Instruction Decoder::decode_instruction() {
 Basic_block Decoder::decode_basic_block() {
     Basic_block block;
 
-    if (state_->disassemble) {
+    if (emu::state::disassemble) {
         util::log("Decoding {:x}\n", pc_);
     }
 

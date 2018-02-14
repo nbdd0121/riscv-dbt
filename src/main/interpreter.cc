@@ -5,7 +5,7 @@
 #include "riscv/opcode.h"
 #include "util/assert.h"
 
-Interpreter::Interpreter(emu::State& state) noexcept: state_{state} {}
+Interpreter::Interpreter() noexcept {}
 
 Interpreter::~Interpreter() {}
 
@@ -14,7 +14,7 @@ void Interpreter::step(riscv::Context& context) {
     riscv::Basic_block& basic_block = inst_cache_[pc];
 
     if (UNLIKELY(basic_block.instructions.size() == 0)) {
-        riscv::Decoder decoder {&state_, pc};
+        riscv::Decoder decoder {pc};
         basic_block = decoder.decode_basic_block();
 
         // Function step will assume the pc is pre-incremented, but this is clearly not the case for auipc. Therfore we

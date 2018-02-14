@@ -118,7 +118,7 @@ static void generate_eh_frame(Ir_block& block) {
     __register_frame(cie);
 }
 
-Ir_dbt::Ir_dbt(emu::State& state) noexcept: state_{state} {
+Ir_dbt::Ir_dbt() noexcept {
     icache_tag_ = std::make_unique<emu::reg_t[]>(4096);
     icache_ = std::make_unique<std::byte*[]>(4096);
     for (size_t i = 0; i < 4096; i++) {
@@ -127,7 +127,7 @@ Ir_dbt::Ir_dbt(emu::State& state) noexcept: state_{state} {
 }
 
 Ir_dbt::~Ir_dbt() {
-    if (emu::monitor_performance) {
+    if (emu::state::monitor_performance) {
         int64_t average_in_ns = (total_compilation_time + (total_block_compiled / 2)) / total_block_compiled;
         int64_t average_in_us = (average_in_ns + 500) / 1000;
         int64_t sum_in_us = (total_compilation_time + 500) / 1000;
@@ -144,7 +144,7 @@ void Ir_dbt::step(riscv::Context& context) {
 
     // If the cache misses, compile the current block.
     if (UNLIKELY(icache_tag_[tag] != pc)) {
-        if (emu::monitor_performance) {
+        if (emu::state::monitor_performance) {
             auto start = std::chrono::high_resolution_clock::now();
             compile(pc);
             auto end = std::chrono::high_resolution_clock::now();
@@ -179,11 +179,11 @@ void Ir_dbt::decode(emu::reg_t pc) {
         block_ptr = std::make_unique<Ir_block>();
 
         ir::Graph& graph = block_ptr->graph;
-        riscv::Decoder decoder {&state_, pc};
+        riscv::Decoder decoder {pc};
         riscv::Basic_block basic_block = decoder.decode_basic_block();
 
         // Frontend stages.
-        graph = riscv::compile(state_, basic_block);
+        graph = riscv::compile(basic_block);
 
         // Optimisation passes.
 
@@ -245,7 +245,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                     i--;
                     operand_count--;
 
-                } else if (counter < state_.inline_limit) {
+                } else if (counter < emu::state::inline_limit) {
 
                     // To avoid spending too much time inlining all possible branches, we set an upper limit.
 
@@ -256,7 +256,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                     // Store the entry point of the inlined graph.
                     block_map[target_pc] = *graph_to_inline.entry()->value(0).references().begin();
 
-                    if (state_.disassemble) {
+                    if (emu::state::disassemble) {
                         util::log("inline {:x} to {:x}\n", target_pc, pc);
                     }
 
@@ -292,14 +292,14 @@ void Ir_dbt::compile(emu::reg_t pc) {
         ir::pass::Local_value_numbering{}.run(graph_for_codegen);
 
         // Dump IR if --disassemble is used.
-        if (state_.disassemble) {
+        if (emu::state::disassemble) {
             util::log("IR for {:x}\n", pc);
             x86::backend::Dot_printer{}.run(graph_for_codegen);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
         // Lowering and target-specific lowering.
-        ir::pass::Lowering{state_}.run(graph_for_codegen);
+        ir::pass::Lowering{}.run(graph_for_codegen);
         ir::pass::Local_value_numbering{}.run(graph_for_codegen);
         x86::backend::Lowering{}.run(graph_for_codegen);
 
@@ -313,7 +313,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         ir::analysis::Scheduler scheduler{graph_for_codegen, block_analysis, dom};
         scheduler.schedule();
-        x86::Backend{state_, block_ptr->code, graph_for_codegen, block_analysis, scheduler}.run();
+        x86::Backend{block_ptr->code, graph_for_codegen, block_analysis, scheduler}.run();
         generate_eh_frame(*block_ptr);
     }
 

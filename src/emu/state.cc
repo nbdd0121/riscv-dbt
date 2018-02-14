@@ -1,10 +1,21 @@
 #include "emu/state.h"
 
-namespace emu {
+namespace emu::state {
 
 std::string exec_path;
 
 std::string sysroot = "/opt/riscv/sysroot";
+
+reg_t original_brk;
+reg_t brk;
+reg_t heap_start;
+reg_t heap_end;
+
+bool disassemble = false;
+
+bool no_instret = true;
+
+int inline_limit = 16;
 
 bool strace = false;
 

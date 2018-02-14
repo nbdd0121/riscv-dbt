@@ -8,10 +8,6 @@
 
 #include <unordered_map>
 
-namespace emu {
-struct State;
-}
-
 namespace x86::backend {
 
 namespace Target_opcode {
@@ -42,7 +38,6 @@ namespace x86 {
 
 class Backend {
 private:
-    emu::State& _state;
     ir::Graph& _graph;
     ir::analysis::Block& _block_analysis;
     ir::analysis::Scheduler& _scheduler;
@@ -66,12 +61,11 @@ private:
 
 public:
     Backend(
-        emu::State& state,
         util::Code_buffer& buffer,
         ir::Graph& graph,
         ir::analysis::Block& block_analysis,
         ir::analysis::Scheduler& scheduler
-    ): _state {state}, _graph{graph}, _block_analysis{block_analysis}, _scheduler{scheduler}, _encoder{buffer} {}
+    ): _graph{graph}, _block_analysis{block_analysis}, _scheduler{scheduler}, _encoder{buffer} {}
 
     void emit(const Instruction& inst);
     void emit_move(ir::Type type, const Operand& dst, const Operand& src);

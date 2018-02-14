@@ -13,7 +13,6 @@ namespace riscv {
 struct Frontend {
     ir::Graph graph;
     ir::Builder builder {graph};
-    emu::State& state;
     const Basic_block* block;
 
     ir::Node* block_node;
@@ -26,8 +25,6 @@ struct Frontend {
 
     // Difference between stored instret and true instret (excluding the processing instruction).
     emu::reg_t instret;
-
-    Frontend(emu::State& state): state{state} {}
 
     ir::Value emit_load_register(ir::Type type, uint16_t reg);
     void emit_store_register(uint16_t reg, ir::Value value, bool sext = false);
@@ -76,7 +73,7 @@ void Frontend::update_pc() {
 
 void Frontend::update_instret() {
     // Update instret
-    if (!state.no_instret) {
+    if (!emu::state::no_instret) {
         ir::Value instret_value;
         std::tie(last_memory, instret_value) = builder.load_register(last_memory, 65);
         auto instret_offset_value = builder.constant(ir::Type::i64, instret);
@@ -389,8 +386,8 @@ void Frontend::compile(const Basic_block& block) {
     graph.exit()->operands({jmp_value});
 }
 
-ir::Graph compile(emu::State& state, const Basic_block& block) {
-    Frontend compiler {state};
+ir::Graph compile(const Basic_block& block) {
+    Frontend compiler;
     compiler.compile(block);
     return std::move(compiler.graph);
 }

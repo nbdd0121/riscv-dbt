@@ -13,7 +13,7 @@ namespace riscv::abi {
 }
 
 namespace emu {
-    reg_t syscall(State*, riscv::abi::Syscall_number, reg_t, reg_t, reg_t, reg_t, reg_t, reg_t);
+    reg_t syscall(riscv::abi::Syscall_number, reg_t, reg_t, reg_t, reg_t, reg_t, reg_t);
 }
 
 namespace riscv {
@@ -335,7 +335,6 @@ void step(Context *context, Instruction inst) {
         /* Environment operations */
         case Opcode::ecall:
             context->registers[10] = emu::syscall(
-                context->state,
                 static_cast<abi::Syscall_number>(context->registers[17]),
                 context->registers[10],
                 context->registers[11],

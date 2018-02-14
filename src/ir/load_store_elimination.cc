@@ -311,7 +311,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
             uint16_t regnum = static_cast<Register_access*>(item)->regnum();
             _value_stack[regnum].push_back(item->value(0));
 
-        } else if (emu::strict_exception ||
+        } else if (emu::state::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
             for (uint16_t regnum = 0; regnum < regcount; regnum++) {
@@ -356,7 +356,7 @@ void Load_store_elimination::fill_store_phi(Node* block) {
             uint16_t regnum = static_cast<Register_access*>(item)->regnum();
             _value_stack[regnum].pop_back();
 
-        } else if (emu::strict_exception ||
+        } else if (emu::state::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
             for (uint16_t regnum = 0; regnum < regcount; regnum++) {
@@ -396,7 +396,7 @@ void Load_store_elimination::rename_store(Node* block) {
 
             _value_stack[regnum].push_back(item->value(0));
 
-        } else if (emu::strict_exception ||
+        } else if (emu::state::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
             for (uint16_t regnum = 0; regnum < regcount; regnum++) {
@@ -425,7 +425,7 @@ void Load_store_elimination::rename_store(Node* block) {
             uint16_t regnum = static_cast<Register_access*>(item)->regnum();
             _value_stack[regnum].pop_back();
 
-        } else if (emu::strict_exception ||
+        } else if (emu::state::strict_exception ||
                     (item->opcode() == Opcode::call && static_cast<Call*>(item)->need_context())) {
 
             for (uint16_t regnum = 0; regnum < regcount; regnum++) {
@@ -460,8 +460,8 @@ void Load_store_elimination::eliminate_store() {
                 auto regnum = static_cast<Register_access*>(node)->regnum();
                 should_add[regnum] = 1;
 
-            } else if (emu::strict_exception ||
-                        (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context())) {
+            } else if (emu::state::strict_exception ||
+                       (node->opcode() == Opcode::call && static_cast<Call*>(node)->need_context())) {
 
                 // If strict exception is enabled, or the call takes CPU context as argument, then we consider it
                 // as an operation that can potentially clobber the registers. We assume CPU contexts cannot be

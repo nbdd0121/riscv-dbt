@@ -17,7 +17,7 @@ void Lowering::after(Node* node) {
         case Opcode::load_memory: {
 
             // In this case lowering is not needed.
-            if (!emu::no_direct_memory_access) break;
+            if (!emu::state::no_direct_memory_access) break;
 
             auto output = node->value(1);
 
@@ -41,7 +41,7 @@ void Lowering::after(Node* node) {
         case Opcode::store_memory: {
 
             // In this case lowering is not needed.
-            if (!emu::no_direct_memory_access) break;
+            if (!emu::state::no_direct_memory_access) break;
 
             auto value = node->operand(2);
 

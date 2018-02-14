@@ -41,7 +41,7 @@ Elf_file::~Elf_file() {
 void Elf_file::load(const char *filename) {
 
     // Similar to sysroot lookup in syscall.cc, prioritize sysroot directory.
-    std::string sysroot_path = sysroot + filename;
+    std::string sysroot_path = state::sysroot + filename;
     if (filename[0] == '/' && access(sysroot_path.c_str(), F_OK) == 0) {
         fd = open(sysroot_path.c_str(), O_RDONLY);
 
@@ -210,15 +210,7 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
     return header->e_entry;
 }
 
-    state.original_brk = bias + brk;
-    state.brk = bias + brk;
-    state.heap_start = bias + ((brk + page_mask) &~ page_mask);
-    state.heap_end = state.heap_start;
-
-    return bias + header->e_entry;
-}
-
-reg_t load_elf(const char *filename, State& state) {
+reg_t load_elf(const char *filename) {
 
     Elf_file file;
     file.load(filename);
@@ -234,10 +226,10 @@ reg_t load_elf(const char *filename, State& state) {
     reg_t entry = load_elf_image(file, bias, brk);
 
     brk = (brk + page_mask) &~ page_mask;
-    state.original_brk = bias + brk;
-    state.brk = bias + brk;
-    state.heap_start = bias + brk;
-    state.heap_end = state.heap_start;
+    state::original_brk = bias + brk;
+    state::brk = bias + brk;
+    state::heap_start = bias + brk;
+    state::heap_end = state::heap_start;
     return entry + bias;
 }
 
