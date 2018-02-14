@@ -39,8 +39,15 @@ Elf_file::~Elf_file() {
 
 void Elf_file::load(const char *filename) {
 
-    // Open the file first
-    fd = open(filename, O_RDONLY);
+    // Similar to sysroot lookup in syscall.cc, prioritize sysroot directory.
+    std::string sysroot_path = sysroot + filename;
+    if (filename[0] == '/' && access(sysroot_path.c_str(), F_OK) == 0) {
+        fd = open(sysroot_path.c_str(), O_RDONLY);
+
+    } else {
+        fd = open(filename, O_RDONLY);
+    }
+
     if (fd == -1) {
         throw std::runtime_error { "cannot open file" };
     }
@@ -100,16 +107,47 @@ std::string Elf_file::find_interpreter() {
     return {};
 }
 
-reg_t load_elf(const char *filename, State& state) {
-
-    Elf_file file;
-    file.load(filename);
-    file.validate();
-
+reg_t load_elf_image(Elf_file& file, State& state) {
 
     // Parse the ELF header and load the binary into memory.
     auto memory = file.memory;
     elf::Elf64_Ehdr *header = reinterpret_cast<elf::Elf64_Ehdr*>(memory);
+
+    // Scan the bounds of the image.
+    reg_t loaddr = -1;
+    reg_t hiaddr = 0;
+    for (int i = 0; i < header->e_phnum; i++) {
+        elf::Elf64_Phdr *h = reinterpret_cast<elf::Elf64_Phdr*>(memory + header->e_phoff + header->e_phentsize * i);
+        if (h->p_type == elf::PT_LOAD) {
+            if (h->p_vaddr < loaddr) loaddr = h->p_vaddr;
+            if (h->p_vaddr + h->p_memsz > hiaddr) hiaddr = h->p_vaddr + h->p_memsz;
+        }
+    }
+
+    loaddr &=~ page_mask;
+    hiaddr = (hiaddr + page_mask) &~ page_mask;
+
+    reg_t bias = 0;
+    // For dynamic binaries, we need to allocate a location for it.
+    if (header->e_type == elf::ET_DYN) {
+        bias = reinterpret_cast<reg_t>(mmap(
+            reinterpret_cast<void*>(0x4000000000),
+            hiaddr - loaddr,
+            PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0
+        )) - loaddr;
+
+    } else {
+        auto address = mmap(
+            reinterpret_cast<void*>(loaddr),
+            hiaddr - loaddr,
+            PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0
+        );
+
+        if (address != reinterpret_cast<void*>(loaddr)) {
+            munmap(address, hiaddr - loaddr);
+            throw std::bad_alloc{};
+        }
+    }
 
     reg_t brk = 0;
     for (int i = 0; i < header->e_phnum; i++) {
@@ -121,15 +159,44 @@ reg_t load_elf(const char *filename, State& state) {
                 throw std::runtime_error { "invalid elf file: constraint p_filesz <= p_memsz is not satisified" };
             }
 
+            reg_t vaddr_map_end = h->p_vaddr + h->p_filesz;
             reg_t vaddr_end = h->p_vaddr + h->p_memsz;
+            reg_t file_offset = h->p_offset;
             reg_t page_start = h->p_vaddr &~ page_mask;
+            reg_t map_end = vaddr_map_end &~ page_mask;
             reg_t page_end = (vaddr_end + page_mask) &~ page_mask;
-            allocate_page(page_start, page_end - page_start);
 
-            // MMU should have memory zeroes at startup
-            zero_memory(h->p_vaddr + h->p_filesz, h->p_memsz - h->p_filesz);
-            // TODO: This should be be mmapped instead of copied
-            copy_from_host(h->p_vaddr, memory + h->p_offset, h->p_filesz);
+            int prot = 0;
+            if (h->p_flags & elf::PF_R) prot |= PROT_READ;
+            if (h->p_flags & elf::PF_W) prot |= PROT_WRITE;
+            if (h->p_flags & elf::PF_X) prot |= PROT_READ;
+
+            // First page is not aligned, we need t adjust it so that it is aligned.
+            if (h->p_vaddr != page_start) {
+                file_offset -= h->p_vaddr - page_start;
+            }
+
+            // Map until map_end.
+            mmap(
+                reinterpret_cast<void*>(bias + page_start),
+                map_end - page_start,
+                prot, MAP_PRIVATE | MAP_FIXED, file.fd, file_offset
+            );
+
+            // For those beyond map_end, we need those beyond filesz to be zero. As we know the memory location will
+            // initially be zero, we just make them writable and copy the remaining part across.
+            if (map_end != page_end) {
+
+                // Make it writable.
+                mprotect(reinterpret_cast<void*>(bias + map_end), page_end - map_end, PROT_READ | PROT_WRITE);
+
+                // Copy across.
+                copy_from_host(bias + map_end, memory + file_offset + (map_end - page_start), vaddr_map_end - map_end);
+
+                if (prot != (PROT_READ | PROT_WRITE)) {
+                    mprotect(reinterpret_cast<void*>(bias + map_end), page_end - map_end, prot);
+                }
+            }
 
             // Set brk to the address past the last program segment.
             if (vaddr_end > brk) {
@@ -138,20 +205,28 @@ reg_t load_elf(const char *filename, State& state) {
         }
     }
 
-    // Align brk to page boundary.
     brk = ((brk + page_mask) &~ page_mask);
 
-    state.original_brk = brk;
-    state.brk = brk;
-    state.heap_start = brk;
+    state.original_brk = bias + brk;
+    state.brk = bias + brk;
+    state.heap_start = bias + ((brk + page_mask) &~ page_mask);
     state.heap_end = state.heap_start;
+
+    return bias + header->e_entry;
+}
+
+reg_t load_elf(const char *filename, State& state) {
+
+    Elf_file file;
+    file.load(filename);
+    file.validate();
 
     std::string interpreter = file.find_interpreter();
     if (!interpreter.empty()) {
         throw std::runtime_error { "sad. dynamic binaries are not yet supported." };
     }
 
-    return header->e_entry;
+    return load_elf_image(file, state);
 }
 
 }
