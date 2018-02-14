@@ -662,7 +662,11 @@ reg_t syscall(
                 if (new_heap_end > state->heap_end) {
 
                     // The heap needs to be expanded
-                    allocate_page(state->heap_end, new_heap_end - state->heap_end);
+                    guest_mmap(
+                        state->heap_end, new_heap_end - state->heap_end,
+                        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0
+                    );
+
                     state->heap_end = new_heap_end;
 
                 } else if (new_heap_end < state->heap_end) {
@@ -679,7 +683,7 @@ reg_t syscall(
             return ret;
         }
         case riscv::abi::Syscall_number::munmap: {
-            reg_t ret = return_errno(munmap(translate_address(arg0), arg1));
+            reg_t ret = return_errno(guest_munmap(arg0, arg1));
             if (strace) {
                 util::error("munmap({:#x}, {}) = {}\n", arg0, arg1, ret);
             }
@@ -695,14 +699,8 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::mmap: {
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
-
-            // For PROT_EXEC request we translate it into PROT_READ, as we need to interpret it.
-            if (prot & PROT_EXEC) {
-                prot = (prot &~ PROT_EXEC) | PROT_READ;
-            }
-
             int flags = convert_mmap_flags_from_host<Abi>(arg3);
-            reg_t ret = reinterpret_cast<reg_t>(mmap(translate_address(arg0), arg1, prot, flags, arg4, arg5));
+            reg_t ret = reinterpret_cast<reg_t>(guest_mmap(arg0, arg1, prot, flags, arg4, arg5));
             if (strace) {
                 util::error("mmap({:#x}, {}, {}, {}, {}, {}) = {:#x}\n", arg0, arg1, arg2, arg3, arg4, arg5, ret);
             }
@@ -711,13 +709,7 @@ reg_t syscall(
         }
         case riscv::abi::Syscall_number::mprotect: {
             int prot = convert_mmap_prot_from_host<Abi>(arg2);
-
-            // For PROT_EXEC request we translate it into PROT_READ, as we need to interpret it.
-            if (prot & PROT_EXEC) {
-                prot = (prot &~ PROT_EXEC) | PROT_READ;
-            }
-
-            sreg_t ret = return_errno(mprotect(translate_address(arg0), arg1, prot));
+            sreg_t ret = return_errno(guest_mprotect(arg0, arg1, prot));
             if (strace) {
                 util::error("mprotect({:#x}, {}, {}) = {:#x}\n", arg0, arg1, arg2, ret);
             }

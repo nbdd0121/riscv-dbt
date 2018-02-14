@@ -1,3 +1,4 @@
+#include <sys/mman.h>
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -101,7 +102,7 @@ int main(int argc, const char **argv) {
 
     // Set sp to be the highest possible address.
     emu::reg_t sp = 0x7fff00000000;
-    emu::allocate_page(sp - 0x800000, 0x800000);
+    emu::guest_mmap(sp - 0x800000, 0x800000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 
     // This contains (guest) pointers to all argument strings.
     std::vector<emu::reg_t> arg_pointers(argc - arg_index);

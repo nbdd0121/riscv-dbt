@@ -6,21 +6,37 @@
 
 namespace emu {
 
-// Allocate memory at given virtual address and estabilish mapping.
-// The address and size must be page-aligned.
-void allocate_page(reg_t address, reg_t size) {
+// Establish a mapping for guest.
+reg_t guest_mmap(reg_t address, reg_t size, int prot, int flags, int fd, reg_t offset) {
 
-    // The input must be page-aligned.
-    ASSERT((address & page_mask) == 0 && (size & page_mask) == 0);
-
-    auto ptr = translate_address(address);
-
-    void *ret = mmap(ptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if (ret != ptr) {
-        throw std::bad_alloc {};
+    // For PROT_EXEC request we translate it into PROT_READ, as we need to interpret it.
+    if (prot & PROT_EXEC) {
+        prot &=~ PROT_EXEC;
+        prot |= PROT_READ;
     }
 
-    return;
+    return reinterpret_cast<reg_t>(mmap(translate_address(address), size, prot, flags, fd, offset));
+}
+
+reg_t guest_mmap_nofail(reg_t address, reg_t size, int prot, int flags, int fd, reg_t offset) {
+    reg_t ret = guest_mmap(address, size, prot, flags, fd, offset);
+    if (ret == static_cast<reg_t>(-1)) throw std::bad_alloc{};
+    return ret;
+}
+
+int guest_mprotect(reg_t address, reg_t size, int prot) {
+
+    // Translate protection flags.
+    if (prot & PROT_EXEC) {
+        prot &=~ PROT_EXEC;
+        prot |= PROT_READ;
+    }
+
+    return mprotect(translate_address(address), size, prot);
+}
+
+int guest_munmap(reg_t address, reg_t size) {
+    return munmap(translate_address(address), size);
 }
 
 }

@@ -21,7 +21,10 @@ inline std::byte* translate_address(reg_t address) {
     return reinterpret_cast<std::byte*>(address);
 }
 
-void allocate_page(reg_t address, reg_t size);
+reg_t guest_mmap(reg_t address, reg_t size, int prot, int flags, int fd, reg_t offset);
+reg_t guest_mmap_nofail(reg_t address, reg_t size, int prot, int flags, int fd, reg_t offset);
+int guest_mprotect(reg_t address, reg_t size, int prot);
+int guest_munmap(reg_t address, reg_t size);
 
 template<typename T>
 inline T load_memory(reg_t address) {

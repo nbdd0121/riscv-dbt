@@ -131,21 +131,21 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
     bias = 0;
     // For dynamic binaries, we need to allocate a location for it.
     if (header->e_type == ET_DYN) {
-        bias = reinterpret_cast<reg_t>(mmap(
-            reinterpret_cast<void*>(0x4000000000),
+        bias = guest_mmap_nofail(
+            0x4000000000,
             hiaddr - loaddr,
             PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0
-        )) - loaddr;
+        ) - loaddr;
 
     } else {
-        auto address = mmap(
-            reinterpret_cast<void*>(loaddr),
+        auto address = guest_mmap_nofail(
+            loaddr,
             hiaddr - loaddr,
             PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0
         );
 
-        if (address != reinterpret_cast<void*>(loaddr)) {
-            munmap(address, hiaddr - loaddr);
+        if (address != loaddr) {
+            guest_munmap(address, hiaddr - loaddr);
             throw std::bad_alloc{};
         }
     }
@@ -170,7 +170,7 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
             int prot = 0;
             if (h->p_flags & PF_R) prot |= PROT_READ;
             if (h->p_flags & PF_W) prot |= PROT_WRITE;
-            if (h->p_flags & PF_X) prot |= PROT_READ;
+            if (h->p_flags & PF_X) prot |= PROT_EXEC;
 
             // First page is not aligned, we need t adjust it so that it is aligned.
             if (h->p_vaddr != page_start) {
@@ -178,8 +178,8 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
             }
 
             // Map until map_end.
-            mmap(
-                reinterpret_cast<void*>(bias + page_start),
+            guest_mmap_nofail(
+                bias + page_start,
                 map_end - page_start,
                 prot, MAP_PRIVATE | MAP_FIXED, file.fd, file_offset
             );
@@ -189,13 +189,13 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
             if (map_end != page_end) {
 
                 // Make it writable.
-                mprotect(reinterpret_cast<void*>(bias + map_end), page_end - map_end, PROT_READ | PROT_WRITE);
+                guest_mprotect(bias + map_end, page_end - map_end, PROT_READ | PROT_WRITE);
 
                 // Copy across.
                 copy_from_host(bias + map_end, memory + file_offset + (map_end - page_start), vaddr_map_end - map_end);
 
                 if (prot != (PROT_READ | PROT_WRITE)) {
-                    mprotect(reinterpret_cast<void*>(bias + map_end), page_end - map_end, prot);
+                    guest_mprotect(bias + map_end, page_end - map_end, prot);
                 }
             }
 
