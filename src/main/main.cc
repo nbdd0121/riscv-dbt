@@ -1,4 +1,7 @@
+#include <sys/auxv.h>
 #include <sys/mman.h>
+#include <unistd.h>
+
 #include <cstring>
 #include <iostream>
 #include <memory>
@@ -131,13 +134,29 @@ int main(int argc, const char **argv) {
 
     emu::reg_t random_data = sp;
 
-    // AT_NULL = 0
+    // Setup auxillary vectors.
     push(0);
-    push(0);
+    push(AT_NULL);
 
-    // AT_RANDOM = random_data
+    // Initialize context, and set up ELF-specific auxillary vectors.
+    riscv::Context context;
+    emu::state::exec_path = program_name;
+    context.pc = emu::load_elf(program_name, sp);
+
+    push(getuid());
+    push(AT_UID);
+    push(geteuid());
+    push(AT_EUID);
+    push(getgid());
+    push(AT_GID);
+    push(getegid());
+    push(AT_EGID);
+    push(0);
+    push(AT_HWCAP);
+    push(100);
+    push(AT_CLKTCK);
     push(random_data);
-    push(25);
+    push(AT_RANDOM);
 
     // envp = 0
     push(0);
@@ -151,12 +170,6 @@ int main(int argc, const char **argv) {
 
     // set argc
     push(argc - arg_index);
-
-    riscv::Context context;
-
-    // Initialize context
-    emu::state::exec_path = program_name;
-    context.pc = emu::load_elf(program_name);
 
     for (int i = 1; i < 32; i++) {
         // Reset to some easily debuggable value.

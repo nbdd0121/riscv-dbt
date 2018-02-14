@@ -1,5 +1,6 @@
 #include <elf.h>
 #include <fcntl.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -108,7 +109,7 @@ std::string Elf_file::find_interpreter() {
     return {};
 }
 
-reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
+reg_t load_elf_image(Elf_file& file, reg_t& load_addr, reg_t& brk) {
 
     // Parse the ELF header and load the binary into memory.
     auto memory = file.memory;
@@ -128,7 +129,7 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
     loaddr &=~ page_mask;
     hiaddr = (hiaddr + page_mask) &~ page_mask;
 
-    bias = 0;
+    reg_t bias = 0;
     // For dynamic binaries, we need to allocate a location for it.
     if (header->e_type == ET_DYN) {
         bias = guest_mmap_nofail(
@@ -178,11 +179,13 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
             }
 
             // Map until map_end.
-            guest_mmap_nofail(
-                bias + page_start,
-                map_end - page_start,
-                prot, MAP_PRIVATE | MAP_FIXED, file.fd, file_offset
-            );
+            if (map_end != page_start) {
+                guest_mmap_nofail(
+                    bias + page_start,
+                    map_end - page_start,
+                    prot, MAP_PRIVATE | MAP_FIXED, file.fd, file_offset
+                );
+            }
 
             // For those beyond map_end, we need those beyond filesz to be zero. As we know the memory location will
             // initially be zero, we just make them writable and copy the remaining part across.
@@ -206,31 +209,69 @@ reg_t load_elf_image(Elf_file& file, reg_t& bias, reg_t& brk) {
         }
     }
 
-    brk = ((brk + page_mask) &~ page_mask);
-    return header->e_entry;
+    // Return information needed by the caller.
+    load_addr = bias + loaddr;
+    brk = bias + ((brk + page_mask) &~ page_mask);
+    return bias + header->e_entry;
 }
 
-reg_t load_elf(const char *filename) {
+reg_t load_elf(const char *filename, reg_t& sp) {
 
     Elf_file file;
     file.load(filename);
     file.validate();
+    auto header = reinterpret_cast<Elf64_Ehdr*>(file.memory);
 
+    reg_t load_addr;
+    reg_t interp_addr = 0;
+    reg_t brk;
+    reg_t entry = load_elf_image(file, load_addr, brk);
+    reg_t actual_entry = entry;
+
+    // If an interpreter exists, load it as well.
     std::string interpreter = file.find_interpreter();
     if (!interpreter.empty()) {
-        throw std::runtime_error { "sad. dynamic binaries are not yet supported." };
+        Elf_file interp_file;
+        interp_file.load(interpreter.c_str());
+        interp_file.validate();
+
+        if (!interp_file.find_interpreter().empty()) {
+            throw std::runtime_error { "interpreter cannot require other interpreters" };
+        }
+
+        reg_t interp_brk;
+        actual_entry = load_elf_image(interp_file, interp_addr, interp_brk);
     }
 
-    reg_t bias;
-    reg_t brk;
-    reg_t entry = load_elf_image(file, bias, brk);
-
+    // Setup brk.
     brk = (brk + page_mask) &~ page_mask;
-    state::original_brk = bias + brk;
-    state::brk = bias + brk;
-    state::heap_start = bias + brk;
+    state::original_brk = brk;
+    state::brk = brk;
+    state::heap_start = brk;
     state::heap_end = state::heap_start;
-    return entry + bias;
+
+    auto push = [&sp](reg_t value) {
+        sp -= sizeof(reg_t);
+        store_memory<reg_t>(sp, value);
+    };
+
+    // Setup auxillary vectors.
+    push(load_addr + header->e_phoff);
+    push(AT_PHDR);
+    push(header->e_phentsize);
+    push(AT_PHENT);
+    push(header->e_phnum);
+    push(AT_PHNUM);
+    push(page_size);
+    push(AT_PAGESZ);
+    push(interp_addr);
+    push(AT_BASE);
+    push(0);
+    push(AT_FLAGS);
+    push(entry);
+    push(AT_ENTRY);
+
+    return actual_entry;
 }
 
 }

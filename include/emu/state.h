@@ -64,7 +64,8 @@ struct Exit_control: std::runtime_error {
     Exit_control(uint8_t exit_code): std::runtime_error { "exit" }, exit_code {exit_code} {}
 };
 
-reg_t load_elf(const char *filename);
+// Load elf, and setup auxillary vectors.
+reg_t load_elf(const char *filename, reg_t& sp);
 
 }
 
