@@ -66,7 +66,7 @@ void handle_fpe(int sig, siginfo_t*, void* context) {
                 util::read_as<uint32_t>(reinterpret_cast<void*>(address));
     }
 
-    // Retrive dividend.
+    // Retrive dividend. Note that technically RDX is also dividend, but we assume it is also sign/zero-extended.
     uint64_t dividend = ucontext->uc_mcontext.gregs[REG_RAX];
     if (opsize == 4) dividend = static_cast<uint32_t>(dividend);
 

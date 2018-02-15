@@ -446,6 +446,55 @@ void Backend::emit_mul(ir::Node* node, Opcode opcode) {
     emit(unary(opcode, loc));
 }
 
+void Backend::emit_div(ir::Node* node, Opcode opcode) {
+    auto quo = node->value(0);
+    auto rem = node->value(1);
+    auto op0 = node->operand(0);
+    auto op1 = node->operand(1);
+
+    ASSERT(quo.type() == rem.type());
+    Register rax = register_of_id(quo.type(), 0);
+    Register rdx = register_of_id(rem.type(), 2);
+
+    // Fix op0 into rax.
+    if (op0.is_const()) {
+        if (register_content[0]) spill_register(rax);
+        emit(mov(rax, op0.const_value()));
+    } else {
+        ensure_register(op0, rax);
+    }
+    decrease_reference(op0);
+    pin_register(rax);
+
+    // Make sure useful values in rax and rdx are stored away safely.
+    if (register_content[0]) spill_register(rax);
+    if (register_content[2]) spill_register(rdx);
+    pin_register(rdx);
+
+    // Location of op1
+    Operand loc = get_location_ex(op1, true, false);
+    decrease_reference(op1);
+
+    unpin_register(rax);
+    unpin_register(rdx);
+
+    bind_register(quo, rax);
+    bind_register(rem, rdx);
+
+    // Setup edx/rdx to be zero/sign-extension of dividend.
+    if (opcode == Opcode::div) {
+        emit(i_xor(x86::Register::edx, x86::Register::edx));
+    } else {
+        if (quo.type() == ir::Type::i64) {
+            emit(cqo());
+        } else {
+            emit(cdq());
+        }
+    }
+
+    emit(unary(opcode, loc));
+}
+
 Condition_code Backend::emit_compare(ir::Value value) {
     int& refcount = reference_count[value];
     if (refcount == 0) {
@@ -772,6 +821,8 @@ void Backend::visit(ir::Node* node) {
         case ir::Opcode::geu: break;
         case ir::Opcode::mul: emit_mul(node, Opcode::imul); break;
         case ir::Opcode::mulu: emit_mul(node, Opcode::mul); break;
+        case ir::Opcode::div: emit_div(node, Opcode::idiv); break;
+        case ir::Opcode::divu: emit_div(node, Opcode::div); break;
         case backend::Target_opcode::address: break;
         default: ASSERT(0);
     }

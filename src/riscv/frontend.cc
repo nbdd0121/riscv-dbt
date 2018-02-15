@@ -325,6 +325,14 @@ void Frontend::compile(const Basic_block& block) {
             case Opcode::mulhsu:
             case Opcode::mulhu:
             case Opcode::mulw: emit_mul(inst); break;
+            case Opcode::div: emit_div(inst, ir::Opcode::div, false, false); break;
+            case Opcode::divu: emit_div(inst, ir::Opcode::divu, false, false); break;
+            case Opcode::rem: emit_div(inst, ir::Opcode::div, true, false); break;
+            case Opcode::remu: emit_div(inst, ir::Opcode::divu, true, false); break;
+            case Opcode::divw: emit_div(inst, ir::Opcode::div, false, true); break;
+            case Opcode::divuw: emit_div(inst, ir::Opcode::divu, false, true); break;
+            case Opcode::remw: emit_div(inst, ir::Opcode::div, true, true); break;
+            case Opcode::remuw: emit_div(inst, ir::Opcode::divu, true, true); break;
             default: {
                 auto serialized_inst = builder.constant(ir::Type::i64, util::read_as<uint64_t>(&inst));
                 last_memory = graph.manage(new ir::Call(
