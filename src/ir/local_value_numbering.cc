@@ -517,6 +517,65 @@ void Local_value_numbering::after(Node* node) {
         return;
     }
 
+    if (opcode == Opcode::div || opcode == Opcode::divu) {
+        auto quo = node->value(0);
+        auto rem = node->value(1);
+        auto op0 = node->operand(0);
+        auto op1 = node->operand(1);
+
+        // Fold if both operands are constant.
+        if (op0.is_const() && op1.is_const()) {
+            uint64_t v0 = op0.const_value();
+            uint64_t v1 = op1.const_value();
+
+            // RISC-V specific exceptional case handling.
+            if (v1 == 0) {
+                replace_with_constant(quo, -1);
+                replace_with_constant(rem, v0);
+                return;
+            }
+
+            if (opcode == Opcode::div) {
+                int64_t type_min = quo.type() == Type::i64 ?
+                        std::numeric_limits<int64_t>::min() :
+                        std::numeric_limits<int32_t>::min();
+
+                if (v0 == static_cast<uint64_t>(type_min) && v1 == static_cast<uint64_t>(-1)) {
+                    replace_with_constant(quo, type_min);
+                    replace_with_constant(rem, 0);
+                    return;
+                }
+            }
+
+            if (opcode == Opcode::divu) {
+                if (quo.type() == Type::i64) {
+                    replace_with_constant(quo, v0 / v1);
+                    replace_with_constant(rem, v0 % v1);
+                } else {
+                    replace_with_constant(quo, sign_extend(
+                        ir::Type::i32, static_cast<uint32_t>(v0) / static_cast<uint32_t>(v1)
+                    ));
+                    replace_with_constant(rem, sign_extend(
+                        ir::Type::i32, static_cast<uint32_t>(v0) % static_cast<uint32_t>(v1)
+                    ));
+                }
+            } else {
+                if (quo.type() == Type::i64) {
+                    replace_with_constant(quo, static_cast<int64_t>(v0) / static_cast<int64_t>(v1));
+                    replace_with_constant(rem, static_cast<int64_t>(v0) % static_cast<int64_t>(v1));
+                } else {
+                    replace_with_constant(quo, static_cast<int32_t>(v0) / static_cast<int32_t>(v1));
+                    replace_with_constant(rem, static_cast<int32_t>(v0) % static_cast<int32_t>(v1));
+                }
+            }
+
+            return;
+        }
+
+        lvn(node);
+        return;
+    }
+
     ASSERT(0);
 }
 

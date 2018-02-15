@@ -121,10 +121,15 @@ enum: uint16_t {
     mux,
 
     /* Other arithmetic ops */
-    // Multiplication. If returns both higher and lower bits.
+    // Multiplication. It returns both lower and higher bits.
     // Input: Value, Value. Output: Value, Value.
     mul,
     mulu,
+
+    // Division. It returns both quotient and remainder.
+    // Input: Value, Value. Output: Value, Value.
+    div,
+    divu,
 
     /* Opcodes after target_start are target-specific opcodes */
     target_start,

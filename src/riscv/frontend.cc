@@ -43,6 +43,7 @@ struct Frontend {
     void emit_shift(Instruction inst, uint16_t opcode, bool w);
     void emit_slt(Instruction inst, uint16_t opcode);
     void emit_mul(Instruction inst);
+    void emit_div(Instruction inst, uint16_t opcode, bool rem, bool w);
     void emit_branch(Instruction instead, uint16_t opcode, emu::reg_t pc);
 
     void compile(const Basic_block& block);
@@ -182,6 +183,15 @@ void Frontend::emit_mul(Instruction inst) {
         auto result = builder.arithmetic(ir::Opcode::sub, mul_node->value(1), rs2_masked);
         emit_store_register(inst.rd(), result);
     }
+}
+
+void Frontend::emit_div(Instruction inst, uint16_t opcode, bool rem, bool w) {
+    if (inst.rd() == 0) return;
+    ir::Type type = w ? ir::Type::i32 : ir::Type::i64;
+    auto rs1_value = emit_load_register(type, inst.rs1());
+    auto rs2_value = emit_load_register(type, inst.rs2());
+    auto div_node = builder.create(opcode, {type, type}, {rs1_value, rs2_value});
+    emit_store_register(inst.rd(), div_node->value(rem ? 1 : 0));
 }
 
 void Frontend::emit_branch(Instruction inst, uint16_t opcode, emu::reg_t pc) {

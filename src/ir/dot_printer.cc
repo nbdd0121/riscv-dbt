@@ -42,6 +42,8 @@ const char* Dot_printer::opcode_name(uint16_t opcode) {
         CASE(mux)
         CASE(mul)
         CASE(mulu)
+        CASE(div)
+        CASE(divu)
 #undef CASE
         default: return "(unknown)";
     }

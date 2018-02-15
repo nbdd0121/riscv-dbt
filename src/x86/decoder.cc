@@ -44,7 +44,12 @@ void Decoder::decode_modrm(Operand& operand, Register& reg, int size) {
 
     // Operand is a register.
     if (mod == 0b11) {
-        operand = static_cast<Register>(rm | reg_gpq);
+        int op_id = rm | (_rex & 0x1 ? 8 : 0);
+        if (size == 1 && !(_rex & 0x40)) {
+            operand = static_cast<Register>(op_id | reg_gpb);
+        } else {
+            operand = register_of_size(op_id, size);
+        }
         return;
     }
 
