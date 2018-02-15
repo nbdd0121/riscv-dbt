@@ -27,7 +27,7 @@ struct Frontend {
     emu::reg_t instret;
 
     ir::Value emit_load_register(ir::Type type, uint16_t reg);
-    void emit_store_register(uint16_t reg, ir::Value value, bool sext = false);
+    void emit_store_register(uint16_t reg, ir::Value value, bool sext = true);
 
     // If some instruction has the possibility to throw, for correctness we need to update pc and instret to
     // correct value before the instruction.
@@ -113,7 +113,7 @@ void Frontend::emit_alui(Instruction inst, uint16_t opcode, bool w) {
     auto rs1_value = emit_load_register(type, inst.rs1());
     auto imm_value = builder.constant(type, inst.imm());
     auto rd_value = builder.arithmetic(opcode, rs1_value, imm_value);
-    emit_store_register(inst.rd(), rd_value, true);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_shifti(Instruction inst, uint16_t opcode, bool w) {
@@ -122,7 +122,7 @@ void Frontend::emit_shifti(Instruction inst, uint16_t opcode, bool w) {
     auto rs1_value = emit_load_register(type, inst.rs1());
     auto imm_value = builder.constant(ir::Type::i8, inst.imm());
     auto rd_value = builder.shift(opcode, rs1_value, imm_value);
-    emit_store_register(inst.rd(), rd_value, true);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_slti(Instruction inst, uint16_t opcode) {
@@ -139,7 +139,7 @@ void Frontend::emit_alu(Instruction inst, uint16_t opcode, bool w) {
     auto rs1_value = emit_load_register(type, inst.rs1());
     auto rs2_value = emit_load_register(type, inst.rs2());
     auto rd_value = builder.arithmetic(opcode, rs1_value, rs2_value);
-    emit_store_register(inst.rd(), rd_value, true);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_shift(Instruction inst, uint16_t opcode, bool w) {
@@ -148,7 +148,7 @@ void Frontend::emit_shift(Instruction inst, uint16_t opcode, bool w) {
     auto rs1_value = emit_load_register(type, inst.rs1());
     auto rs2_value = emit_load_register(ir::Type::i8, inst.rs2());
     auto rd_value = builder.shift(opcode, rs1_value, rs2_value);
-    emit_store_register(inst.rd(), rd_value, true);
+    emit_store_register(inst.rd(), rd_value);
 }
 
 void Frontend::emit_slt(Instruction inst, uint16_t opcode) {
@@ -174,7 +174,7 @@ void Frontend::emit_mul(Instruction inst) {
     if (inst.opcode() == Opcode::mul || inst.opcode() == Opcode::mulw) {
         emit_store_register(inst.rd(), mul_node->value(0));
     } else if (inst.opcode() == Opcode::mulh || inst.opcode() == Opcode::mulhu) {
-        emit_store_register(inst.rd(), mul_node->value(1), true);
+        emit_store_register(inst.rd(), mul_node->value(1));
     } else {
         // For mulhsu, we translate to the following:
         // First do unsigned multiplication first, then apply fix up. How to fix up is described in dbt.cc and step.cc.
