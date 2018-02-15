@@ -37,6 +37,7 @@ OBJS = \
 	util/format.o \
 	util/safe_memory.o \
 	x86/backend.o \
+	x86/decoder.o \
 	x86/disassembler.o \
 	x86/encoder.o \
 	x86/lowering.o

@@ -25,6 +25,7 @@ enum class Condition_code: uint8_t {
 };
 
 enum class Opcode: uint16_t {
+    illegal,
     add,
     i_and,
     cdqe,

@@ -123,23 +123,9 @@ _Unwind_Reason_Code dbt_personality(
 ) {
     if (actions & _UA_SEARCH_PHASE) {
 
-        // We will need to catch FPE exception. So check if the exception_class is a C++ exception.
-        // 432B2B00 is ASCII of 'C++\0'.
-        if ((exception_class & 0xFFFFFFFF) == 0x432B2B00) {
-
-            // Get the C++ exception object from the generic exception object.
-            __cxa_exception *ex = reinterpret_cast<__cxa_exception*>(
-                reinterpret_cast<uintptr_t>(exception_object) - offsetof(__cxa_exception, unwindHeader)
-            );
-
-            // Check if the exception in process is a FPE exception.
-            if (*ex->exceptionType == typeid(Fpe_exception)) {
-                return _URC_HANDLER_FOUND;
-            }
-        }
-
-        // Otherwise we do not catch it, and we proceed to unwind.
+        // We don't catch anything, just continue the unwind.
         return _URC_CONTINUE_UNWIND;
+
     } else {
 
         // Cleanup phase.
@@ -163,26 +149,10 @@ _Unwind_Reason_Code dbt_personality(
         }
         ASSERT(i < block.pc_map.size());
 
-        if (actions & _UA_HANDLER_FRAME) {
-
-            // Emulate the trapping division instruction using step function.
-            riscv::step(ctx, block.block.instructions[i]);
-
-            // Advance the IP past the generated sequence for the trapping guest instruction.
-            _Unwind_SetIP(context, current_ip - host_offset + block.pc_map[i]);
-
-            // Cleanup the exception object.
-            _Unwind_DeleteException(exception_object);
-
-            return _URC_INSTALL_CONTEXT;
-
-        } else {
-
-            // Make sure emulated CPU state is consistency.
-            ctx->instret += i;
-            ctx->pc += guest_offset;
-            return _URC_CONTINUE_UNWIND;
-        }
+        // Make sure emulated CPU state is consistency.
+        ctx->instret += i;
+        ctx->pc += guest_offset;
+        return _URC_CONTINUE_UNWIND;
     }
 }
 
