@@ -655,26 +655,31 @@ reg_t syscall(
         case riscv::abi::Syscall_number::brk: {
             if (arg0 < state::original_brk) {
                 // Cannot reduce beyond original_brk
+            } else if (arg0 <= state::heap_end) {
+                if (arg0 > state::brk) {
+                    zero_memory(state::brk, arg0 - state::brk);
+                }
+                state::brk = arg0;
             } else {
                 reg_t new_heap_end = std::max(state::heap_start, (arg0 + page_mask) &~ page_mask);
 
-                if (new_heap_end > state::heap_end) {
+                // The heap needs to be expanded
+                reg_t addr = guest_mmap(
+                    state::heap_end, new_heap_end - state::heap_end,
+                    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0
+                );
 
-                    // The heap needs to be expanded
-                    guest_mmap(
-                        state::heap_end, new_heap_end - state::heap_end,
-                        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0
-                    );
+                if (addr != state::heap_end) {
+                    // We failed to expand the brk.
+                    guest_munmap(addr, new_heap_end - state::heap_end);
 
+                } else {
+                    zero_memory(state::brk, state::heap_end - state::brk);
                     state::heap_end = new_heap_end;
-
-                } else if (new_heap_end < state::heap_end) {
-
-                    // TODO: Also shrink when brk is reduced.
+                    state::brk = arg0;
                 }
-
-                state::brk = arg0;
             }
+
             reg_t ret = state::brk;
             if (state::strace) {
                 util::log("brk({}) = {}\n", pointer(arg0), pointer(ret));
