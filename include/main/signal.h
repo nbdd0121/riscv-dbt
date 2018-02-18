@@ -4,7 +4,8 @@
 #include <stdexcept>
 
 struct Segv_exception: std::runtime_error {
-    Segv_exception(): std::runtime_error {"segmentation fault"} {}
+    int sig;
+    Segv_exception(int sig): std::runtime_error {"segmentation fault"}, sig {sig} {}
 };
 
 void setup_fault_handler();

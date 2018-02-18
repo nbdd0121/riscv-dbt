@@ -11,13 +11,13 @@
 namespace {
 
 void handle_fault(int sig) {
-    ASSERT(sig == SIGSEGV);
+    ASSERT(sig == SIGSEGV || sig == SIGBUS);
 
     sigset_t x;
     sigemptyset(&x);
     sigaddset(&x, sig);
     sigprocmask(SIG_UNBLOCK, &x, nullptr);
-    throw Segv_exception {};
+    throw Segv_exception {sig};
 }
 
 void handle_fpe(int sig, siginfo_t*, void* context) {
@@ -105,6 +105,7 @@ void setup_fault_handler() {
     memset (&act, 0, sizeof(act));
     act.sa_handler = handle_fault;
     sigaction(SIGSEGV, &act, NULL);
+    sigaction(SIGBUS, &act, NULL);
 
     memset (&act, 0, sizeof(act));
     act.sa_sigaction = handle_fpe;
