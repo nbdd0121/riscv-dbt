@@ -6,7 +6,16 @@ namespace x86::backend {
 
 ir::Value Lowering::match_address(ir::Value value, bool required) {
     if (value.opcode() == Target_opcode::lea) {
-        return value.node()->operand(0);
+        if (value.references().size() == 1) {
+            return value.node()->operand(0);
+        }
+
+        // If the LEA node has more than one user, then we need to clone the address node, as address node can only
+        // have single user.
+        return _graph->manage(new ir::Node(
+            Target_opcode::address, {ir::Type::i64},
+            std::vector<ir::Value>(value.node()->operand(0).node()->operands())
+        ))->value(0);
     }
 
     ir::Value base = value;
@@ -103,6 +112,21 @@ void Lowering::after(ir::Node* node) {
             auto addr = match_address(output, false);
             if (addr) {
                 replace(output, _graph->manage(new ir::Node(Target_opcode::lea, {output.type()}, {addr}))->value(0));
+            }
+            break;
+        }
+        case ir::Opcode::cast:
+        case ir::Opcode::mux:
+        case ir::Opcode::i_if: {
+            size_t index = node->opcode() != ir::Opcode::i_if ? 0 : 1;
+            auto op = node->operand(index);
+
+            // It will be easier for the backend if non-constant node producing i1 has only single user.
+            if (op.type() == ir::Type::i1 && op.opcode() != ir::Opcode::constant && op.references().size() != 1) {
+                node->operand_set(index, _graph->manage(new ir::Node(
+                    op.opcode(), {ir::Type::i1},
+                    std::vector<ir::Value>(op.node()->operands())
+                ))->value(0));
             }
             break;
         }

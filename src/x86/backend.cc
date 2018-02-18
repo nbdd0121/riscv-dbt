@@ -496,10 +496,7 @@ void Backend::emit_div(ir::Node* node, Opcode opcode) {
 }
 
 Condition_code Backend::emit_compare(ir::Value value) {
-    int& refcount = reference_count[value];
-    if (refcount == 0) {
-        refcount = value.references().size();
-    }
+    ASSERT(value.references().size() == 1);
 
     auto node = value.node();
     Condition_code cc;
@@ -536,19 +533,14 @@ Condition_code Backend::emit_compare(ir::Value value) {
     emit(cmp(loc0, get_location_ex(op1, true, true)));
     unpin_register(loc0);
 
-    if (--refcount == 0) {
-        decrease_reference(op0);
-        decrease_reference(op1);
-    }
+    decrease_reference(op0);
+    decrease_reference(op1);
 
     return cc;
 }
 
 Memory Backend::emit_address(ir::Value value) {
-    int& refcount = reference_count[value];
-    if (refcount == 0) {
-        refcount = value.references().size();
-    }
+    ASSERT(value.references().size() == 1);
 
     auto node = value.node();
     auto base = node->operand(0);
@@ -563,9 +555,7 @@ Memory Backend::emit_address(ir::Value value) {
         : modify_size(ir::Type::i64, get_register_location(base));
 
     if (scale.const_value() == 0) {
-        if (--refcount == 0) {
-            decrease_reference(base);
-        }
+        decrease_reference(base);
 
         return qword(base_reg + node->operand(3).const_value());
     }
@@ -574,10 +564,8 @@ Memory Backend::emit_address(ir::Value value) {
     Register index_reg = modify_size(ir::Type::i64, get_register_location(index));
     if (base_reg != Register::none) unpin_register(base_reg);
 
-    if (--refcount == 0) {
-        decrease_reference(base);
-        decrease_reference(index);
-    }
+    decrease_reference(base);
+    decrease_reference(index);
 
     return qword(base_reg + index_reg * node->operand(2).const_value() + node->operand(3).const_value());
 }
