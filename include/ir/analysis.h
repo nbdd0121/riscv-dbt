@@ -113,6 +113,7 @@ private:
 public:
     void schedule();
     const std::vector<Node*>& get_node_list(Node* block) { return _nodelist[block]; }
+    std::vector<Node*>& get_mutable_node_list(Node* block) { return _nodelist[block]; }
 };
 
 class Load_store_elimination {

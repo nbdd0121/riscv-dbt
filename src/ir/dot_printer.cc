@@ -16,6 +16,7 @@ const char* Dot_printer::opcode_name(uint16_t opcode) {
         CASE(jmp)
         CASE(phi)
         CASE(constant)
+        CASE(copy)
         CASE(cast)
         CASE(load_register)
         CASE(store_register)

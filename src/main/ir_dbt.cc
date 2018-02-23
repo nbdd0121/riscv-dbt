@@ -52,7 +52,7 @@ _Unwind_Reason_Code ir_dbt_personality(
     return _URC_CONTINUE_UNWIND;
 }
 
-static void generate_eh_frame(Ir_block& block) {
+static void generate_eh_frame(Ir_block& block, int stack_size) {
     // TODO: Create an dwarf generation to replace this hard-coded template.
     static const unsigned char cie_template[] = {
         // CIE
@@ -98,8 +98,8 @@ static void generate_eh_frame(Ir_block& block) {
         0x0E, 0x10,
         // offset(rbp, cfa-16)
         0x86, 0x02,
-        // def_cfa_offset(8192+16)
-        0x0E, 0x90, 0x40,
+        // def_cfa_offset(stack_size+16)
+        0x0E, 0x00, 0x00,
         // Padding
         0x00, 0x00, 0x00,
 
@@ -114,6 +114,16 @@ static void generate_eh_frame(Ir_block& block) {
     util::write_as<uint64_t>(cie + 0x28, reinterpret_cast<uint64_t>(block.code.data()));
     util::write_as<uint64_t>(cie + 0x30, 4096);
     util::write_as<uint64_t>(cie + 0x39, 0);
+
+    // We only have logic for two bytes in LEB127
+    stack_size += 16;
+    ASSERT(stack_size >= 0 && stack_size <= 0x3FFF);
+    if (stack_size <= 127) {
+        cie[0x47] = stack_size;
+    } else {
+        cie[0x47] = (stack_size & 127) | 0x80;
+        cie[0x48] = stack_size >> 7;
+    }
 
     __register_frame(cie);
 }
@@ -165,7 +175,7 @@ void Ir_dbt::step(riscv::Context& context) {
         // jmp rax => FF E0
         // 11 here indicates the length of the prologue.
         util::write_as<uint16_t>(_code_ptr_to_patch, 0xB848);
-        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 11);
+        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
         util::write_as<uint16_t>(_code_ptr_to_patch + 10, 0xE0FF);
     }
 
@@ -298,9 +308,11 @@ void Ir_dbt::compile(emu::reg_t pc) {
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
-        // Lowering and target-specific lowering.
-        ir::pass::Lowering{}.run(graph_for_codegen);
-        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
+        // Lowering and target-specific lowering. Currently lowering is only needed if no_direct_memory_access is on.
+        if (emu::state::no_direct_memory_access) {
+            ir::pass::Lowering{}.run(graph_for_codegen);
+            ir::pass::Local_value_numbering{}.run(graph_for_codegen);
+        }
         x86::backend::Lowering{}.run(graph_for_codegen);
 
         // This garbage collection is required for Value::references to correctly reflect number of users.
@@ -313,8 +325,10 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         ir::analysis::Scheduler scheduler{graph_for_codegen, block_analysis, dom};
         scheduler.schedule();
-        x86::Backend{block_ptr->code, graph_for_codegen, block_analysis, scheduler}.run();
-        generate_eh_frame(*block_ptr);
+        x86::backend::Register_allocator regalloc{graph_for_codegen, block_analysis, scheduler};
+        regalloc.allocate();
+        x86::backend::Code_generator{block_ptr->code, graph_for_codegen, block_analysis, scheduler, regalloc}.run();
+        generate_eh_frame(*block_ptr, regalloc.get_stack_size());
     }
 
     // Update tag to reflect newly compiled code.

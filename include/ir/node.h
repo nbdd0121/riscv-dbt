@@ -80,6 +80,9 @@ enum: uint16_t {
     // Input: None. Output: Value.
     constant,
 
+    // Used for assisting register allocation.
+    copy,
+
     // Input: Value. Output: Value.
     cast,
 
