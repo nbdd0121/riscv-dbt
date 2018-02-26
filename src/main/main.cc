@@ -125,7 +125,7 @@ int main(int argc, const char **argv) {
 
     // Random data
     {
-        std::random_device rd;
+        std::default_random_engine rd;
         push(rd());
         push(rd());
         push(rd());
