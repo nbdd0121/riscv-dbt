@@ -34,7 +34,7 @@ public:
     Ir_dbt() noexcept;
     ~Ir_dbt();
     void step(riscv::Context& context);
-    void decode(emu::reg_t pc);
+    ir::Graph decode(emu::reg_t pc);
     void compile(emu::reg_t pc);
     virtual void flush_cache() override;
 };

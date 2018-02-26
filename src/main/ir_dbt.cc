@@ -29,9 +29,6 @@ struct Ir_block {
     // Translated code.
     util::Code_buffer code;
 
-    // Graph representing the basic block.
-    ir::Graph graph;
-
     // Exception handling frame
     std::unique_ptr<uint8_t[]> cie;
 
@@ -182,60 +179,37 @@ void Ir_dbt::step(riscv::Context& context) {
     _code_ptr_to_patch = func(context);
 }
 
-void Ir_dbt::decode(emu::reg_t pc) {
-    auto& block_ptr = inst_cache_[pc];
-
-    if (!block_ptr) {
-        block_ptr = std::make_unique<Ir_block>();
-
-        ir::Graph& graph = block_ptr->graph;
-        riscv::Decoder decoder {pc};
-        riscv::Basic_block basic_block = decoder.decode_basic_block();
-
-        // Frontend stages.
-        graph = riscv::compile(basic_block);
-
-        // Optimisation passes.
-
-        // Cannot turn on this right now as more advance load/store elimination pass does not work well with the
-        // register acccess elimination pass.
-        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
-        ir::pass::Local_value_numbering{}.run(graph);
-
-        // Clean up memory.
-        graph.garbage_collect();
-    }
+ir::Graph Ir_dbt::decode(emu::reg_t pc) {
+    riscv::Decoder decoder {pc};
+    riscv::Basic_block basic_block = decoder.decode_basic_block();
+    return riscv::compile(basic_block);
 }
 
 void Ir_dbt::compile(emu::reg_t pc) {
     const ptrdiff_t tag = (pc >> 1) & 4095;
 
     // Check the flush flag here, if it is true then we need to flush cache entries.
-    if (_need_cache_flush) {
+    if (UNLIKELY(_need_cache_flush)) {
         inst_cache_.clear();
         _need_cache_flush = false;
     }
 
-
-    decode(pc);
     auto& block_ptr = inst_cache_[pc];
-    ASSERT(block_ptr);
-
-    if (block_ptr->code.empty()) {
+    if (UNLIKELY(!block_ptr)) {
+        block_ptr = std::make_unique<Ir_block>();
         block_ptr->code.reserve(4096);
 
-        ir::Graph& graph = block_ptr->graph;
-        ir::Graph graph_for_codegen = graph.clone();
+        ir::Graph graph = decode(pc);
 
         // A map between emulated pc and entry point in the graph.
         std::unordered_map<emu::reg_t, ir::Node*> block_map;
-        block_map[pc] = *graph_for_codegen.entry()->value(0).references().begin();
+        block_map[pc] = *graph.entry()->value(0).references().begin();
 
         int counter = 0;
-        size_t operand_count = graph_for_codegen.exit()->operand_count();
+        size_t operand_count = graph.exit()->operand_count();
 
         for (size_t i = 0; i < operand_count; i++) {
-            auto operand = graph_for_codegen.exit()->operand(i);
+            auto operand = graph.exit()->operand(i);
             ir::Value target_pc_value = ir::analysis::Block::get_tail_jmp_pc(operand, 64);
 
             // We can inline tail jump.
@@ -248,7 +222,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                 if (block) {
 
                     // Add a new edge to the block, and remove the old edge to exit node.
-                    graph_for_codegen.exit()->operand_delete(operand);
+                    graph.exit()->operand_delete(operand);
                     block->operand_add(operand);
 
                     // Update constraints
@@ -260,8 +234,7 @@ void Ir_dbt::compile(emu::reg_t pc) {
                     // To avoid spending too much time inlining all possible branches, we set an upper limit.
 
                     // Decode and clone the graph of the block to be inlined.
-                    decode(target_pc);
-                    ir::Graph graph_to_inline = inst_cache_[target_pc]->graph.clone();
+                    ir::Graph graph_to_inline = decode(target_pc);
 
                     // Store the entry point of the inlined graph.
                     block_map[target_pc] = *graph_to_inline.entry()->value(0).references().begin();
@@ -271,26 +244,31 @@ void Ir_dbt::compile(emu::reg_t pc) {
                     }
 
                     // Inline the graph. Note that the iterator is invalidated so we need to break.
-                    graph_for_codegen.inline_graph(operand, std::move(graph_to_inline));
+                    graph.inline_graph(operand, std::move(graph_to_inline));
 
                     // Update constraints
                     i--;
-                    operand_count = graph_for_codegen.exit()->operand_count();
+                    operand_count = graph.exit()->operand_count();
                     counter++;
                 }
             }
         }
 
         // Insert keepalive edges and merge blocks without interesting control flow.
-        ir::analysis::Block block_analysis{graph_for_codegen};
+        ir::analysis::Block block_analysis{graph};
         block_analysis.update_keepalive();
         block_analysis.simplify_graph();
+
+        if (emu::state::disassemble) {
+            util::log("IR for {:x}\n", pc);
+            x86::backend::Dot_printer{}.run(graph);
+        }
 
         {
             // We are making this regional, as simplify graph will break the dominance tree, so we need to reconstruct.
             // TODO: Maybe find a way to incrementally update the tree when the control is simplified?
-            ir::analysis::Dominance dom(graph_for_codegen, block_analysis);
-            ir::analysis::Load_store_elimination elim{graph_for_codegen, block_analysis, dom, 66};
+            ir::analysis::Dominance dom(graph, block_analysis);
+            ir::analysis::Load_store_elimination elim{graph, block_analysis, dom, 66};
             elim.eliminate_load();
             elim.eliminate_store();
             block_analysis.simplify_graph();
@@ -298,36 +276,36 @@ void Ir_dbt::compile(emu::reg_t pc) {
 
         // Cannot turn this on - actually this is already quite useless as its eliminations are subset of load/store
         // elimination. However it is sad that we cannot have nice parititioning of register accesses.
-        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph_for_codegen);
-        ir::pass::Local_value_numbering{}.run(graph_for_codegen);
+        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
+        ir::pass::Local_value_numbering{}.run(graph);
 
         // Dump IR if --disassemble is used.
         if (emu::state::disassemble) {
-            util::log("IR for {:x}\n", pc);
-            x86::backend::Dot_printer{}.run(graph_for_codegen);
+            util::log("IR for {:x}-opt\n", pc);
+            x86::backend::Dot_printer{}.run(graph);
             util::log("Translating {:x} to {:x}\n", pc, reinterpret_cast<uintptr_t>(block_ptr->code.data()));
         }
 
         // Lowering and target-specific lowering. Currently lowering is only needed if no_direct_memory_access is on.
         if (emu::state::no_direct_memory_access) {
-            ir::pass::Lowering{}.run(graph_for_codegen);
-            ir::pass::Local_value_numbering{}.run(graph_for_codegen);
+            ir::pass::Lowering{}.run(graph);
+            ir::pass::Local_value_numbering{}.run(graph);
         }
-        x86::backend::Lowering{}.run(graph_for_codegen);
+        x86::backend::Lowering{}.run(graph);
 
         // This garbage collection is required for Value::references to correctly reflect number of users.
-        graph_for_codegen.garbage_collect();
+        graph.garbage_collect();
 
-        ir::analysis::Dominance dom{graph_for_codegen, block_analysis};
+        ir::analysis::Dominance dom{graph, block_analysis};
 
         // Reorder basic blocks before feeding it to the backend.
         block_analysis.reorder(dom);
 
-        ir::analysis::Scheduler scheduler{graph_for_codegen, block_analysis, dom};
+        ir::analysis::Scheduler scheduler{graph, block_analysis, dom};
         scheduler.schedule();
-        x86::backend::Register_allocator regalloc{graph_for_codegen, block_analysis, scheduler};
+        x86::backend::Register_allocator regalloc{graph, block_analysis, scheduler};
         regalloc.allocate();
-        x86::backend::Code_generator{block_ptr->code, graph_for_codegen, block_analysis, scheduler, regalloc}.run();
+        x86::backend::Code_generator{block_ptr->code, graph, block_analysis, scheduler, regalloc}.run();
         generate_eh_frame(*block_ptr, regalloc.get_stack_size());
     }
 
