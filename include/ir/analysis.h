@@ -116,6 +116,21 @@ public:
     std::vector<Node*>& get_mutable_node_list(Node* block) { return _nodelist[block]; }
 };
 
+class Local_load_store_elimination {
+private:
+    Graph& _graph;
+    Block& _block_analysis;
+    size_t _regcount;
+
+public:
+    Local_load_store_elimination(Graph& graph, Block& block_analysis, size_t regcount):
+        _graph{graph}, _block_analysis{block_analysis}, _regcount{regcount} {
+    }
+
+public:
+    void run();
+};
+
 class Load_store_elimination {
 private:
     Graph& _graph;
