@@ -1,5 +1,6 @@
 #include "ir/analysis.h"
 #include "ir/pass.h"
+#include "ir/visit.h"
 
 #include "emu/state.h"
 #include "util/reverse_iterable.h"
@@ -10,40 +11,9 @@ void Load_store_elimination::populate_memops() {
     // Get lists of all memory operations within blocks.
     for (auto block: _block_analysis.blocks()) {
         _oplist = &_memops[block];
-        visit_memops(static_cast<Paired*>(block)->mate());
-        _visited.clear();
-    }
-
-    // Clean up as _visited is no longer needed.
-    _visited = std::unordered_set<Node*>();
-}
-
-void Load_store_elimination::visit_memops(Node* node) {
-
-    // Already visited.
-    if (_visited.find(node) != _visited.end()) return;
-
-    // Marked as visited.
-    _visited.insert(node);
-
-    // Visit memory predecessors first. This is a reverse post-order visit.
-    // TODO: This does not work well with existing Register_access_elimination, as it fails to extract data
-    // dependencies (not memory dependencies) between load/store register nodes. Maybe if we do something similar
-    // to what we have done in scheduler, we can get this issue resolved.
-    for (auto op: node->operands()) {
-        if (op.type() == Type::memory) {
-            visit_memops(op.node());
-        }
-    }
-
-    switch (node->opcode()) {
-        case Opcode::load_register:
-        case Opcode::store_register:
-        case Opcode::load_memory:
-        case Opcode::store_memory:
-        case Opcode::call:
+        visit_local_memops_reverse_postorder(static_cast<Paired*>(block)->mate(), [this](Node* node) {
             _oplist->push_back(node);
-            break;
+        });
     }
 }
 

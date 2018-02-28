@@ -132,7 +132,6 @@ private:
     std::vector<std::vector<Value>> _value_stack;
 
     // Used for walking through each block to get all memory related nodes.
-    std::unordered_set<Node*> _visited;
     std::vector<Node*>* _oplist;
 
 public:
@@ -145,7 +144,6 @@ public:
 
 private:
     void populate_memops();
-    void visit_memops(Node* node);
 
     void fill_load_phi(Node* block);
     void rename_load(Node* block);
