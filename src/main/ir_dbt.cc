@@ -182,7 +182,14 @@ void Ir_dbt::step(riscv::Context& context) {
 ir::Graph Ir_dbt::decode(emu::reg_t pc) {
     riscv::Decoder decoder {pc};
     riscv::Basic_block basic_block = decoder.decode_basic_block();
-    return riscv::compile(basic_block);
+    ir::Graph graph = riscv::compile(basic_block);
+
+    // Load/store elimination and LVN are required to allow inlining of auipc/jalr fused pair.
+    ir::analysis::Block block_analysis{graph};
+    ir::analysis::Local_load_store_elimination{graph, block_analysis, 66}.run();
+    ir::pass::Local_value_numbering{}.run(graph);
+
+    return std::move(graph);
 }
 
 void Ir_dbt::compile(emu::reg_t pc) {
