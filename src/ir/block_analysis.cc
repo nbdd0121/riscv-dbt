@@ -31,17 +31,8 @@ Value Block::get_tail_jmp_pc(Value control, uint16_t pc_regnum) {
     if (target->opcode() != ir::Opcode::exit) return {};
 
     auto last_mem = control.node()->operand(0);
-    if (last_mem.opcode() == ir::Opcode::fence) {
-        for (auto operand: last_mem.node()->operands()) {
-            if (operand.opcode() == ir::Opcode::store_register &&
-                static_cast<ir::Register_access*>(operand.node())->regnum() == pc_regnum) {
-
-                return operand.node()->operand(1);
-            }
-        }
-
-    } else if (last_mem.opcode() == ir::Opcode::store_register &&
-               static_cast<ir::Register_access*>(last_mem.node())->regnum() == pc_regnum) {
+    if (last_mem.opcode() == ir::Opcode::store_register &&
+        static_cast<ir::Register_access*>(last_mem.node())->regnum() == pc_regnum) {
 
         return last_mem.node()->operand(1);
 

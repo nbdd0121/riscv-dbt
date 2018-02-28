@@ -22,7 +22,6 @@ const char* Dot_printer::opcode_name(uint16_t opcode) {
         CASE(store_register)
         CASE(load_memory)
         CASE(store_memory)
-        CASE(fence)
         CASE(call)
         CASE(neg)
         case Opcode::i_not: return "not";

@@ -46,30 +46,6 @@ protected:
     virtual void after(Node* node) override;
 };
 
-class Register_access_elimination: public Pass {
-private:
-    std::vector<Node*> last_load;
-    std::vector<Node*> last_store;
-    // Do not use std::vector<bool> as we don't need its space optimization.
-    std::vector<char> has_store_after_exception;
-
-    Value last_exception;
-    Value last_effect;
-
-    // Whether the pass is allowed to move store_register after memory operations.
-    bool _strict;
-
-public:
-    Register_access_elimination(int regcount, bool strict = true):
-        last_load(regcount), last_store(regcount), has_store_after_exception(regcount), _strict{strict} {}
-
-private:
-    Value merge_memory(std::vector<Value> values);
-
-protected:
-    virtual void after(Node* node) override;
-};
-
 class Local_value_numbering: public Pass {
 private:
     struct Hash {

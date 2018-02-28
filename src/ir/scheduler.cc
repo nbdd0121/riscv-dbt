@@ -61,11 +61,7 @@ void Scheduler::schedule_node_late(Node* node) {
 
     ASSERT(block);
     _late[node] = block;
-
-    // Do not place fence into the list.
-    if (node->opcode() != Opcode::fence) {
-        _nodelist[block].push_back(node);
-    }
+    _nodelist[block].push_back(node);
 }
 
 void Scheduler::schedule_block(Node* block) {

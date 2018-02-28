@@ -69,9 +69,6 @@ enum: uint16_t {
     // Input: Memory, Value, Value. Output: Memory.
     store_memory,
 
-    // Input: Memory[], Output: Memory
-    fence,
-
     // Call a helper function.
     // Input: Memory, Value[]. Output: Memory, Value(opt)
     call,

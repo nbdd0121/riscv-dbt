@@ -274,9 +274,6 @@ void Ir_dbt::compile(emu::reg_t pc) {
             block_analysis.simplify_graph();
         }
 
-        // Cannot turn this on - actually this is already quite useless as its eliminations are subset of load/store
-        // elimination. However it is sad that we cannot have nice parititioning of register accesses.
-        // ir::pass::Register_access_elimination{66, emu::strict_exception}.run(graph);
         ir::pass::Local_value_numbering{}.run(graph);
 
         // Dump IR if --disassemble is used.
