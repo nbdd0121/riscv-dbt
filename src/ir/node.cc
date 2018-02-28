@@ -5,7 +5,7 @@
 
 namespace ir {
 
-Node::Node(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+Node::Node(uint16_t opcode, Type_container&& type, Operand_container&& operands):
     _operands(std::move(operands)),  _type{std::move(type)}, _opcode{opcode}, _visited{0} {
 
     link();
@@ -29,7 +29,7 @@ void Node::unlink() {
     }
 }
 
-void Node::operands(std::vector<Value>&& operands) {
+void Node::operands(Operand_container&& operands) {
     unlink();
     _operands = std::move(operands);
     link();
@@ -138,25 +138,25 @@ Graph Graph::clone() const {
                 result = new Register_access(
                     static_cast<Register_access*>(node)->regnum(),
                     node->_opcode,
-                    std::vector<Type>(node->_type),
+                    Node::Type_container(node->_type),
                     {}
                 );
                 break;
             case Opcode::block:
             case Opcode::jmp:
             case Opcode::i_if:
-                result = new Paired(node->_opcode, std::vector<Type>(node->_type), {});
+                result = new Paired(node->_opcode, Node::Type_container(node->_type), {});
                 break;
             case Opcode::call:
                 result = new Call(
                     static_cast<Call*>(node)->target(),
                     static_cast<Call*>(node)->need_context(),
-                    std::vector<Type>(node->_type),
+                    Node::Type_container(node->_type),
                     {}
                 );
                 break;
             default:
-                result = new Node(node->_opcode, std::vector<Type>(node->_type), {});
+                result = new Node(node->_opcode, Node::Type_container(node->_type), {});
                 break;
         }
         mapping[node] = ret.manage(result);
@@ -166,7 +166,7 @@ Graph Graph::clone() const {
     for (auto node: _heap) {
         size_t op_count = node->_operands.size();
 
-        std::vector<Value> operands(op_count);
+        Node::Operand_container operands(op_count);
         for (size_t i = 0; i < op_count; i++) {
             Value oldvalue = node->operand(i);
             operands[i] = { mapping[oldvalue.node()], oldvalue.index() };

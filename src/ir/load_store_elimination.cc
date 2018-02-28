@@ -256,7 +256,7 @@ void Load_store_elimination::eliminate_load() {
                 if (!phi_node) {
 
                     // The first operand of PHI should be the block node, and we fill the rest with placeholders now.
-                    std::vector<Value> operands(frontier->operand_count() + 1, dummy.value(0));
+                    Node::Operand_container operands(frontier->operand_count() + 1, dummy.value(0));
                     operands[0] = frontier->value(0);
                     phi_node = new Node(Opcode::phi, {Type::i64}, std::move(operands));
                     list.push_back(frontier);
@@ -495,7 +495,7 @@ void Load_store_elimination::eliminate_store() {
 
                     // Normal phi nodes have n + 1 operands, but we don't care here.
                     phi_node = new Node(
-                        Opcode::phi, {Type::none}, std::vector<Value>(end->value_count(), dummy.value(0))
+                        Opcode::phi, {Type::none}, Node::Operand_container(end->value_count(), dummy.value(0))
                     );
                     list.push_back(frontier);
                 }

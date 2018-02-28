@@ -7,6 +7,7 @@
 
 #include "util/assert.h"
 #include "util/array_multiset.h"
+#include "util/small_vector.h"
 
 namespace ir {
 
@@ -225,16 +226,19 @@ public:
         Value_iterator begin() const noexcept { return {_node, 0}; }
         Value_iterator end() const noexcept { return {_node, _node->value_count()}; }
     };
+
+    using Operand_container = util::Small_vector<Value, 2>;
+    using Type_container = util::Small_vector<Type, 2>;
 private:
 
     // Values that this node references.
-    std::vector<Value> _operands;
+    Operand_container _operands;
 
     // Nodes that references the value of this node.
-    std::vector<util::Array_multiset<Node*>> _references;
+    util::Small_vector<util::Array_multiset<Node*>, 2> _references;
 
     // The output type of this node.
-    std::vector<Type> _type;
+    Type_container _type;
 
     // Opcode of the node.
     uint16_t _opcode;
@@ -244,7 +248,7 @@ private:
     uint8_t _visited;
 
 public:
-    Node(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands);
+    Node(uint16_t opcode, Type_container&& type, Operand_container&& operands);
     virtual ~Node();
 
     // Disable copy construction and assignment. Node should live on heap.
@@ -268,8 +272,8 @@ public:
     void opcode(uint16_t opcode) { _opcode = opcode; }
 
     // Operand accessors and mutators
-    const std::vector<Value>& operands() const { return _operands; }
-    void operands(std::vector<Value>&& operands);
+    const Operand_container& operands() const { return _operands; }
+    void operands(Operand_container&& operands);
     size_t operand_count() const { return _operands.size(); }
 
     Value operand(size_t index) const {
@@ -316,7 +320,7 @@ private:
     uint16_t _regnum;
 
 public:
-    Register_access(uint16_t regnum, uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& operands):
+    Register_access(uint16_t regnum, uint16_t opcode, Type_container&& type, Operand_container&& operands):
         Node(opcode, std::move(type), std::move(operands)), _regnum{regnum} {}
 
     uint16_t regnum() const { return _regnum; }
@@ -343,7 +347,7 @@ private:
     bool _need_context;
 
 public:
-    Call(uintptr_t target, bool need_context, std::vector<Type>&& types, std::vector<Value>&& operands):
+    Call(uintptr_t target, bool need_context, Type_container&& types, Operand_container&& operands):
         Node(Opcode::call, std::move(types), std::move(operands)), _target{target}, _need_context{need_context} {}
 
     uintptr_t target() const { return _target; }

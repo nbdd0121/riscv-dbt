@@ -14,7 +14,7 @@ ir::Value Lowering::match_address(ir::Value value, bool required) {
         // have single user.
         return _graph->manage(new ir::Node(
             Target_opcode::address, {ir::Type::i64},
-            std::vector<ir::Value>(value.node()->operand(0).node()->operands())
+            ir::Node::Operand_container(value.node()->operand(0).node()->operands())
         ))->value(0);
     }
 
@@ -125,7 +125,7 @@ void Lowering::after(ir::Node* node) {
             if (op.type() == ir::Type::i1 && op.opcode() != ir::Opcode::constant && op.references().size() != 1) {
                 node->operand_set(index, _graph->manage(new ir::Node(
                     op.opcode(), {ir::Type::i1},
-                    std::vector<ir::Value>(op.node()->operands())
+                    ir::Node::Operand_container(op.node()->operands())
                 ))->value(0));
             }
             break;

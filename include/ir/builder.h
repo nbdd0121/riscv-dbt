@@ -13,15 +13,15 @@ private:
 public:
     Builder(Graph& graph): _graph{graph} {}
 
-    Node* create(uint16_t opcode, std::vector<Type>&& type, std::vector<Value>&& opr) {
+    Node* create(uint16_t opcode, Node::Type_container&& type, Node::Operand_container&& opr) {
         return _graph.manage(new Node(opcode, std::move(type), std::move(opr)));
     }
 
-    Value control(uint16_t opcode, std::vector<Value>&& opr) {
+    Value control(uint16_t opcode, Node::Operand_container&& opr) {
         return create(opcode, {Type::control}, std::move(opr))->value(0);
     }
 
-    Value block(std::vector<Value>&& operands) {
+    Value block(Node::Operand_container&& operands) {
         return _graph.manage(new Paired(Opcode::block, {Type::memory}, std::move(operands)))->value(0);
     }
 

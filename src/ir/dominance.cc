@@ -66,14 +66,16 @@ void Dominance::compute_idom() {
         auto ancestor = ancestors[node];
         if (ancestor == -1) return node;
         if (ancestors[ancestor] != -1) {
-            eval(ancestor);
-            if (sdoms[bests[node]] > sdoms[bests[ancestor]]) bests[node] = bests[ancestor];
+            auto u = eval(ancestor);
+            ASSERT(u == bests[ancestor]);
+            if (sdoms[bests[node]] > sdoms[u]) bests[node] = u;
             ancestors[node] = ancestors[ancestor];
         }
         return bests[node];
     };
 
     auto link = [&](size_t parent, size_t node) {
+        ASSERT(ancestors[node] == -1);
         ancestors[node] = parent;
     };
 
