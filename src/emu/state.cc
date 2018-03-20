@@ -15,7 +15,7 @@ bool disassemble = false;
 
 bool no_instret = true;
 
-int inline_limit = 16;
+int inline_limit = 15;
 
 bool strace = false;
 

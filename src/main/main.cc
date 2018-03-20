@@ -35,8 +35,8 @@ Options:\n\
                         code.\n\
   --strict-exception    Enable strict enforcement of excecution correctness in\n\
                         case of segmentation fault.\n\
-  --inline-limit=<n>    Number of basic blocks that can be inlined in single\n\
-                        compilation by the IR-based binary translator.\n\
+  --region-limit=<n>    Number of basic blocks that can be included in a single\n\
+                        compilation region by the IR-based binary translator.\n\
   --monitor-performance Display metrics about performance in compilation phase.\n\
   --sysroot             Change the sysroot to a non-default value.\n\
   --help                Display this help message.\n\
@@ -76,8 +76,8 @@ int main(int argc, const char **argv) {
             emu::state::no_instret = false;
         } else if (strcmp(arg, "--strict-exception") == 0) {
             emu::state::strict_exception = true;
-        } else if (strncmp(arg, "--inline-limit=", strlen("--inline-limit=")) == 0) {
-            emu::state::inline_limit = atoi(arg + strlen("--inline-limit="));
+        } else if (strncmp(arg, "--region-limit=", strlen("--region-limit=")) == 0) {
+            emu::state::inline_limit = atoi(arg + strlen("--region-limit=")) - 1;
         } else if (strcmp(arg, "--monitor-performance") == 0) {
             emu::state::monitor_performance = true;
         } else if (strncmp(arg, "--sysroot=", strlen("--sysroot=")) == 0) {
