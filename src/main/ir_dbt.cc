@@ -151,15 +151,7 @@ void Ir_dbt::step(riscv::Context& context) {
 
     // If the cache misses, compile the current block.
     if (UNLIKELY(icache_tag_[tag] != pc)) {
-        if (emu::state::monitor_performance) {
-            auto start = std::chrono::high_resolution_clock::now();
-            compile(pc);
-            auto end = std::chrono::high_resolution_clock::now();
-            total_compilation_time += (end - start).count();
-            total_block_compiled++;
-        } else {
-            compile(pc);
-        }
+        compile(pc);
     }
 
     // The return value is the address to patch.
@@ -205,6 +197,8 @@ void Ir_dbt::compile(emu::reg_t pc) {
     if (UNLIKELY(!block_ptr)) {
         block_ptr = std::make_unique<Ir_block>();
         block_ptr->code.reserve(4096);
+        auto start = emu::state::monitor_performance ?
+            std::chrono::high_resolution_clock::now().time_since_epoch().count() : 0;
 
         ir::Graph graph = decode(pc);
 
@@ -311,6 +305,12 @@ void Ir_dbt::compile(emu::reg_t pc) {
         regalloc.allocate();
         x86::backend::Code_generator{block_ptr->code, graph, block_analysis, scheduler, regalloc}.run();
         generate_eh_frame(*block_ptr, regalloc.get_stack_size());
+
+        if (emu::state::monitor_performance) {
+            auto end = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            total_compilation_time += end - start;
+            total_block_compiled++;
+        }
     }
 
     // Update tag to reflect newly compiled code.
