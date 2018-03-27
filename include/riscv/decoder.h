@@ -15,6 +15,7 @@ class Decoder {
 
 public:
     static Instruction decode(uint32_t bits);
+    static bool can_change_control_flow(Instruction inst);
 
 public:
     Decoder(): pc_{0} {}
