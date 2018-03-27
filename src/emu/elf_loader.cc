@@ -133,7 +133,7 @@ reg_t load_elf_image(Elf_file& file, reg_t& load_addr, reg_t& brk) {
     // For dynamic binaries, we need to allocate a location for it.
     if (header->e_type == ET_DYN) {
         bias = guest_mmap_nofail(
-            0x4000000000,
+            0,
             hiaddr - loaddr,
             PROT_NONE, MAP_PRIVATE | MAP_ANON, -1, 0
         ) - loaddr;

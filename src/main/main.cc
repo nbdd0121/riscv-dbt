@@ -42,6 +42,10 @@ Options:\n\
   --help                Display this help message.\n\
 ";
 
+extern "C" {
+    extern char **environ;
+}
+
 int main(int argc, const char **argv) {
 
     setup_fault_handler();
@@ -102,8 +106,19 @@ int main(int argc, const char **argv) {
     emu::reg_t sp = 0x7fff00000000;
     emu::guest_mmap(sp - 0x800000, 0x800000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
 
-    // This contains (guest) pointers to all argument strings.
+    // This contains (guest) pointers to all argument strings annd environment variables.
+    std::vector<emu::reg_t> env_pointers;
     std::vector<emu::reg_t> arg_pointers(argc - arg_index);
+
+    // Copy all environment variables into guest user space.
+    for (char** env = environ; *env; env++) {
+        size_t env_length = strlen(*env) + 1;
+
+        // Allocate memory from stack and copy to that region.
+        sp -= env_length;
+        emu::copy_from_host(sp, *env, env_length);
+        env_pointers.push_back(sp);
+    }
 
     // Copy all arguments into guest user space.
     for (int i = argc - 1; i >= arg_index; i--) {
@@ -158,18 +173,18 @@ int main(int argc, const char **argv) {
     push(random_data);
     push(AT_RANDOM);
 
-    // envp = 0
+    // fill in environ, last is nullptr
     push(0);
+    sp -= env_pointers.size() * sizeof(emu::reg_t);
+    emu::copy_from_host(sp, env_pointers.data(), env_pointers.size() * sizeof(emu::reg_t));
 
-    // argv[argc] = 0
+    // fill in argv, last is nullptr
     push(0);
-
-    // fill in argv
-    sp -= (argc - arg_index) * sizeof(emu::reg_t);
-    emu::copy_from_host(sp, arg_pointers.data(), (argc - arg_index) * sizeof(emu::reg_t));
+    sp -= arg_pointers.size() * sizeof(emu::reg_t);
+    emu::copy_from_host(sp, arg_pointers.data(), arg_pointers.size() * sizeof(emu::reg_t));
 
     // set argc
-    push(argc - arg_index);
+    push(arg_pointers.size());
 
     for (int i = 1; i < 32; i++) {
         // Reset to some easily debuggable value.
