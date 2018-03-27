@@ -17,6 +17,8 @@ struct Ir_block;
 
 class Ir_dbt final: public Executor {
 private:
+    using Compiled_function = std::byte*(*)(riscv::Context&);
+
      // The following two fields are for hot direct-mapped instruction cache that contains recently executed code.
     std::unique_ptr<emu::reg_t[]> icache_tag_;
     std::unique_ptr<std::byte*[]> icache_;
@@ -35,7 +37,8 @@ public:
     ~Ir_dbt();
     void step(riscv::Context& context);
     ir::Graph decode(emu::reg_t pc);
-    void compile(emu::reg_t pc);
+    void compile(riscv::Context& context, emu::reg_t pc);
+    void patch_trampoline(Compiled_function func);
     virtual void flush_cache() override;
 };
 

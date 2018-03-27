@@ -151,24 +151,25 @@ void Ir_dbt::step(riscv::Context& context) {
 
     // If the cache misses, compile the current block.
     if (UNLIKELY(icache_tag_[tag] != pc)) {
-        compile(pc);
+        compile(context, pc);
+        return;
     }
 
     // The return value is the address to patch.
-    auto func = reinterpret_cast<std::byte*(*)(riscv::Context&)>(icache_[tag]);
+    auto func = reinterpret_cast<Compiled_function>(icache_[tag]);
     ASSERT(func);
-
-    if (_code_ptr_to_patch) {
-        // Patch the trampoline.
-        // mov rax, i64 => 48 B8 i64
-        // jmp rax => FF E0
-        // 4 here indicates the length of the prologue.
-        util::write_as<uint16_t>(_code_ptr_to_patch, 0xB848);
-        util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(icache_[tag]) + 4);
-        util::write_as<uint16_t>(_code_ptr_to_patch + 10, 0xE0FF);
-    }
-
+    if (UNLIKELY(_code_ptr_to_patch)) patch_trampoline(func);
     _code_ptr_to_patch = func(context);
+}
+
+void Ir_dbt::patch_trampoline(Compiled_function func) {
+    // Patch the trampoline.
+    // mov rax, i64 => 48 B8 i64
+    // jmp rax => FF E0
+    // 4 here indicates the length of the prologue.
+    util::write_as<uint16_t>(_code_ptr_to_patch, 0xB848);
+    util::write_as<uint64_t>(_code_ptr_to_patch + 2, reinterpret_cast<uint64_t>(func) + 4);
+    util::write_as<uint16_t>(_code_ptr_to_patch + 10, 0xE0FF);
 }
 
 ir::Graph Ir_dbt::decode(emu::reg_t pc) {
@@ -184,13 +185,14 @@ ir::Graph Ir_dbt::decode(emu::reg_t pc) {
     return std::move(graph);
 }
 
-void Ir_dbt::compile(emu::reg_t pc) {
+void Ir_dbt::compile(riscv::Context& context, emu::reg_t pc) {
     const ptrdiff_t tag = (pc >> 1) & 4095;
 
     // Check the flush flag here, if it is true then we need to flush cache entries.
     if (UNLIKELY(_need_cache_flush)) {
         inst_cache_.clear();
         _need_cache_flush = false;
+        _code_ptr_to_patch = nullptr;
     }
 
     auto& block_ptr = inst_cache_[pc];
@@ -316,6 +318,12 @@ void Ir_dbt::compile(emu::reg_t pc) {
     // Update tag to reflect newly compiled code.
     icache_[tag] = block_ptr->code.data();
     icache_tag_[tag] = pc;
+
+    // Run the newly compiled (or loaded from cache) code.
+    auto func = reinterpret_cast<Compiled_function>(icache_[tag]);
+    ASSERT(func);
+    if (_code_ptr_to_patch) patch_trampoline(func);
+    _code_ptr_to_patch = func(context);
 }
 
 void Ir_dbt::flush_cache() {
