@@ -32,6 +32,9 @@ struct Ir_block {
     // Exception handling frame
     std::unique_ptr<uint8_t[]> cie;
 
+    // Number of times the block is hit. If the number reaches compile_threshold, IR DBT will start to work.
+    int num_hit = 0;
+
     ~Ir_block() {
         if (cie) {
             __deregister_frame(cie.get());
@@ -196,13 +199,35 @@ void Ir_dbt::compile(riscv::Context& context, emu::reg_t pc) {
     }
 
     auto& block_ptr = inst_cache_[pc];
-    if (UNLIKELY(!block_ptr)) {
-        block_ptr = std::make_unique<Ir_block>();
-        block_ptr->code.reserve(4096);
+    if (UNLIKELY(!block_ptr) || block_ptr->code.empty()) {
+        if (!block_ptr) block_ptr = std::make_unique<Ir_block>();
+
+        if (block_ptr->num_hit < emu::state::compile_threshold) {
+            _code_ptr_to_patch = nullptr;
+            block_ptr->num_hit++;
+            riscv::Decoder decoder {pc};
+            riscv::Instruction inst;
+            do {
+                inst = decoder.decode_instruction();
+                context.pc += inst.length();
+                context.instret++;
+                try {
+                    riscv::step(&context, inst);
+                } catch(...) {
+                    // In case an exception happens, we need to move the pc before the instruction.
+                    context.pc -= inst.length();
+                    context.instret--;
+                    throw;
+                }
+            } while (!decoder.can_change_control_flow(inst));
+            return;
+        }
+
         auto start = emu::state::monitor_performance ?
             std::chrono::high_resolution_clock::now().time_since_epoch().count() : 0;
 
         ir::Graph graph = decode(pc);
+        block_ptr->code.reserve(4096);
 
         // A map between emulated pc and entry point in the graph.
         std::unordered_map<emu::reg_t, ir::Node*> block_map;

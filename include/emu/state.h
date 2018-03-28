@@ -43,6 +43,9 @@ extern bool no_instret;
 // Upper limit of number of blocks that can be inlined by IR DBT.
 extern int inline_limit;
 
+// Threshold beyond which the IR DBT will start working
+extern int compile_threshold;
+
 // A flag to determine whether to trace all system calls. If true then all guest system calls will be logged.
 extern bool strace;
 

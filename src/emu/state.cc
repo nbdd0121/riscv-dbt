@@ -17,6 +17,8 @@ bool no_instret = true;
 
 int inline_limit = 15;
 
+int compile_threshold = 0;
+
 bool strace = false;
 
 bool strict_exception = false;

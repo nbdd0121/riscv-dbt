@@ -37,6 +37,8 @@ Options:\n\
                         case of segmentation fault.\n\
   --region-limit=<n>    Number of basic blocks that can be included in a single\n\
                         compilation region by the IR-based binary translator.\n\
+  --compile-threshold=<n> Number of execution required for a block to be\n\
+                        considered by the IR-based binary translator.\n\
   --monitor-performance Display metrics about performance in compilation phase.\n\
   --sysroot             Change the sysroot to a non-default value.\n\
   --help                Display this help message.\n\
@@ -82,6 +84,8 @@ int main(int argc, const char **argv) {
             emu::state::strict_exception = true;
         } else if (strncmp(arg, "--region-limit=", strlen("--region-limit=")) == 0) {
             emu::state::inline_limit = atoi(arg + strlen("--region-limit=")) - 1;
+        } else if (strncmp(arg, "--compile-threshold=", strlen("--compile-threshold=")) == 0) {
+            emu::state::compile_threshold = atoi(arg + strlen("--compile-threshold="));
         } else if (strcmp(arg, "--monitor-performance") == 0) {
             emu::state::monitor_performance = true;
         } else if (strncmp(arg, "--sysroot=", strlen("--sysroot=")) == 0) {
