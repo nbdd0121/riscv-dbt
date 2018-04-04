@@ -124,7 +124,10 @@ void Load_store_elimination::rename_load(Node* block) {
             // yet), and also do not replace a load with a value from other blocks (controlled by not_first) for now as
             // as they also need special support in the code generator. An exception here is constant. We can always
             // propagate constants across multiple blocks.
-            if (value && value.opcode() != Opcode::phi && (not_first[regnum] || value.is_const())) {
+            if (value && (
+                emu::state::enable_phi ||
+                (value.opcode() != Opcode::phi && (not_first[regnum] || value.is_const())))
+            ) {
                 ir::pass::Pass::replace(item->value(0), item->operand(0));
                 ir::pass::Pass::replace(item->value(1), value);
 
@@ -246,12 +249,14 @@ void Load_store_elimination::eliminate_load() {
 
     rename_load(Block::get_target(_graph.entry()->value(0)));
 
+    // Add PHI nodes to the graph or remove them when they are not referenced.
     for (uint16_t regnum = 0; regnum < regcount; regnum++) {
         for (auto& pair: _phis[regnum]) {
-            pair.second->operands({});
-        }
-        for (auto& pair: _phis[regnum]) {
-            delete pair.second;
+            if (pair.second->operand_count() != 0) {
+                _graph.manage(pair.second);
+            } else {
+                delete pair.second;
+            }
         }
     }
 

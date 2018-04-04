@@ -23,6 +23,8 @@ bool strace = false;
 
 bool strict_exception = false;
 
+bool enable_phi = false;
+
 bool monitor_performance = false;
 
 bool no_direct_memory_access = false;

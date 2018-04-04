@@ -86,6 +86,7 @@ private:
 
     // Spill a specified register to memory. Size of the register will be ignored.
     void spill_register(Register reg);
+    Memory alloc_stack_slot(ir::Type type);
 
     // Spill all volatile registers to memory.
     void spill_all_registers();

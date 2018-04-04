@@ -115,17 +115,7 @@ void Register_allocator::spill_register(Register reg) {
 
         // Create a copy of the node and assign a stack slot.
         auto copied_value = create_copy(actual_value);
-
-        Memory mem;
-        if (_free_memory.empty()) {
-            _stack_size += 8;
-            mem = qword(Register::rsp + (_stack_size - 8));
-        } else {
-            mem = _free_memory.back();
-            _free_memory.pop_back();
-        }
-        mem.size = get_type_size(value.type()) / 8;
-        _allocation[copied_value] = mem;
+        _allocation[copied_value] = alloc_stack_slot(value.type());
 
         // Associate the memory node with the original value.
         _memory_node[value] = copied_value;
@@ -136,6 +126,19 @@ void Register_allocator::spill_register(Register reg) {
         // The value is spilled already, reuse the value.
         actual_value = ptr->second;
     }
+}
+
+Memory Register_allocator::alloc_stack_slot(ir::Type type) {
+    Memory mem;
+    if (_free_memory.empty()) {
+        _stack_size += 8;
+        mem = qword(Register::rsp + (_stack_size - 8));
+    } else {
+        mem = _free_memory.back();
+        _free_memory.pop_back();
+    }
+    mem.size = get_type_size(type) / 8;
+    return mem;
 }
 
 void Register_allocator::spill_all_registers() {

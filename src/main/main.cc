@@ -35,6 +35,7 @@ Options:\n\
                         code.\n\
   --strict-exception    Enable strict enforcement of excecution correctness in\n\
                         case of segmentation fault.\n\
+  --enable-phi          Allow load elimination to emit PHI nodes.\n\
   --region-limit=<n>    Number of basic blocks that can be included in a single\n\
                         compilation region by the IR-based binary translator.\n\
   --compile-threshold=<n> Number of execution required for a block to be\n\
@@ -82,6 +83,8 @@ int main(int argc, const char **argv) {
             emu::state::no_instret = false;
         } else if (strcmp(arg, "--strict-exception") == 0) {
             emu::state::strict_exception = true;
+        } else if (strcmp(arg, "--enable-phi") == 0) {
+            emu::state::enable_phi = true;
         } else if (strncmp(arg, "--region-limit=", strlen("--region-limit=")) == 0) {
             emu::state::inline_limit = atoi(arg + strlen("--region-limit=")) - 1;
         } else if (strncmp(arg, "--compile-threshold=", strlen("--compile-threshold=")) == 0) {

@@ -52,6 +52,9 @@ extern bool strace;
 // A flag to determine whether correctness in case of segmentation fault should be dealt strictly.
 extern bool strict_exception;
 
+// A flag to determine whether PHI nodes should be introduced to the graph by load elimination.
+extern bool enable_phi;
+
 // Whether compilation performance counters should be enabled.
 extern bool monitor_performance;
 
