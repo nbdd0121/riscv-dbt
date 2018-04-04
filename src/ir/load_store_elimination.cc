@@ -120,12 +120,12 @@ void Load_store_elimination::rename_load(Node* block) {
             uint16_t regnum = static_cast<Register_access*>(item)->regnum();
             auto value = _value_stack[regnum].back();
 
-            // For now, do not actually add PHI nodes into the graph (as the code generator is not prepared for it
-            // yet), and also do not replace a load with a value from other blocks (controlled by not_first) for now as
-            // as they also need special support in the code generator. An exception here is constant. We can always
-            // propagate constants across multiple blocks.
-            if (value && (
-                emu::state::enable_phi ||
+            // Do not actually add PHI nodes into the graph unless enable_phi is on, and also do not replace a load
+            // with a value from other blocks (controlled by not_first) for now as register allocator cannot handle
+            // them efficiently yet. An exception here is constant. We can always propagate constants across multiple
+            // blocks.
+            if (value && (emu::state::enable_phi ?
+                (value.opcode() == Opcode::phi || (not_first[regnum] || value.is_const())) :
                 (value.opcode() != Opcode::phi && (not_first[regnum] || value.is_const())))
             ) {
                 ir::pass::Pass::replace(item->value(0), item->operand(0));

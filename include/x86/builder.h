@@ -193,6 +193,7 @@ BINARY(shl)
 BINARY(shr)
 BINARY(sub)
 BINARY(test)
+BINARY(xchg)
 BINARY(i_xor)
 
 #undef BINARY

@@ -58,6 +58,7 @@ enum class Opcode: uint16_t {
     shr,
     sub,
     test,
+    xchg,
     i_xor,
 
     // aliases

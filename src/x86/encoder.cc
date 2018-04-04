@@ -726,6 +726,30 @@ void Encoder::emit_test(const Instruction& inst) {
     emit_r_rm(op_size, dst, src.as_register(), op_size == 1 ? 0x84 : 0x85);
 }
 
+void Encoder::emit_xchg(const Instruction& inst) {
+    Operand dst = inst.operands[0];
+    Operand src = inst.operands[1];
+
+    // Normalise to make src always register.
+    ASSERT(dst.is_register() || src.is_register());
+    if (!src.is_register()) std::swap(dst, src);
+
+    int op_size = get_size(dst);
+
+    // Special encoding exists if either operand is AX, EAX or RAX.
+    if (op_size != 1 && dst.is_register()) {
+        if ((static_cast<uint8_t>(src.as_register()) & 0xF) == 0) {
+            emit_plusr(op_size, dst.as_register(), 0x90);
+            return;
+        } else if ((static_cast<uint8_t>(dst.as_register()) & 0xF) == 0) {
+            emit_plusr(op_size, src.as_register(), 0x90);
+            return;
+        }
+    }
+
+    emit_r_rm(op_size, dst, src.as_register(), op_size == 1 ? 0x86 : 0x87);
+}
+
 void Encoder::encode(const Instruction& inst) {
 
     // If operand0 is monostate, then operand1 must also be.
@@ -770,6 +794,7 @@ void Encoder::encode(const Instruction& inst) {
         case Opcode::ret: emit_ret(inst); break;
         case Opcode::setcc: emit_setcc(inst); break;
         case Opcode::test: emit_test(inst); break;
+        case Opcode::xchg: emit_xchg(inst); break;
         default: ASSERT(0);
     }
 }

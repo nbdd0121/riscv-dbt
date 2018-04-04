@@ -90,6 +90,7 @@ const char *opcode_name(Opcode opcode) {
         CASE(shr)
         CASE(sub)
         CASE(test)
+        CASE(xchg)
         case Opcode::i_xor: return "xor";
 #undef CASE
         default: return "(unknown)";
