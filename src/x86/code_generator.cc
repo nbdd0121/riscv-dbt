@@ -1,3 +1,5 @@
+#include <list>
+
 #include "emu/state.h"
 #include "util/memory.h"
 #include "x86/backend.h"
@@ -346,9 +348,14 @@ void Code_generator::visit(ir::Node* node) {
 
 bool Code_generator::need_phi(ir::Value control) {
     auto target = ir::analysis::Block::get_target(control);
+
+    // Find out the operand id, which will tells us the correct operand of PHI node to use.
+    size_t id = target->operand_find(control);
     for (auto ref: target->value(0).references()) {
         if (ref->opcode() != ir::Opcode::phi) continue;
-        return true;
+
+        // We do not need emit any instructions for the PHI node if everything stays.
+        if (!same_location(get_allocation(ref->operand(id + 1)), get_allocation(ref->value(0)))) return true;
     }
 
     return false;
@@ -357,18 +364,117 @@ bool Code_generator::need_phi(ir::Value control) {
 void Code_generator::emit_phi(ir::Value control) {
     auto target = ir::analysis::Block::get_target(control);
 
+    // List tracking all moves necessary for the control edge. List is used to ease reordering.
+    std::list<std::pair<Operand, Operand>> phi_nodes;
+
     // Find out the operand id, which will tells us the correct operand of PHI node to use.
     size_t id = target->operand_find(control);
     for (auto ref: target->value(0).references()) {
         if (ref->opcode() != ir::Opcode::phi) continue;
 
-        auto value = ref->operand(id + 1);
-        auto src = get_allocation(value);
+        auto src = get_allocation(ref->operand(id + 1));
         auto dst = get_allocation(ref->value(0));
+        if (!same_location(dst, src)) phi_nodes.push_back({dst, src});
+    }
 
-        // Move to the designated PHI value storage area.
-        emit(mov(Register::rax, src));
-        emit(mov(dst, Register::rax));
+    if (phi_nodes.empty()) return;
+
+    while (true) {
+        bool changed = true;
+        while (changed) {
+            changed = false;
+
+            // Loop through all PHI nodes, and pick one whose destination is not used
+            auto iter = phi_nodes.begin();
+            while (iter != phi_nodes.end()) {
+                const auto& [dst, src] = *iter;
+
+                // Check if other PHI nodes may need to use old dst.
+                bool has_conflict = false;
+                auto iter2 = phi_nodes.begin();
+                while (iter2 != phi_nodes.end()) {
+                    if (iter2 != iter) {
+                        const auto& src2 = iter2->second;
+                        if (same_location(dst, src2)) {
+                            has_conflict = true;
+                            break;
+                        }
+                    }
+                    ++iter2;
+                }
+
+                if (!has_conflict) {
+                    // Move to the designated PHI value storage area.
+                    if (src.is_register() || dst.is_register()) {
+                        emit(mov(dst, src));
+                    } else {
+                        emit(mov(Register::r11, src));
+                        emit(mov(dst, Register::r11));
+                    }
+
+                    changed = true;
+                    iter = phi_nodes.erase(iter);
+                } else {
+                    ++iter;
+                }
+            }
+        }
+
+        // Break if we successfully emitted all moves.
+        if (phi_nodes.empty()) break;
+
+        // Now we encounter cyclical dependency. To break the cyclical dependency, we can find a node whose src is also
+        // going to modified, then generate `xchg dst, src`, and update dependencies accordingly.
+        auto iter = phi_nodes.begin();
+        while (iter != phi_nodes.end()) {
+            const auto& [dst, src] = *iter;
+
+            // Check if other PHI nodes will write to src.
+            bool will_write = false;
+            auto iter2 = phi_nodes.begin();
+            while (iter2 != phi_nodes.end()) {
+                if (iter2 != iter) {
+                    const auto& src2 = iter2->first;
+                    if (same_location(src, src2)) {
+                        will_write = true;
+                        break;
+                    }
+                }
+                ++iter2;
+            }
+
+            if (will_write) {
+                if (src.is_register() || dst.is_register()) {
+                    emit(xchg(dst, src));
+                } else {
+                    emit(mov(Register::r11, src));
+                    emit(mov(src, dst));
+                    emit(mov(dst, Register::r11));
+                }
+
+                auto iter2 = phi_nodes.begin();
+                while (iter2 != phi_nodes.end()) {
+                    if (iter2 != iter) {
+                        auto& src2 = iter2->second;
+                        // XXX: This is okay as currently all PHI nodes are i64.
+                        if (same_location(src2, src)) {
+                            src2 = dst;
+                        } else if (same_location(src2, dst)) {
+                            src2 = src;
+                        }
+                    }
+                    ++iter2;
+                }
+
+                changed = true;
+                phi_nodes.erase(iter);
+                break;
+            } else {
+                ++iter;
+            }
+        }
+
+        ASSERT(changed);
     }
 }
 
@@ -428,14 +534,27 @@ void Code_generator::run() {
                 }
             } else {
                 Condition_code cc = emit_compare(op);
-                if (true_target == next_block) {
+                bool true_need_phi = need_phi(target_control_true);
+                bool false_need_phi = need_phi(target_control);
+
+                // It's always better if we don't need PHIs on the true path.
+                if (true_need_phi && !false_need_phi) {
+                    // Invert condition code.
+                    cc = static_cast<Condition_code>(static_cast<uint8_t>(cc) ^ 1);
+                    std::swap(true_target, target);
+                    std::swap(target_control_true, target_control);
+                    std::swap(true_need_phi, false_need_phi);
+                }
+
+                // If we can swap targets to get a fallthrough.
+                if (true_target == next_block && true_need_phi == false_need_phi) {
                     // Invert condition code.
                     cc = static_cast<Condition_code>(static_cast<uint8_t>(cc) ^ 1);
                     std::swap(true_target, target);
                     std::swap(target_control_true, target_control);
                 }
 
-                if (need_phi(target_control_true)) {
+                if (true_need_phi) {
                     emit(jcc(static_cast<Condition_code>(static_cast<uint8_t>(cc) ^ 1), 0xAAAA));
                     size_t s = _encoder.buffer().size();
                     emit_phi(target_control_true);

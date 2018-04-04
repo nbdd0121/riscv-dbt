@@ -375,33 +375,35 @@ Operand Register_allocator::get_allocation(ir::Value value) {
 
 void Register_allocator::allocate() {
 
-    // First process all PHI nodes.
+    // Generate code for the block.
     for (auto block: _block_analysis.blocks()) {
-        auto& nodelist = _scheduler.get_mutable_node_list(block);
+
+        // Bind all PHI nodes first (except memory-allocated once, which will be done by copy).
         int phi_id = 0;
         for (auto ref: block->value(0).references()) {
             if (ref->opcode() == ir::Opcode::phi) {
                 auto value = ref->value(0);
 
-                // Create a new copy node moving value out from PHI.
-                auto copy_node = _graph.manage(new ir::Node(ir::Opcode::copy, {value.type()}, {}));
-                ir::pass::Pass::replace(value, copy_node->value(0));
-                copy_node->operands({value});
-                nodelist.insert(nodelist.begin(), copy_node);
+                // First try to fit into registers. The R11 is reserved for code generator to perform PHI reordering.
+                constexpr int num_phi_can_fit = sizeof(volatile_register) / sizeof(volatile_register[0]) - 1;
+                if (phi_id < num_phi_can_fit) {
+                    auto reg = register_of_id(value.type(), volatile_register[phi_id]);
+                    bind_register(value, reg);
+                } else {
 
-                // Allocate a stack slot for each PHI node.
-                Memory mem = qword(Register::rsp + (phi_id++) * 8);
-                mem.size = ir::get_type_size(value.type()) / 8;
-                _allocation[value] = mem;
+                    // If cannot fit into memory, put it into a stack slot.
+                    auto mem = alloc_stack_slot(value.type());
+                    _allocation[value] = mem;
+                    ASSERT(!value.references().empty());
+                    _actual_node[value] = value;
+                    _memory_node[value] = value;
+                    _reference_count[value] = value.references().size();
+                }
+
+                phi_id++;
             }
         }
-        if (phi_id * 8 > _stack_size) {
-            _stack_size = phi_id * 8;
-        }
-    }
 
-    // Generate code for the block.
-    for (auto block: _block_analysis.blocks()) {
         _nodelist = &_scheduler.get_mutable_node_list(block);
         for (_node_index = 0; _node_index < _nodelist->size(); _node_index++) {
             auto node = (*_nodelist)[_node_index];
@@ -470,16 +472,6 @@ void Register_allocator::allocate() {
                         auto output = node->value(1);
                         bind_register(output, register_of_id(output.type(), 0));
                     }
-                    break;
-                }
-                case ir::Opcode::copy: {
-                    auto output = node->value(0);
-
-                    // We assume that there are no copy nodes before register allocation.
-                    ASSERT(node->operand(0).opcode() == ir::Opcode::phi);
-
-                    Register reg = alloc_register(output.type());
-                    bind_register(output, reg);
                     break;
                 }
                 case ir::Opcode::cast: {
@@ -671,15 +663,10 @@ void Register_allocator::allocate() {
             }
         }
 
-        // For anything cross basic block, life time management is harder. We cannot recycle its memory when we
-        // encounter the last use for example, as it may still be used later. We workaround this by adding 1 to each
-        // variable live at the end of a basic block.
-        for (auto& pair: _reference_count) {
-            pair.second++;
-        }
+        // Spill R11 if it is occupied, as it is reserved by code generator for reordering PHI nodes.
+        if (_register_content[11]) spill_register(Register::r11);
 
-        spill_all_registers();
-
+        // Fill in actual nodes into PHI nodes.
         for (size_t i = 0; i < end->value_count(); i++) {
             auto target = ir::analysis::Block::get_target(end->value(i));
             size_t id = target->operand_find(end->value(i));
@@ -692,7 +679,17 @@ void Register_allocator::allocate() {
                 if (value.is_const()) continue;
                 auto actual_value = _actual_node[value];
                 if (actual_value != value) ref->operand_set(id + 1, actual_value);
+
+                decrease_reference(value);
             }
+        }
+
+        // For anything cross basic block, life time management is harder. We cannot recycle its memory when we
+        // encounter the last use for example, as it may still be used later. We workaround this by spilling everything
+        // into memory, adding 1 to each variable live at the end of basic block to make it live across entire region.
+        spill_all_registers();
+        for (auto& pair: _reference_count) {
+            pair.second++;
         }
     }
 
