@@ -454,16 +454,27 @@ void Code_generator::emit_phi(ir::Value control) {
 
                 auto iter2 = phi_nodes.begin();
                 while (iter2 != phi_nodes.end()) {
-                    if (iter2 != iter) {
-                        auto& src2 = iter2->second;
-                        // XXX: This is okay as currently all PHI nodes are i64.
-                        if (same_location(src2, src)) {
-                            src2 = dst;
-                        } else if (same_location(src2, dst)) {
-                            src2 = src;
-                        }
+                    if (iter2 == iter) {
+                        ++iter2;
+                        continue;
                     }
-                    ++iter2;
+                    auto& [dst2, src2] = *iter2;
+                    // XXX: This is okay as currently all PHI nodes are i64.
+                    if (same_location(src2, src)) {
+                        src2 = dst;
+                    } else if (same_location(src2, dst)) {
+                        src2 = src;
+                    } else {
+                        ++iter2;
+                        continue;
+                    }
+
+                    // dst2 and src2 may end up in the same location if modify them. Elide if possible.
+                    if (same_location(dst2, src2)) {
+                        iter2 = phi_nodes.erase(iter2);
+                    } else {
+                        ++iter2;
+                    }
                 }
 
                 changed = true;
