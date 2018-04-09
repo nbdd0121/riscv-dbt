@@ -447,9 +447,9 @@ void Code_generator::emit_phi(ir::Value control) {
                 if (src.is_register() || dst.is_register()) {
                     emit(xchg(dst, src));
                 } else {
-                    emit(mov(Register::r11, src));
-                    emit(mov(src, dst));
-                    emit(mov(dst, Register::r11));
+                    emit(xchg(Register::r11, src));
+                    emit(xchg(Register::r11, dst));
+                    emit(xchg(Register::r11, src));
                 }
 
                 auto iter2 = phi_nodes.begin();
