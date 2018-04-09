@@ -109,6 +109,8 @@ void Load_store_elimination::rename_load(Node* block) {
             _value_stack[regnum].push_back(
                 phi_node->second->operand_count() != 0 ? phi_node->second->value(0) : Value{}
             );
+
+            not_first[regnum] = 1;
         }
     }
 
@@ -124,10 +126,9 @@ void Load_store_elimination::rename_load(Node* block) {
             // with a value from other blocks (controlled by not_first) for now as register allocator cannot handle
             // them efficiently yet. An exception here is constant. We can always propagate constants across multiple
             // blocks.
-            if (value && (emu::state::enable_phi ?
-                (value.opcode() == Opcode::phi || (not_first[regnum] || value.is_const())) :
-                (value.opcode() != Opcode::phi && (not_first[regnum] || value.is_const())))
-            ) {
+            if (value && (not_first[regnum] || value.is_const()) &&
+                (emu::state::enable_phi || value.opcode() != Opcode::phi)) {
+
                 ir::pass::Pass::replace(item->value(0), item->operand(0));
                 ir::pass::Pass::replace(item->value(1), value);
 
