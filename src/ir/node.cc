@@ -2,6 +2,7 @@
 
 #include "ir/node.h"
 #include "ir/pass.h"
+#include "ir/visit.h"
 
 namespace ir {
 
@@ -199,7 +200,7 @@ void Graph::inline_graph(Value control, Graph&& graph) {
     _exit->operands(std::move(operands));
 
     // Redirect the entry node.
-    pass::Pass::replace(graph.entry()->value(0), control);
+    replace_value(graph.entry()->value(0), control);
 
     // Take control of everything except entry and exit.
     _heap.insert(_heap.end(), graph._heap.begin() + 2, graph._heap.end());

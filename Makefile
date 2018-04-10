@@ -19,7 +19,7 @@ OBJS = \
 	ir/local_value_numbering.o \
 	ir/lowering.o \
 	ir/node.o \
-	ir/pass.o \
+	ir/visit.o \
 	ir/local_load_store_elimination.o \
 	ir/scheduler.o \
 	main/dbt.o \

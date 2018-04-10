@@ -9,9 +9,6 @@
 namespace ir::pass {
 
 class Pass {
-public:
-    static void replace(Value oldvalue, Value newvalue);
-
 protected:
     Graph* _graph;
 
@@ -24,8 +21,6 @@ protected:
     virtual void start() {}
     // After visiting the tree.
     virtual void finish() {}
-    // Before visiting children of the node. Returning true will abort children visit.
-    virtual bool before(Node*) { return false; }
     // After all children has been visited.
     virtual void after(Node*) {}
 

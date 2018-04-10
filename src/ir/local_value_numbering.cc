@@ -1,6 +1,7 @@
 #include "ir/builder.h"
 #include "ir/node.h"
 #include "ir/pass.h"
+#include "ir/visit.h"
 #include "util/bit_op.h"
 #include "util/int128.h"
 
@@ -138,7 +139,7 @@ Value Local_value_numbering::new_constant(Type type, uint64_t const_value) {
 // Helper function that replaces current value with a constant value. It will keep type intact.
 void Local_value_numbering::replace_with_constant(Value value, uint64_t const_value) {
     if (value.references().empty()) return;
-    replace(value, new_constant(value.type(), const_value));
+    replace_value(value, new_constant(value.type(), const_value));
 }
 
 void Local_value_numbering::lvn(Node* node) {
@@ -151,7 +152,7 @@ void Local_value_numbering::lvn(Node* node) {
     if (node != *pair.first) {
         auto target = *pair.first;
         for (auto v: node->values()) {
-            replace(v, target->value(v.index()));
+            replace_value(v, target->value(v.index()));
         }
     }
 }
@@ -193,7 +194,7 @@ void Local_value_numbering::after(Node* node) {
 
             // If the size is same, then eliminate.
             if (ysize == size) {
-                return replace(output, y);
+                return replace_value(output, y);
             }
 
             // This can either be up-cast followed by up-cast, up-cast followed by down-cast.
@@ -269,7 +270,7 @@ void Local_value_numbering::after(Node* node) {
                     case Opcode::shl:
                     case Opcode::shr:
                     case Opcode::sar:
-                        return replace(output, x);
+                        return replace_value(output, x);
                     // For these node x @ 0 == 0
                     case Opcode::i_and:
                     case Opcode::ltu:
@@ -286,7 +287,7 @@ void Local_value_numbering::after(Node* node) {
                         node->operands({x});
                         return lvn(node);
                     case Opcode::i_and:
-                        return replace(output, x);
+                        return replace_value(output, x);
                     case Opcode::i_or:
                         return replace_with_constant(output, -1);
                     default: break;
@@ -304,7 +305,7 @@ void Local_value_numbering::after(Node* node) {
                     return replace_with_constant(output, 0);
                 case Opcode::i_or:
                 case Opcode::i_and:
-                    return replace(output, x);
+                    return replace_value(output, x);
                 case Opcode::eq:
                 case Opcode::ge:
                 case Opcode::geu:
@@ -331,21 +332,21 @@ void Local_value_numbering::after(Node* node) {
                 ASSERT(output.type() != Type::i8);
                 auto downcast = _graph->manage(new Cast(Type::i8, false, x));
                 auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             } else if (y.const_value() == 0xFFFF) {
                 ASSERT(output.type() != Type::i8 && output.type() != Type::i16);
                 auto downcast = _graph->manage(new Cast(Type::i16, false, x));
                 auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             } else if (y.const_value() == 0xFFFFFFFF) {
                 ASSERT(output.type() == Type::i64);
                 auto downcast = _graph->manage(new Cast(Type::i32, false, x));
                 auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             }
@@ -361,19 +362,19 @@ void Local_value_numbering::after(Node* node) {
             if (width == 8) {
                 auto downcast = _graph->manage(new Cast(Type::i8, false, op));
                 auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             } else if (width == 16) {
                 auto downcast = _graph->manage(new Cast(Type::i16, false, op));
                 auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             } else if (width == 32) {
                 auto downcast = _graph->manage(new Cast(Type::i32, false, op));
                 auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
-                replace(output, upcast->value(0));
+                replace_value(output, upcast->value(0));
                 after(downcast);
                 return after(upcast);
             }
@@ -389,7 +390,7 @@ void Local_value_numbering::after(Node* node) {
         auto z = node->operand(2);
 
         if (x.is_const()) {
-            return replace(output, x.const_value() ? y : z);
+            return replace_value(output, x.const_value() ? y : z);
         }
 
         return lvn(node);
@@ -458,7 +459,7 @@ void Local_value_numbering::after(Node* node) {
                 replace_with_constant(hi, 0);
                 return;
             } else if (v == 1) {
-                replace(lo, op0);
+                replace_value(lo, op0);
                 replace_with_constant(hi, 0);
                 return;
             }
@@ -467,9 +468,9 @@ void Local_value_numbering::after(Node* node) {
             int logv = util::log2_floor(v);
             if ((1ULL << logv) == v) {
                 Builder builder { *_graph };
-                replace(lo, builder.shift(Opcode::shl, op0, builder.constant(Type::i8, logv)));
+                replace_value(lo, builder.shift(Opcode::shl, op0, builder.constant(Type::i8, logv)));
                 if (!hi.references().empty()) {
-                    replace(hi, builder.shift(
+                    replace_value(hi, builder.shift(
                         opcode == Opcode::mul ? Opcode::sar : Opcode::shr,
                         op0,
                         builder.constant(Type::i8, get_type_size(hi.type()) - logv)
@@ -482,8 +483,8 @@ void Local_value_numbering::after(Node* node) {
         // If the same node exists in lvn table already, use it.
         auto iter = _set.find(node);
         if (iter != _set.end()) {
-            replace(lo, (*iter)->value(0));
-            replace(hi, (*iter)->value(1));
+            replace_value(lo, (*iter)->value(0));
+            replace_value(hi, (*iter)->value(1));
             return;
         }
 
@@ -499,14 +500,14 @@ void Local_value_numbering::after(Node* node) {
             // Only lo output of the other node is used, then redirect to this node.
             if (other_node->value(1).references().empty()) {
                 _set.erase(iter);
-                replace(other_node->value(0), lo);
+                replace_value(other_node->value(0), lo);
                 _set.insert(node);
                 return;
             }
 
             // Only lo output of this node is used, then redirect to the other node.
             if (hi.references().empty()) {
-                replace(lo, other_node->value(0));
+                replace_value(lo, other_node->value(0));
                 return;
             }
 

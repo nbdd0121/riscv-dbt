@@ -1,5 +1,4 @@
 #include "ir/analysis.h"
-#include "ir/pass.h"
 #include "ir/visit.h"
 
 #include "emu/state.h"
@@ -11,7 +10,7 @@ void Load_store_elimination::populate_memops() {
     // Get lists of all memory operations within blocks.
     for (auto block: _block_analysis.blocks()) {
         _oplist = &_memops[block];
-        visit_local_memops_reverse_postorder(static_cast<Paired*>(block)->mate(), [this](Node* node) {
+        visit_local_memops_postorder(static_cast<Paired*>(block)->mate(), [this](Node* node) {
             _oplist->push_back(node);
         });
     }
@@ -129,8 +128,8 @@ void Load_store_elimination::rename_load(Node* block) {
             if (value && (not_first[regnum] || value.is_const()) &&
                 (emu::state::enable_phi || value.opcode() != Opcode::phi)) {
 
-                ir::pass::Pass::replace(item->value(0), item->operand(0));
-                ir::pass::Pass::replace(item->value(1), value);
+                replace_value(item->value(0), item->operand(0));
+                replace_value(item->value(1), value);
 
                 // Remove from memops.
                 return true;
@@ -245,7 +244,7 @@ void Load_store_elimination::eliminate_load() {
     while (!dummy.value(0).references().empty()) {
         auto to_kill = *dummy.value(0).references().rbegin();
         to_kill->operands({});
-        ir::pass::Pass::replace(to_kill->value(0), dummy.value(0));
+        replace_value(to_kill->value(0), dummy.value(0));
     }
 
     rename_load(Block::get_target(_graph.entry()->value(0)));
@@ -367,7 +366,7 @@ void Load_store_elimination::rename_store(Node* block) {
             uint16_t regnum = static_cast<Register_access*>(item)->regnum();
 
             if (_value_stack[regnum].back()) {
-                ir::pass::Pass::replace(item->value(0), item->operand(0));
+                replace_value(item->value(0), item->operand(0));
             }
 
             _value_stack[regnum].push_back(item->value(0));
@@ -490,7 +489,7 @@ void Load_store_elimination::eliminate_store() {
     while (!dummy.value(0).references().empty()) {
         auto to_kill = *dummy.value(0).references().rbegin();
         to_kill->operands({});
-        ir::pass::Pass::replace(to_kill->value(0), dummy.value(0));
+        replace_value(to_kill->value(0), dummy.value(0));
     }
 
     // Second renaming pass to actually remove the stores.

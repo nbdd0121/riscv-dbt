@@ -1,21 +1,20 @@
 #include "ir/node.h"
 #include "ir/pass.h"
 
-namespace ir::pass {
+namespace ir {
 
-void Pass::replace(Value oldvalue, Value newvalue) {
+void replace_value(Value oldvalue, Value newvalue) {
     while (!oldvalue.references().empty()) {
         (*oldvalue.references().rbegin())->operand_update(oldvalue, newvalue);
     }
 }
 
+}
+
+namespace ir::pass {
+
 void Pass::run_recurse(Node* node) {
     if (node->_visited) return;
-    if (before(node)) {
-        node->_visited = 1;
-        return;
-    }
-
     node->_visited = 2;
 
     // Visit all dependencies

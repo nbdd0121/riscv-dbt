@@ -1,7 +1,7 @@
 #include <list>
 
 #include "ir/analysis.h"
-#include "ir/pass.h"
+#include "ir/visit.h"
 #include "util/reverse_iterable.h"
 
 namespace ir::analysis {
@@ -144,7 +144,7 @@ void Block::simplify_graph() {
             end->operand(0) == block->value(0)) {
 
             // Link predecessor and successor together.
-            ir::pass::Pass::replace(end->value(0), block->operand(0));
+            replace_value(end->value(0), block->operand(0));
 
             // Remove current block as successor. This will maintain the constraint that control is used only once.
             block->operand_set(0, end->value(0));
@@ -164,7 +164,7 @@ void Block::simplify_graph() {
             auto prev_block = static_cast<ir::Paired*>(prev_jmp->mate());
 
             // Link two blocks together.
-            ir::pass::Pass::replace(block->value(0), prev_jmp->operand(0));
+            replace_value(block->value(0), prev_jmp->operand(0));
 
             // Update mate information.
             end->mate(prev_block);

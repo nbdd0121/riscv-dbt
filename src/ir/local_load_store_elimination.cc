@@ -2,7 +2,6 @@
 
 #include "ir/analysis.h"
 #include "ir/node.h"
-#include "ir/pass.h"
 #include "ir/visit.h"
 
 namespace ir::analysis {
@@ -16,13 +15,13 @@ void Local_load_store_elimination::run() {
     for (auto block: _block_analysis.blocks()) {
         auto end = static_cast<Paired*>(block)->mate();
 
-        visit_local_memops_reverse_postorder(end, [&](Node* node) {
+        visit_local_memops_postorder(end, [&](Node* node) {
             if (node->opcode() == Opcode::load_register) {
                 uint16_t regnum = static_cast<Register_access*>(node)->regnum();
                 auto value = value_stack[regnum].back();
                 if (value) {
-                    ir::pass::Pass::replace(node->value(0), node->operand(0));
-                    ir::pass::Pass::replace(node->value(1), value);
+                    replace_value(node->value(0), node->operand(0));
+                    replace_value(node->value(1), value);
                     return;
                 }
 
@@ -42,7 +41,7 @@ void Local_load_store_elimination::run() {
         // Reset value stacks to invalid.
         for (auto& stack: value_stack) stack.resize(1);
 
-        visit_local_memops_reverse_preorder(end, [&](Node* node) {
+        visit_local_memops_preorder(end, [&](Node* node) {
             if (node->opcode() == Opcode::load_register) {
                 uint16_t regnum = static_cast<Register_access*>(node)->regnum();
                 value_stack[regnum].push_back({});
@@ -51,7 +50,7 @@ void Local_load_store_elimination::run() {
                 uint16_t regnum = static_cast<Register_access*>(node)->regnum();
 
                 if (value_stack[regnum].back()) {
-                    ir::pass::Pass::replace(node->value(0), node->operand(0));
+                    replace_value(node->value(0), node->operand(0));
                     return;
                 }
 

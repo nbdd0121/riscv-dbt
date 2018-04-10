@@ -2,6 +2,7 @@
 #include "emu/state.h"
 #include "ir/builder.h"
 #include "ir/pass.h"
+#include "ir/visit.h"
 #include "util/functional.h"
 
 namespace ir::pass {
@@ -34,8 +35,8 @@ void Lowering::after(Node* node) {
                 func, false, {Type::memory, output.type()}, {node->operand(0), node->operand(1)}
             ));
 
-            replace(node->value(0), call_node->value(0));
-            replace(output, call_node->value(1));
+            replace_value(node->value(0), call_node->value(0));
+            replace_value(output, call_node->value(1));
             break;
         }
         case Opcode::store_memory: {
@@ -58,7 +59,7 @@ void Lowering::after(Node* node) {
                 func, false, {Type::memory}, {node->operand(0), node->operand(1), value}
             ));
 
-            replace(node->value(0), call_node->value(0));
+            replace_value(node->value(0), call_node->value(0));
             break;
         }
         default:

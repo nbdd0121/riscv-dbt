@@ -674,6 +674,8 @@ reg_t syscall(
                     guest_munmap(addr, new_heap_end - state::heap_end);
 
                 } else {
+
+                    // Memory should be zeroed here as this is expected by glibc.
                     zero_memory(state::brk, state::heap_end - state::brk);
                     state::heap_end = new_heap_end;
                     state::brk = arg0;

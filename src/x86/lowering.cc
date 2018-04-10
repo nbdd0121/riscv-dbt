@@ -1,4 +1,5 @@
 #include "ir/builder.h"
+#include "ir/visit.h"
 #include "util/int_size.h"
 #include "x86/backend.h"
 
@@ -111,7 +112,7 @@ void Lowering::after(ir::Node* node) {
             auto output = node->value(0);
             auto addr = match_address(output, false);
             if (addr) {
-                replace(output, _graph->manage(new ir::Node(Target_opcode::lea, {output.type()}, {addr}))->value(0));
+                replace_value(output, _graph->manage(new ir::Node(Target_opcode::lea, {output.type()}, {addr}))->value(0));
             }
             break;
         }
