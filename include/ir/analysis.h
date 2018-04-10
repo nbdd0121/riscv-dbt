@@ -169,7 +169,6 @@ private:
 public:
     void eliminate_load();
     void eliminate_store();
-
 };
 
 }

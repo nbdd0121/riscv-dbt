@@ -13,7 +13,7 @@ ir::Value Lowering::match_address(ir::Value value, bool required) {
 
         // If the LEA node has more than one user, then we need to clone the address node, as address node can only
         // have single user.
-        return _graph->manage(new ir::Node(
+        return _graph.manage(new ir::Node(
             Target_opcode::address, {ir::Type::i64},
             ir::Node::Operand_container(value.node()->operand(0).node()->operands())
         ))->value(0);
@@ -70,7 +70,7 @@ ir::Value Lowering::match_address(ir::Value value, bool required) {
         index.node()->operand(1).is_const() &&
         index.node()->operand(1).const_value() <= 3) {
 
-        scale = _graph->manage(new ir::Constant(ir::Type::i8, 1 << index.node()->operand(1).const_value()))->value(0);
+        scale = _graph.manage(new ir::Constant(ir::Type::i8, 1 << index.node()->operand(1).const_value()))->value(0);
         index = index.node()->operand(0);
     }
 
@@ -85,54 +85,55 @@ ir::Value Lowering::match_address(ir::Value value, bool required) {
         if (filled < 3) return {};
     }
 
-    if (!base) base = _graph->manage(new ir::Constant(ir::Type::i64, 0))->value(0);
-    if (!scale) scale = _graph->manage(new ir::Constant(ir::Type::i8, index ? 1 : 0))->value(0);
-    if (!index) index = _graph->manage(new ir::Constant(ir::Type::i64, 0))->value(0);
-    if (!displacement) displacement = _graph->manage(new ir::Constant(ir::Type::i64, 0))->value(0);
+    if (!base) base = _graph.manage(new ir::Constant(ir::Type::i64, 0))->value(0);
+    if (!scale) scale = _graph.manage(new ir::Constant(ir::Type::i8, index ? 1 : 0))->value(0);
+    if (!index) index = _graph.manage(new ir::Constant(ir::Type::i64, 0))->value(0);
+    if (!displacement) displacement = _graph.manage(new ir::Constant(ir::Type::i64, 0))->value(0);
 
-    return _graph->manage(new ir::Node(
+    return _graph.manage(new ir::Node(
         Target_opcode::address, {ir::Type::i64}, {base, index, scale, displacement}
     ))->value(0);
 }
 
-void Lowering::after(ir::Node* node) {
-
-    switch (node->opcode()) {
-        case ir::Opcode::load_memory: {
-            auto addr = match_address(node->operand(1), true);
-            node->operand_set(1, addr);
-            break;
-        }
-        case ir::Opcode::store_memory: {
-            auto addr = match_address(node->operand(1), true);
-            if (addr) node->operand_set(1, addr);
-            break;
-        }
-        case ir::Opcode::add: {
-            auto output = node->value(0);
-            auto addr = match_address(output, false);
-            if (addr) {
-                replace_value(output, _graph->manage(new ir::Node(Target_opcode::lea, {output.type()}, {addr}))->value(0));
+void Lowering::run() {
+    visit_postorder(_graph, [this](ir::Node* node) {
+        switch (node->opcode()) {
+            case ir::Opcode::load_memory: {
+                auto addr = match_address(node->operand(1), true);
+                node->operand_set(1, addr);
+                break;
             }
-            break;
-        }
-        case ir::Opcode::cast:
-        case ir::Opcode::mux:
-        case ir::Opcode::i_if: {
-            size_t index = node->opcode() != ir::Opcode::i_if ? 0 : 1;
-            auto op = node->operand(index);
-
-            // It will be easier for the backend if non-constant node producing i1 has only single user.
-            if (op.type() == ir::Type::i1 && op.opcode() != ir::Opcode::constant && op.references().size() != 1) {
-                node->operand_set(index, _graph->manage(new ir::Node(
-                    op.opcode(), {ir::Type::i1},
-                    ir::Node::Operand_container(op.node()->operands())
-                ))->value(0));
+            case ir::Opcode::store_memory: {
+                auto addr = match_address(node->operand(1), true);
+                if (addr) node->operand_set(1, addr);
+                break;
             }
-            break;
+            case ir::Opcode::add: {
+                auto output = node->value(0);
+                auto addr = match_address(output, false);
+                if (addr) {
+                    replace_value(output, _graph.manage(new ir::Node(Target_opcode::lea, {output.type()}, {addr}))->value(0));
+                }
+                break;
+            }
+            case ir::Opcode::cast:
+            case ir::Opcode::mux:
+            case ir::Opcode::i_if: {
+                size_t index = node->opcode() != ir::Opcode::i_if ? 0 : 1;
+                auto op = node->operand(index);
+
+                // It will be easier for the backend if non-constant node producing i1 has only single user.
+                if (op.type() == ir::Type::i1 && op.opcode() != ir::Opcode::constant && op.references().size() != 1) {
+                    node->operand_set(index, _graph.manage(new ir::Node(
+                        op.opcode(), {ir::Type::i1},
+                        ir::Node::Operand_container(op.node()->operands())
+                    ))->value(0));
+                }
+                break;
+            }
+            default: break;
         }
-        default: break;
-    }
+    });
 }
 
 void Dot_printer::write_node_content(std::ostream& stream, ir::Node* node) {

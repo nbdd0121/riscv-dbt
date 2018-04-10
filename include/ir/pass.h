@@ -8,40 +8,19 @@
 
 namespace ir::pass {
 
-class Pass {
-protected:
-    Graph* _graph;
-
-private:
-    void run_recurse(Node* node);
-
-protected:
-
-    // Before visiting the tree.
-    virtual void start() {}
-    // After visiting the tree.
-    virtual void finish() {}
-    // After all children has been visited.
-    virtual void after(Node*) {}
-
-public:
-    void run_on(Graph& graph, Node* node);
-    void run(Graph& graph) { run_on(graph, graph.exit()); }
-};
-
-class Dot_printer: public Pass {
+class Dot_printer {
 public:
     static const char* opcode_name(uint16_t opcode);
     static const char* type_name(Type type);
 
 protected:
     virtual void write_node_content(std::ostream& stream, Node* node);
-    virtual void start() override;
-    virtual void finish() override;
-    virtual void after(Node* node) override;
+
+public:
+    void run(Graph& graph);
 };
 
-class Local_value_numbering: public Pass {
+class Local_value_numbering {
 private:
     struct Hash {
         size_t operator ()(Node* node) const noexcept;
@@ -52,6 +31,7 @@ private:
     };
 
 private:
+    Graph& _graph;
     std::unordered_set<Node*, Hash, Equal_to> _set;
 
     static uint64_t sign_extend(Type type, uint64_t value);
@@ -62,15 +42,17 @@ private:
     Value new_constant(Type type, uint64_t const_value);
     void replace_with_constant(Value value, uint64_t const_value);
     void lvn(Node* node);
+    void process(Node* node);
 
-protected:
-    virtual void after(Node* node) override;
+public:
+    Local_value_numbering(Graph& graph): _graph{graph} {};
+    void run();
 };
 
 // Target-independent lowering pass.
-class Lowering: public Pass {
-protected:
-    virtual void after(Node* node) override;
+class Lowering {
+public:
+    void run(Graph& graph);
 };
 
 }

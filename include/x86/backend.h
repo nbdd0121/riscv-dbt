@@ -20,11 +20,13 @@ enum: uint16_t {
 
 }
 
-class Lowering: public ir::pass::Pass {
+class Lowering {
 private:
+    ir::Graph& _graph;
     ir::Value match_address(ir::Value value, bool required);
-protected:
-    virtual void after(ir::Node* node) override;
+public:
+    Lowering(ir::Graph& graph): _graph{graph} {};
+    void run();
 };
 
 class Dot_printer: public ir::pass::Dot_printer {

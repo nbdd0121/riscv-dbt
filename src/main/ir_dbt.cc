@@ -183,7 +183,7 @@ ir::Graph Ir_dbt::decode(emu::reg_t pc) {
     // Load/store elimination and LVN are required to allow inlining of auipc/jalr fused pair.
     ir::analysis::Block block_analysis{graph};
     ir::analysis::Local_load_store_elimination{graph, block_analysis, 66}.run();
-    ir::pass::Local_value_numbering{}.run(graph);
+    ir::pass::Local_value_numbering{graph}.run();
 
     return std::move(graph);
 }
@@ -302,7 +302,7 @@ void Ir_dbt::compile(riscv::Context& context, emu::reg_t pc) {
             block_analysis.simplify_graph();
         }
 
-        ir::pass::Local_value_numbering{}.run(graph);
+        ir::pass::Local_value_numbering{graph}.run();
 
         // Dump IR if --disassemble is used.
         if (emu::state::disassemble) {
@@ -314,9 +314,9 @@ void Ir_dbt::compile(riscv::Context& context, emu::reg_t pc) {
         // Lowering and target-specific lowering. Currently lowering is only needed if no_direct_memory_access is on.
         if (emu::state::no_direct_memory_access) {
             ir::pass::Lowering{}.run(graph);
-            ir::pass::Local_value_numbering{}.run(graph);
+            ir::pass::Local_value_numbering{graph}.run();
         }
-        x86::backend::Lowering{}.run(graph);
+        x86::backend::Lowering{graph}.run();
 
         // This garbage collection is required for Value::references to correctly reflect number of users.
         graph.garbage_collect();

@@ -1,7 +1,6 @@
 #include <algorithm>
 
 #include "ir/node.h"
-#include "ir/pass.h"
 #include "ir/visit.h"
 
 namespace ir {
@@ -85,17 +84,15 @@ Graph::~Graph() {
 void Graph::garbage_collect() {
 
     // Mark all reachable nodes.
-    pass::Pass{}.run(*this);
+    visit_postorder(*this, [](Node*){});
 
     ASSERT(_entry->_visited);
 
-    // Unlink to clear up references. This is necessary to maintain correctness of outgoing references.
+    // Clear operands so that references are also cleared. This is necessary to maintain correctness of outgoing
+    // references.
     size_t size = _heap.size();
     for (size_t i = 0; i < size; i++) {
-        if (!_heap[i]->_visited) {
-            _heap[i]->unlink();
-            _heap[i]->_operands.clear();
-        }
+        if (!_heap[i]->_visited) _heap[i]->operands({});
     }
 
     for (size_t i = 0; i < size; i++) {

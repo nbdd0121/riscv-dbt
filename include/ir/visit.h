@@ -5,8 +5,37 @@
 
 namespace ir {
 
+namespace internal {
+
+void clear_visited_flags(Graph& graph);
+
+template<typename F>
+void visit_postorder_actual(Node* node, F func) {
+    if (node->_visited) return;
+    node->_visited = 1;
+
+    // Visit all dependencies
+    for (auto operand: node->operands()) visit_postorder_actual(operand.node(), func);
+    func(node);
+}
+
+}
+
 void replace_value(Value oldvalue, Value newvalue);
 
+// Visit the dependence graph in postorder.
+template<typename F>
+void visit_postorder(Graph& graph, Node* node, F func) {
+    internal::clear_visited_flags(graph);
+    internal::visit_postorder_actual(node, func);
+}
+
+template<typename F>
+void visit_postorder(Graph& graph, F func) {
+    visit_postorder(graph, graph.exit(), func);
+}
+
+// Visit the dependence graph in postorder, do not cross block boundary, and only care about memory nodes.
 template<typename F>
 void visit_local_memops_postorder(Node* node, F func) {
 
@@ -28,6 +57,7 @@ void visit_local_memops_postorder(Node* node, F func) {
     }
 }
 
+// Visit the dependence graph in preorder, do not cross block boundary, and only care about memory nodes.
 template<typename F>
 void visit_local_memops_preorder(Node* node, F func) {
 

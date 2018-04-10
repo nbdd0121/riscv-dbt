@@ -11,8 +11,18 @@
 
 namespace ir {
 
+class Node;
+class Value;
+class Graph;
+
 namespace pass {
 class Pass;
+}
+
+namespace internal {
+void clear_visited_flags(Graph&);
+template<typename F>
+void visit_postorder_actual(Node* node, F func);
 }
 
 enum class Type: uint8_t {
@@ -167,10 +177,6 @@ static inline bool is_commutative_opcode(uint16_t opcode) {
     }
 }
 
-class Node;
-class Value;
-class Graph;
-
 // Represents a value defined by a node. Note that the node may be null.
 class Value {
 private:
@@ -287,6 +293,9 @@ public:
 
     friend Value;
     friend Graph;
+    friend void internal::clear_visited_flags(Graph&);
+    template<typename F>
+    friend void internal::visit_postorder_actual(Node* node, F func);
     friend pass::Pass;
 };
 
@@ -383,7 +392,7 @@ public:
     Graph clone() const;
     void inline_graph(Value control, Graph&& graph);
 
-    friend pass::Pass;
+    friend void internal::clear_visited_flags(Graph&);
 };
 
 Type Value::type() const { return _node->_type[_index]; }

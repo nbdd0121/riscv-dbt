@@ -130,7 +130,7 @@ uint64_t Local_value_numbering::binary(Type type, uint16_t opcode, uint64_t l, u
 Value Local_value_numbering::new_constant(Type type, uint64_t const_value) {
 
     // Create a new constant node.
-    Node* new_node = _graph->manage(new Constant(type, const_value));
+    Node* new_node = _graph.manage(new Constant(type, const_value));
 
     auto pair = _set.insert(new_node);
     return pair.second ? new_node->value(0) : (*pair.first)->value(0);
@@ -157,7 +157,7 @@ void Local_value_numbering::lvn(Node* node) {
     }
 }
 
-void Local_value_numbering::after(Node* node) {
+void Local_value_numbering::process(Node* node) {
     auto opcode = node->opcode();
 
     if (!is_pure_opcode(opcode)) return;
@@ -330,25 +330,25 @@ void Local_value_numbering::after(Node* node) {
             if (y.const_value() == 0xFF) {
                 // For i8, 0xFF is sign-extended to -1.
                 ASSERT(output.type() != Type::i8);
-                auto downcast = _graph->manage(new Cast(Type::i8, false, x));
-                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i8, false, x));
+                auto upcast = _graph.manage(new Cast(output.type(), false, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             } else if (y.const_value() == 0xFFFF) {
                 ASSERT(output.type() != Type::i8 && output.type() != Type::i16);
-                auto downcast = _graph->manage(new Cast(Type::i16, false, x));
-                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i16, false, x));
+                auto upcast = _graph.manage(new Cast(output.type(), false, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             } else if (y.const_value() == 0xFFFFFFFF) {
                 ASSERT(output.type() == Type::i64);
-                auto downcast = _graph->manage(new Cast(Type::i32, false, x));
-                auto upcast = _graph->manage(new Cast(output.type(), false, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i32, false, x));
+                auto upcast = _graph.manage(new Cast(output.type(), false, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             }
         }
 
@@ -360,23 +360,23 @@ void Local_value_numbering::after(Node* node) {
             bool sext = opcode == Opcode::sar;
             auto width = get_type_size(output.type()) - y.const_value();
             if (width == 8) {
-                auto downcast = _graph->manage(new Cast(Type::i8, false, op));
-                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i8, false, op));
+                auto upcast = _graph.manage(new Cast(output.type(), sext, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             } else if (width == 16) {
-                auto downcast = _graph->manage(new Cast(Type::i16, false, op));
-                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i16, false, op));
+                auto upcast = _graph.manage(new Cast(output.type(), sext, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             } else if (width == 32) {
-                auto downcast = _graph->manage(new Cast(Type::i32, false, op));
-                auto upcast = _graph->manage(new Cast(output.type(), sext, downcast->value(0)));
+                auto downcast = _graph.manage(new Cast(Type::i32, false, op));
+                auto upcast = _graph.manage(new Cast(output.type(), sext, downcast->value(0)));
                 replace_value(output, upcast->value(0));
-                after(downcast);
-                return after(upcast);
+                process(downcast);
+                return process(upcast);
             }
         }
 
@@ -467,7 +467,7 @@ void Local_value_numbering::after(Node* node) {
             // Reduce multiplication to shifts for power of two.
             int logv = util::log2_floor(v);
             if ((1ULL << logv) == v) {
-                Builder builder { *_graph };
+                Builder builder { _graph };
                 replace_value(lo, builder.shift(Opcode::shl, op0, builder.constant(Type::i8, logv)));
                 if (!hi.references().empty()) {
                     replace_value(hi, builder.shift(
@@ -578,6 +578,10 @@ void Local_value_numbering::after(Node* node) {
     }
 
     ASSERT(0);
+}
+
+void Local_value_numbering::run() {
+    visit_postorder(_graph, [this](Node* node) { process(node); });
 }
 
 }
