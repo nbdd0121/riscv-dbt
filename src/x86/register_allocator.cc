@@ -327,9 +327,9 @@ void Register_allocator::emit_compare(ir::Value value) {
     auto node = value.node();
 
     if (node->operand(0).is_const()) {
-        auto op1 = get_actual_value_and_deref(node, 1, true, true);;
+        auto op1 = get_actual_value_and_deref(node, 1, false, false);
         pin_value(op1);
-        get_actual_value_and_deref(node, 0, false, false);
+        get_actual_value_and_deref(node, 0, true, true);
         unpin_value(op1);
 
     } else {
