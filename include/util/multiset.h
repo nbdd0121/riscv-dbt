@@ -1,5 +1,5 @@
-#ifndef UTIL_ARRAY_SET_H
-#define UTIL_ARRAY_SET_H
+#ifndef UTIL_MULTISET_H
+#define UTIL_MULTISET_H
 
 #include <vector>
 #include <functional>
@@ -9,7 +9,7 @@
 namespace util {
 
 template<typename T>
-class Array_multiset {
+class Multiset {
 public:
     using iterator = typename std::vector<T>::iterator;
     using const_iterator = typename std::vector<T>::const_iterator;
@@ -20,13 +20,13 @@ private:
     std::vector<T> _vector;
 
 public:
-    Array_multiset() = default;
-    Array_multiset(const Array_multiset&) = default;
-    Array_multiset(Array_multiset&&) = default;
-    ~Array_multiset() = default;
+    Multiset() = default;
+    Multiset(const Multiset&) = default;
+    Multiset(Multiset&&) = default;
+    ~Multiset() = default;
 
-    Array_multiset& operator =(const Array_multiset&) = default;
-    Array_multiset& operator =(Array_multiset&&) = default;
+    Multiset& operator =(const Multiset&) = default;
+    Multiset& operator =(Multiset&&) = default;
 
     /* Iterators */
     iterator begin() noexcept { return _vector.begin(); }

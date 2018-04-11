@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "util/assert.h"
-#include "util/array_multiset.h"
+#include "util/multiset.h"
 #include "util/small_vector.h"
 
 namespace ir {
@@ -190,7 +190,7 @@ public:
     size_t index() const { return _index; }
 
     inline Type type() const;
-    inline const util::Array_multiset<Node*>& references() const;
+    inline const util::Multiset<Node*>& references() const;
 
     explicit operator bool() { return _node != nullptr; }
 
@@ -238,7 +238,7 @@ private:
     Operand_container _operands;
 
     // Nodes that references the value of this node.
-    util::Small_vector<util::Array_multiset<Node*>, 2> _references;
+    util::Small_vector<util::Multiset<Node*>, 2> _references;
 
     // The output type of this node.
     Type_container _type;
@@ -396,7 +396,7 @@ public:
 };
 
 Type Value::type() const { return _node->_type[_index]; }
-const util::Array_multiset<Node*>& Value::references() const { return _node->_references[_index]; }
+const util::Multiset<Node*>& Value::references() const { return _node->_references[_index]; }
 
 uint16_t Value::opcode() const { return _node->_opcode; }
 bool Value::is_const() const { return _node->_opcode == Opcode::constant; }
