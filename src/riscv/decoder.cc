@@ -505,15 +505,12 @@ Instruction Decoder::decode(uint32_t bits) {
             case 0b0001111: {
                 switch (function) {
                     case 0b000: {
-                        if (ret.rd() != 0 || ret.rs1() != 0) goto illegal;
                         reg_t imm = I_imm_field::extract(bits);
-                        if (imm &~ 0xFF) goto illegal;
                         ret.opcode(Opcode::fence);
-                        ret.imm(imm);
+                        ret.imm(imm & 0xFF);
                         return ret;
                     }
                     case 0b001: {
-                        if (ret.rd() != 0 || ret.rs1() != 0 || I_imm_field::extract(bits) != 0) goto illegal;
                         ret.opcode(Opcode::fence_i);
                         return ret;
                     }
