@@ -185,7 +185,7 @@ ir::Graph Ir_dbt::decode(emu::reg_t pc) {
     ir::analysis::Local_load_store_elimination{graph, block_analysis, 66}.run();
     ir::pass::Local_value_numbering{graph}.run();
 
-    return std::move(graph);
+    return graph;
 }
 
 void Ir_dbt::compile(riscv::Context& context, emu::reg_t pc) {

@@ -176,7 +176,7 @@ Graph Graph::clone() const {
         }
     }
 
-    return std::move(ret);
+    return ret;
 }
 
 void Graph::inline_graph(Value control, Graph&& graph) {

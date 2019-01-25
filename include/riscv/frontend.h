@@ -5,7 +5,7 @@
 
 namespace riscv {
 
-class Basic_block;
+struct Basic_block;
 
 ir::Graph compile(const Basic_block& block);
 
