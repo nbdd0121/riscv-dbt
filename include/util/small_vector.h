@@ -71,7 +71,7 @@ public:
 
     ~Small_vector() {
         std::destroy(_begin, _end);
-        if (!is_small()) delete[] _begin;
+        if (!is_small()) delete[] (storage*)_begin;
     }
 
     Small_vector& operator =(const Small_vector& other) = delete;
